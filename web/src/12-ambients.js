@@ -459,7 +459,7 @@ function makeSquareCloth(kind) {
 }
 
 /* ---------- where props can go in this room ---------- */
-const SLOTS = { wallL: [-118, 118], wallR: [116, 118], floorL: [-120, 16], floorR: [118, 16], tableL: [-81, 31], tableR: [79, 31], shelfTop: SHELF.top + SHELF.th };
+const SLOTS = { wallL: [-112, 118], wallR: [110, 118], floorL: [-120, 16], floorR: [118, 16], tableL: [-81, 31], tableR: [79, 31], shelfTop: SHELF.top + SHELF.th };
 function onTable(g) { g.position.y += TABLE.top; return g; }
 
 /* ---------- presets ---------- */

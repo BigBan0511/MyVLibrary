@@ -19,7 +19,7 @@ function viewPose(name, outPos, outLook) {
     box = narrow ? { cx: CON.x - 14, cy: TABLE.top + 22, w: 86, h: 110 } : { cx: (TV.x + CON.x) / 2 + 8, cy: TABLE.top + 26, w: 150, h: 70 }; dir = new V3(-.06, .2, 1);
   } else {
     /* the reference shot: shelf at the top, table and its things below, a little from above */
-    box = narrow ? { cx: SHELF.cx, cy: 112, w: 120, h: 150 } : { cx: SHELF.cx, cy: 109, w: 214, h: 112 }; dir = new V3(0, .14, 1);
+    box = narrow ? { cx: SHELF.cx, cy: 108, w: 200, h: 130 } : { cx: SHELF.cx, cy: 108, w: 232, h: 122 }; dir = new V3(0, .14, 1);
   }
   dir.normalize(); outLook.set(box.cx, box.cy, 0); outPos.copy(outLook).addScaledVector(dir, fitDist(box.w, box.h));
 }

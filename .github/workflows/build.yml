@@ -50,7 +50,8 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [System.IO.Compression.ZipFile]::CreateFromDirectory($dir, (Join-Path $PWD "out/$name"))
           "PEXT=out/$name" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Get-ChildItem -Recurse $dir | Select-Object -First 60 | Format-Table -AutoSize FullName, Length
+          $files = Get-ChildItem -Recurse -File $dir | ForEach-Object { $_.FullName.Substring("$dir".Length + 1) + " (" + [math]::Round($_.Length / 1KB) + " KB)" }
+          Write-Host "::notice title=Contenido del paquete ($($files.Count) archivos, $([math]::Round((Get-Item "out/$name").Length / 1MB, 1)) MB)::$($files -join ' | ')"
 
       - uses: actions/upload-artifact@v4
         with:

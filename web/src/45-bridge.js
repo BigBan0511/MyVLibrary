@@ -191,10 +191,14 @@ const LIB = {
       case 'resume': this.paused = false; lastT = performance.now(); break;
     }
   },
+  /* Playnite may also turn the stick and the d-pad into arrow keys; the same press must not count twice */
+  recent: { key: '', t: 0, from: '' },
+  dupe(key, from) { const now = performance.now(), r = this.recent, d = r.key === key && r.from !== from && now - r.t < 160; this.recent = { key, t: now, from }; return d; },
   pad(button, state) {
     this.hostPad = true; if (state !== 'Pressed') return;
     const map = { A: 'Enter', B: 'Escape', X: 'm', Y: 'f', Start: 'Enter', Back: 'i', LeftShoulder: 'q', RightShoulder: 'e', TriggerLeft: 'PageUp', TriggerRight: 'PageDown', DPadUp: 'ArrowUp', DPadDown: 'ArrowDown', DPadLeft: 'ArrowLeft', DPadRight: 'ArrowRight', LeftStickUp: 'ArrowUp', LeftStickDown: 'ArrowDown', LeftStickLeft: 'ArrowLeft', LeftStickRight: 'ArrowRight' };
     const k = map[button]; if (!k) return;
+    if (this.dupe(k, 'pad')) return;
     sfx.init();
     if (k === 'Escape' && mode === 'shelf' && PN_STATE.mode === 'fullscreen') { this.send('close'); return; }
     handleKey(k);

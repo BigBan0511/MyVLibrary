@@ -106,6 +106,7 @@ window.addEventListener('keydown', e => {
   if (tag === 'INPUT' || tag === 'SELECT') { if (e.key === 'Escape') tg.blur(); return; }
   if (tag === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
   if (e.key === 'Escape' && !setPop.hidden) { setPop.hidden = true; return; }
+  if (LIB.hostPad && /^(Arrow|Page)/.test(e.key) && LIB.dupe(e.key, 'key')) { e.preventDefault(); return; }
   sfx.init(); if (handleKey(e.key)) e.preventDefault();
 });
 const gp = { prev: {}, stickT: 0 };

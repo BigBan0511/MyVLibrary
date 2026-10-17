@@ -66,7 +66,15 @@ namespace MyVLibrary
                 var loaderDir = Path.Combine(plugin.PluginDir, "runtimes", "win-" + arch, "native");
                 if (File.Exists(Path.Combine(loaderDir, "WebView2Loader.dll")))
                 {
-                    CoreWebView2Environment.SetLoaderDllFolderPath(loaderDir);
+                    try
+                    {
+                        CoreWebView2Environment.SetLoaderDllFolderPath(loaderDir);
+                    }
+                    catch (Exception e)
+                    {
+                        // another extension already loaded WebView2 in this process: its loader works for us too
+                        logger.Warn(e, "MyVLibrary: WebView2Loader ya estaba cargado");
+                    }
                 }
 
                 var dataDir = Path.Combine(plugin.GetPluginUserDataPath(), "WebView2");
