@@ -1,0 +1,71 @@
+name: Compilar MyVLibrary
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pext:
+    name: Extensión para Playnite (.pext)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Construir la estantería (web)
+        working-directory: web
+        run: |
+          npm ci
+          node build.mjs
+          node build.mjs --target=demo
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Compilar la extensión
+        run: dotnet build extension/MyVLibrary.csproj -c Release -o out/MyVLibrary
+
+      - name: Empaquetar el .pext
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path extension/extension.yaml -Pattern '^Version:\s*(.+)$').Matches[0].Groups[1].Value.Trim()
+          $dir = Resolve-Path out/MyVLibrary
+          # Playnite ya trae su SDK; no debe ir dentro del paquete
+          Remove-Item "$dir/Playnite.SDK.dll", "$dir/*.pdb" -ErrorAction SilentlyContinue
+          if (-not (Test-Path "$dir/web/index.html")) { throw "Falta web/index.html en el paquete" }
+          if (-not (Test-Path "$dir/runtimes/win-x64/native/WebView2Loader.dll")) { throw "Falta WebView2Loader.dll en el paquete" }
+          $name = "MyVLibrary_$($version.Replace('.', '_')).pext"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::CreateFromDirectory($dir, (Join-Path $PWD "out/$name"))
+          "PEXT=out/$name" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Get-ChildItem -Recurse $dir | Select-Object -First 60 | Format-Table -AutoSize FullName, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MyVLibrary-pext
+          path: ${{ env.PEXT }}
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MyVLibrary-demo-navegador
+          path: web/dist-demo/index.html
+
+      - name: Publicar la versión
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.PEXT }}
+          generate_release_notes: true

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <AssemblyName>MyVLibrary</AssemblyName>
+    <RootNamespace>MyVLibrary</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <LangVersion>7.3</LangVersion>
+    <Version>0.1.0</Version>
+    <Product>MyVLibrary</Product>
+    <Description>Estantería 3D para tu biblioteca de Playnite</Description>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- WebView2 copies its native loader for every architecture under runtimes\win-*\native -->
+    <WebView2LoaderPreference>Dynamic</WebView2LoaderPreference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Playnite provides Playnite.SDK.dll at runtime: compile against it, never ship it -->
+    <PackageReference Include="PlayniteSDK" Version="6.12.0" ExcludeAssets="runtime" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3719.77" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="extension.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="icon.png" CopyToOutputDirectory="PreserveNewest" />
+    <!-- the shelf itself: built by web/build.mjs into web/dist -->
+    <None Include="..\web\dist\**\*" LinkBase="web" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

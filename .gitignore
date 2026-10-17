@@ -1,0 +1,8 @@
+web/node_modules/
+web/dist/
+web/dist-demo/
+extension/bin/
+extension/obj/
+out/
+*.user
+.vs/
