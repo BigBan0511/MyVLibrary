@@ -1,0 +1,21 @@
+{
+  "name": "myvlibrary-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Estantería 3D de MyVLibrary (la parte web que carga la extensión de Playnite)",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:demo": "node build.mjs --target=demo"
+  },
+  "dependencies": {
+    "three": "0.128.0",
+    "@fontsource/bungee": "5.1.0",
+    "@fontsource/figtree": "5.1.1",
+    "@fontsource/fraunces": "5.1.0",
+    "@fontsource/jetbrains-mono": "5.1.1",
+    "@fontsource/permanent-marker": "5.1.0",
+    "@fontsource/press-start-2p": "5.1.0",
+    "@fontsource/saira-extra-condensed": "5.1.0"
+  }
+}
