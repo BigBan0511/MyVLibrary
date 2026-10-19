@@ -659,7 +659,7 @@ namespace MyVLibrary
         private void Fetch(ShelfHost host, string url)
         {
             var dispatcher = api.MainView.UIDispatcher;
-            Action<string> reply = local => dispatcher.BeginInvoke(new Action(() => host.Post(new Dictionary<string, object> { ["type"] = "fetched", ["url"] = url, ["local"] = local })));
+            Action<string> reply = served => dispatcher.BeginInvoke(new Action(() => host.Post(new Dictionary<string, object> { ["type"] = "fetched", ["url"] = url, ["local"] = served })));
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             {
                 reply(null);
