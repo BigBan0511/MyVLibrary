@@ -17,6 +17,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # La versión vive en extension/extension.yaml. Cada PR tiene que subirla, y una etiqueta vX.Y.Z tiene que coincidir con ella.
+      - name: Comprobar la versión
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path extension/extension.yaml -Pattern '^Version:\s*([0-9][0-9.]*)').Matches[0].Groups[1].Value
+          if (-not $version) { throw "No encuentro la versión en extension/extension.yaml" }
+          $pkg = (Get-Content web/package.json -Raw | ConvertFrom-Json).version
+          if ($pkg -ne $version) { Write-Host "::error file=web/package.json::web/package.json dice $pkg y extension.yaml dice $version; tienen que coincidir"; exit 1 }
+          if ("${{ github.event_name }}" -eq 'pull_request') {
+            git fetch --quiet --depth=1 origin "${{ github.base_ref }}"
+            $before = ((git show FETCH_HEAD:extension/extension.yaml) | Select-String -Pattern '^Version:\s*([0-9][0-9.]*)').Matches[0].Groups[1].Value
+            if ([version]$version -le [version]$before) { Write-Host "::error file=extension/extension.yaml::La versión sigue en $version (en ${{ github.base_ref }} es $before). Súbela en extension/extension.yaml y web/package.json."; exit 1 }
+            Write-Host "::notice title=Versión::$before -> $version"
+          }
+          if ("${{ github.ref }}" -like 'refs/tags/v*' -and "${{ github.ref_name }}" -ne "v$version") { Write-Host "::error::La etiqueta ${{ github.ref_name }} no coincide con la versión $version de extension.yaml"; exit 1 }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -40,8 +57,10 @@ jobs:
       - name: Empaquetar el .pext
         shell: pwsh
         run: |
-          $version = (Select-String -Path extension/extension.yaml -Pattern '^Version:\s*(.+)$').Matches[0].Groups[1].Value.Trim()
+          $version = $env:VERSION
           $dir = Resolve-Path out/MyVLibrary
+          $dll = (Get-Item "$dir/MyVLibrary.dll").VersionInfo.ProductVersion
+          if (-not $dll.StartsWith($version)) { throw "MyVLibrary.dll dice $dll y extension.yaml dice $version" }
           # Playnite ya trae su SDK; no debe ir dentro del paquete
           Remove-Item "$dir/Playnite.SDK.dll", "$dir/*.pdb" -ErrorAction SilentlyContinue
           if (-not (Test-Path "$dir/web/index.html")) { throw "Falta web/index.html en el paquete" }

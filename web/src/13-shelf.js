@@ -210,8 +210,10 @@ function drawRowLabels() {
 }
 
 /* ---------- switching design ---------- */
+/* switching design always rebuilds the room and sends the camera back to the overview of the new one */
+let layoutChanged = false;
 function setLayout(name) {
-  prefs.layout = name === 'cases' ? 'cases' : 'wall'; savePrefs();
+  prefs.layout = name === 'cases' ? 'cases' : 'wall'; savePrefs(); layoutChanged = true;
   if (mode !== 'shelf') { pendingRelayout = true; return; }
   relayout({ full: true, reset: true });
 }

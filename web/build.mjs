@@ -12,7 +12,8 @@ const src = join(here, 'src');
 const parts = readdirSync(src).filter(f => f.endsWith('.js')).sort();
 const app = '(() => {\n' + parts.map(f => `/* ---- ${f} ---- */\n` + readFileSync(join(src, f), 'utf8')).join('\n') + '\n})();\n';
 new vm.Script(app, { filename: 'app.js' }); // syntax check
-const head = readFileSync(join(src, 'head.html'), 'utf8');
+const VERSION = (readFileSync(join(here, '..', 'extension', 'extension.yaml'), 'utf8').match(/^Version:\s*([0-9][0-9.]*)/m) || [])[1] || '0.0.0';
+const head = readFileSync(join(src, 'head.html'), 'utf8').replace(/<!--VERSION-->/g, VERSION);
 
 const FONTS = [
   ['Bungee', 'bungee', [[400, 'normal']]],

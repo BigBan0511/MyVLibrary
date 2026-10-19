@@ -125,6 +125,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 .pop{position:fixed;z-index:8;background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;padding:14px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 16px 40px rgba(0,0,0,.45)}
 #settings{top:calc(var(--hud-h,72px) + 4px);right:max(16px,env(safe-area-inset-right,0px));width:min(380px,calc(100vw - 32px));display:grid;gap:12px}
 .set-row{display:grid;gap:6px}
+.set-ver{margin:2px 0 0;font:500 11px var(--f-body);color:var(--ink-dim);text-align:right;opacity:.75}
 .set-row>span{font:700 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
 .seg{display:flex;border:1px solid var(--panel-line);border-radius:8px;overflow:hidden}
 .seg button{flex:1;height:36px;border:0;background:transparent;font-weight:600;font-size:14px;cursor:pointer;border-right:1px solid var(--panel-line)}
@@ -337,6 +338,7 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="set-row"><span>Tráiler</span><div class="seg" data-pref="trailer"><button type="button" data-v="on">Con sonido</button><button type="button" data-v="mute">Sin sonido</button><button type="button" data-v="off">No</button></div></div>
   <div class="set-row"><span>Ficha al sacar un juego</span><div class="seg" data-pref="cardStart"><button type="button" data-v="hide">Plegada</button><button type="button" data-v="show">Abierta</button></div></div>
   <p class="set-note">Los juegos que nunca has abierto llegan precintados: con «A mano» el precinto solo se quita tirando de la lengüeta. Los estados y categorías solo cambian cuando tú los cambias.</p>
+  <p class="set-ver">MyVLibrary <!--VERSION--></p>
 </div>
 <aside class="info" id="info" hidden aria-label="Ficha del juego"></aside>
 <button class="info-tab" id="infoTab" type="button" hidden aria-label="Mostrar la ficha del juego"></button>
