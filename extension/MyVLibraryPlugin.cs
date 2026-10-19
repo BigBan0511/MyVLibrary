@@ -36,6 +36,7 @@ namespace MyVLibrary
         public MyVLibraryPlugin(IPlayniteAPI api) : base(api)
         {
             PluginDir = Path.GetDirectoryName(typeof(MyVLibraryPlugin).Assembly.Location);
+            Loc.Init(api);
             SettingsVm = new ShelfSettingsViewModel(this);
             Bridge = new LibraryBridge(this);
             Properties = new GenericPluginProperties { HasSettings = true };
@@ -57,6 +58,7 @@ namespace MyVLibrary
 
         public override void OnApplicationStopped(OnApplicationStoppedEventArgs args)
         {
+            Bridge.Shutdown();
             Bridge.Unsubscribe();
             if (shelfWindow != null)
             {
@@ -92,7 +94,7 @@ namespace MyVLibrary
             yield return new MainMenuItem
             {
                 MenuSection = "@MyVLibrary",
-                Description = "Abrir la estantería en una ventana",
+                Description = Loc.S("Abrir la estantería en una ventana", "Open the shelf in a window"),
                 Action = a => OpenWindow(null)
             };
         }
@@ -108,12 +110,14 @@ namespace MyVLibrary
             yield return new GameMenuItem
             {
                 MenuSection = "MyVLibrary",
-                Description = "Ver en la estantería",
+                Description = Loc.S("Ver en la estantería", "Show on the shelf"),
                 Action = a => OpenWindow(game.Id)
             };
         }
 
         // ---------- game events, relayed to the shelf ----------
+
+        public override void OnGameStarting(OnGameStartingEventArgs args) => Bridge.GameStarting(args.Game);
 
         public override void OnGameStarted(OnGameStartedEventArgs args) => Bridge.GameStarted(args.Game);
 
@@ -193,7 +197,7 @@ namespace MyVLibrary
             catch (Exception e)
             {
                 logger.Error(e, "MyVLibrary: no se ha podido abrir la ventana");
-                PlayniteApi.Dialogs.ShowErrorMessage("No se ha podido abrir la estantería:\n" + e.Message, "MyVLibrary");
+                PlayniteApi.Dialogs.ShowErrorMessage(Loc.S("No se ha podido abrir la estantería:\n", "Could not open the shelf:\n") + e.Message, "MyVLibrary");
             }
         }
 

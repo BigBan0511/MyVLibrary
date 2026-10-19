@@ -17,7 +17,7 @@ const maxAniso = renderer.capabilities.getMaxAnisotropy();
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#121110');
 scene.fog = new THREE.Fog('#121110', 520, 1200);
-const camera = new THREE.PerspectiveCamera(28, innerWidth / innerHeight, 1, 3200);
+const camera = new THREE.PerspectiveCamera(28, innerWidth / innerHeight, 6, 2400);
 
 function tex(c, rep) { const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = maxAniso; if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); } return t; }
 function dataTex(c, rep) { const t = new THREE.CanvasTexture(c); t.anisotropy = maxAniso; if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); } return t; }
@@ -44,8 +44,8 @@ scene.environment = buildEnv();
    LIGHTS: one warm ceiling spot over the table, a weak fill, the TV's glow
    ===================================================================== */
 const hemi = new THREE.HemisphereLight('#c9cbff', '#4a3426', .25); scene.add(hemi);
-const key = new THREE.SpotLight('#ffd2a0', 1.6, 0, .52, .9, 1);
-key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -.0004; key.shadow.radius = 4; if ('normalBias' in key.shadow) key.shadow.normalBias = .02;
+const key = new THREE.SpotLight('#ffd2a0', 1.6, 0, .62, 1, 1);
+key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -.0005; key.shadow.radius = 6; if ('normalBias' in key.shadow) key.shadow.normalBias = .02;
 key.shadow.camera.near = 120; key.shadow.camera.far = 700;
 const KEY_POS = new V3(60, 330, 230), KEY_AIM = new V3(-6, 108, -6);
 key.position.copy(KEY_POS); key.target.position.copy(KEY_AIM); scene.add(key, key.target);
@@ -186,26 +186,26 @@ class Case {
     const isJ = g.fmt === 'jewel', isB = g.fmt === 'big';
     this.root = new THREE.Group(); this.inner = new THREE.Group(); this.root.add(this.inner); scene.add(this.root);
     this.edge = isB ? M(THREE.MeshStandardMaterial, { color: g.spine || g.pal[0], roughness: .7 }, .6) : MAT.edge[g.fmt];
-    const cp = isB ? { roughness: .62, clearcoat: .35, clearcoatRoughness: .35 } : isJ ? { roughness: .42, clearcoat: 1, clearcoatRoughness: .03 } : { roughness: .5, clearcoat: 1, clearcoatRoughness: .07 };
-    this.frontMat = M(THREE.MeshPhysicalMaterial, { color: g.pal[0], ...cp }, 1);
-    this.backMat = M(THREE.MeshPhysicalMaterial, { color: g.pal[0], ...cp }, 1);
+    const cp = isB ? { roughness: .62, clearcoat: .3, clearcoatRoughness: .4 } : isJ ? { roughness: .45, clearcoat: .7, clearcoatRoughness: .08 } : { roughness: .52, clearcoat: .55, clearcoatRoughness: .14 };
+    this.frontMat = M(THREE.MeshPhysicalMaterial, { color: g.pal[0], ...cp }, .8);
+    this.backMat = M(THREE.MeshPhysicalMaterial, { color: g.pal[0], ...cp }, .8);
     const shellD = split + d / 2, lidD = d / 2 - split; this.shellD = shellD; this.lidD = lidD;
     this.shell = new THREE.Mesh(G.shell, [MAT.tray[g.fmt], this.backMat, this.edge]); this.shell.position.z = -d / 2 + shellD / 2; this.inner.add(this.shell);
     this.pivot = new THREE.Group(); this.pivot.position.set(-w / 2, 0, split); this.inner.add(this.pivot);
     this.lid = new THREE.Mesh(G.lid, [this.frontMat, MAT.lid[g.fmt], this.edge]); this.lid.position.set(w / 2, 0, lidD / 2); this.pivot.add(this.lid);
     /* spine label under the clear sleeve */
     this.spineCanvas = drawSpine(g); this.spineTex = tex(this.spineCanvas);
-    this.spineMat = M(THREE.MeshPhysicalMaterial, { map: this.spineTex, roughness: isB ? .62 : .5, clearcoat: isB ? .3 : 1, clearcoatRoughness: .08, emissive: new THREE.Color('#ffffff'), emissiveMap: this.spineTex, emissiveIntensity: 0 }, 1);
+    this.spineMat = M(THREE.MeshPhysicalMaterial, { map: this.spineTex, roughness: isB ? .62 : .5, clearcoat: isB ? .3 : .6, clearcoatRoughness: .12, emissive: new THREE.Color('#ffffff'), emissiveMap: this.spineTex, emissiveIntensity: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, .8);
     const sw = d - G.bevel * 1.4, sh = h - .3;
-    this.spine = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.spineMat); this.spine.rotation.y = -Math.PI / 2; this.spine.position.x = -w / 2 - .004; this.inner.add(this.spine);
+    this.spine = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.spineMat); this.spine.rotation.y = -Math.PI / 2; this.spine.position.x = -w / 2 - .03; this.inner.add(this.spine);
     /* dust: spine, top, front, back */
-    this.dustMat = M(THREE.MeshStandardMaterial, { map: TEXS.spineDust, color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1 }, .6);
-    this.filmMat = M(THREE.MeshStandardMaterial, { map: TEXS.film, color: '#c9bea9', transparent: true, opacity: 0, depthWrite: false, roughness: 1 }, .6);
-    this.topMat = M(THREE.MeshStandardMaterial, { map: TEXS.topDust, color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1 }, .6);
-    const ds = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.dustMat); ds.rotation.y = -Math.PI / 2; ds.position.x = -w / 2 - .014;
-    const dt = new THREE.Mesh(pgeo(g.fmt, 'top'), this.topMat); dt.rotation.x = -Math.PI / 2; dt.position.y = h / 2 + .014;
-    const df = new THREE.Mesh(pgeo(g.fmt, 'film'), this.filmMat); df.position.set(0, 0, lidD / 2 + .014); this.lid.add(df);
-    const db = new THREE.Mesh(pgeo(g.fmt, 'film'), this.filmMat); db.rotation.y = Math.PI; db.position.set(0, 0, -shellD / 2 - .014); this.shell.add(db);
+    this.dustMat = M(THREE.MeshStandardMaterial, { map: TEXS.spineDust, color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }, .6);
+    this.filmMat = M(THREE.MeshStandardMaterial, { map: TEXS.film, color: '#c9bea9', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }, .6);
+    this.topMat = M(THREE.MeshStandardMaterial, { map: TEXS.topDust, color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }, .6);
+    const ds = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.dustMat); ds.rotation.y = -Math.PI / 2; ds.position.x = -w / 2 - .06;
+    const dt = new THREE.Mesh(pgeo(g.fmt, 'top'), this.topMat); dt.rotation.x = -Math.PI / 2; dt.position.y = h / 2 + .04;
+    const df = new THREE.Mesh(pgeo(g.fmt, 'film'), this.filmMat); df.position.set(0, 0, lidD / 2 + .035); this.lid.add(df);
+    const db = new THREE.Mesh(pgeo(g.fmt, 'film'), this.filmMat); db.rotation.y = Math.PI; db.position.set(0, 0, -shellD / 2 - .035); this.shell.add(db);
     this.inner.add(ds, dt); this.dustMeshes = [ds, dt, df, db];
     /* dust footprint on the shelf and an optional cobweb (live in the room, not on the case) */
     this.footMat = M(THREE.MeshStandardMaterial, { map: TEXS.foot[g.fmt], color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }, .6);

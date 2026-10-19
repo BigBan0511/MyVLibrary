@@ -64,7 +64,9 @@ function makeLinenCanvas() {
 function makeAOBack() {
   const W = 256, H = 160, c = mkCanvas(W, H), x = c.getContext('2d');
   const band = (x0, y0, x1, y1, w, h, a) => { x.fillStyle = lg(x, x0, y0, x1, y1, [[0, `rgba(0,0,0,${a})`], [1, 'rgba(0,0,0,0)']]); x.fillRect(0, 0, w, h); };
-  band(0, 0, 0, H * .45, W, H, .62); band(0, H, 0, H * .7, W, H, .35); band(0, 0, W * .16, 0, W, H, .45); band(W, 0, W * .84, 0, W, H, .45);
+  /* one soft falloff from the dark top to the floor, with no lit stripe left in the middle */
+  x.fillStyle = lg(x, 0, 0, 0, H, [[0, 'rgba(0,0,0,.64)'], [.3, 'rgba(0,0,0,.38)'], [.6, 'rgba(0,0,0,.26)'], [.86, 'rgba(0,0,0,.3)'], [1, 'rgba(0,0,0,.42)']]); x.fillRect(0, 0, W, H);
+  band(0, 0, W * .16, 0, W, H, .45); band(W, 0, W * .84, 0, W, H, .45);
   return c;
 }
 function makeAOFloor() {
@@ -86,7 +88,7 @@ function makeLabelCanvas(label, count) {
   x.fillStyle = '#26211c'; x.textBaseline = 'middle'; x.textAlign = 'left';
   let fs = 56; x.font = `800 ${fs}px ${F.saira}`; while (x.measureText(label.toUpperCase()).width > W - 200 && fs > 24) { fs -= 2; x.font = `800 ${fs}px ${F.saira}`; }
   x.fillText(label.toUpperCase(), 26, H / 2 + 2);
-  x.textAlign = 'right'; x.font = `700 22px ${F.mono}`; x.fillStyle = '#6b5d4a'; x.fillText(count === 1 ? '1 JUEGO' : `${count} JUEGOS`, W - 24, H / 2 + 2);
+  x.textAlign = 'right'; x.font = `700 22px ${F.mono}`; x.fillStyle = '#6b5d4a'; x.fillText(T(count === 1 ? '{0} JUEGO' : '{0} JUEGOS', count), W - 24, H / 2 + 2);
   addGrain(x, W, H, r, 14); return c;
 }
 function makeBezelCanvas() {
@@ -99,7 +101,7 @@ function makeBezelCanvas() {
   addGrain(x, W, H, r, 6); return c;
 }
 function requirements(g) {
-  if (g.real) return ['TU COPIA', `Plataforma: ${(g.platName || g.plat || '—').slice(0, 34)}`, `Origen: ${(g.src || '—').slice(0, 36)}`, g.installed ? 'Instalado en este equipo' : 'Sin instalar'];
-  if (g.year < 2005) return ['REQUISITOS MÍNIMOS', `Windows ${g.year < 1998 ? '95' : '98'} · Pentium ${g.year < 1998 ? '133' : '266'} MHz`, `${g.year < 1998 ? '16' : '64'} MB de RAM · CD-ROM ${g.year < 1998 ? '4x' : '24x'}`, `Tarjeta de sonido compatible`];
-  return ['REQUISITOS MÍNIMOS', 'Windows 10 de 64 bits · 4 núcleos', `${g.year > 2021 ? 16 : 8} GB de RAM · ${g.year > 2021 ? 40 : 20} GB libres`, 'GPU con 4 GB · DirectX 12'];
+  if (g.real) return [T('TU COPIA'), T('Plataforma: {0}', (g.platName || g.plat || '—').slice(0, 34)), T('Origen: {0}', (g.src || '—').slice(0, 36)), T(g.installed ? 'Instalado en este equipo' : 'Sin instalar')];
+  if (g.year < 2005) return [T('REQUISITOS MÍNIMOS'), `Windows ${g.year < 1998 ? '95' : '98'} · Pentium ${g.year < 1998 ? '133' : '266'} MHz`, T('{0} MB de RAM · CD-ROM {1}', g.year < 1998 ? '16' : '64', g.year < 1998 ? '4x' : '24x'), T('Tarjeta de sonido compatible')];
+  return [T('REQUISITOS MÍNIMOS'), T('Windows 10 de 64 bits · 4 núcleos'), T('{0} GB de RAM · {1} GB libres', g.year > 2021 ? 16 : 8, g.year > 2021 ? 40 : 20), T('GPU con 4 GB · DirectX 12')];
 }

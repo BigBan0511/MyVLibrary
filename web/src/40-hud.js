@@ -1,11 +1,11 @@
 
-sfx.on = prefs.sound !== 'off';
+sfx.on = prefs.sound !== 'off'; sfx.vol = clamp(prefs.vol / 100, 0, 1);
 
 /* =====================================================================
    STATE + HUD
    ===================================================================== */
 let mode = 'loading', active = null, busy = false, hovered = null, focus = null, kbNav = false, pendingRelayout = false;
-let hoverPart = null, playStart = 0, lastInfoKey = '', infoEdit = false, infoOpen = false;
+let hoverPart = null, playStart = 0, lastInfoKey = '', infoEdit = false, infoOpen = false, newStatus = false;
 const pointer = { x: 0, y: 0, cx: 0, cy: 0, type: 'mouse', down: null };
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 const coarse = matchMedia('(pointer: coarse)').matches;
@@ -17,14 +17,15 @@ function hit(list) {
   const h = ray.intersectObjects(list, false)[0];
   return h ? { case: h.object.userData.case, part: h.object.userData.part || null, point: h.point } : null;
 }
-function setHovered(c) { if (hovered === c) return; if (hovered) hovered.hoverT = 0; hovered = c; if (c) { c.hoverT = 1; if (kbNav) sfx.tick(); } renderTip(); }
+let prefetchT = 0;
+function setHovered(c) { if (hovered === c) return; if (hovered) hovered.hoverT = 0; hovered = c; if (c) { c.hoverT = 1; if (kbNav) sfx.tick(); clearTimeout(prefetchT); prefetchT = setTimeout(() => { if (hovered === c) LIB.prefetch(c.g); }, 220); } renderTip(); }
 const tipEl = $('#tip');
 function renderTip() {
   const c = mode === 'shelf' ? hovered : null;
   if (!c) { tipEl.hidden = true; return; }
   const g = c.g, idle = g.last === null || g.last === undefined ? g.added : g.last;
-  const extra = g.wrapped ? ' · precintado' : g.dust > .3 && idle != null ? ` · ${spanText(idle)} sin tocar` : '';
-  tipEl.innerHTML = `<b>${esc(g.t)}</b><span>${fmtH(g.hours)} · ${esc(g.status || 'Sin estado')}${extra}</span>`; tipEl.hidden = false; placeTip();
+  const extra = g.wrapped ? ' · ' + T('precintado') : g.dust > .3 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : '';
+  tipEl.innerHTML = `<b>${esc(g.t)}</b><span>${fmtH(g.hours)} · ${esc(g.status ? TD(g.status) : T('Sin estado'))}${extra}</span>`; tipEl.hidden = false; placeTip();
 }
 const _tipV = new V3();
 function placeTip() {
@@ -37,23 +38,23 @@ function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.c
 
 function setMode(m) { mode = m; renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
 const btn = (k, label, a, primary) => `<button class="pbtn${primary ? ' primary' : ''}" type="button" data-act="${a}"><kbd>${k}</kbd>${label}</button>`;
-function tearHintText(c) { return c.tear > .05 ? `Precinto ${Math.round(100 * c.tear / c.L)} % · sigue tirando` : 'Arrastra la lengüeta roja para quitar el precinto'; }
+function tearHintText(c) { return c.tear > .05 ? T('Precinto {0} % · sigue tirando', Math.round(100 * c.tear / c.L)) : T('Arrastra la lengüeta roja para quitar el precinto'); }
 function renderPrompts() {
   const el = $('#prompts'); let h = '';
   if (mode === 'shelf') {
     const gr = groups[curGroup], np = gr ? gr.pages.length : 1;
-    if (np > 1) h += `<div class="pager"><button class="pbtn icon" type="button" data-act="prevPage" aria-label="Página anterior"${curPage === 0 ? ' disabled' : ''}>‹</button><span class="pg">${curPage + 1} / ${np}</span><button class="pbtn next" type="button" data-act="nextPage"${curPage >= np - 1 ? ' disabled' : ''}>Siguiente <i aria-hidden="true">›</i></button></div>`;
-    h += coarse ? `<span class="hint">Toca un lomo para sacar el juego</span>` : `<span class="hint">Clic en un lomo · <kbd>←</kbd><kbd>→</kbd> recorrer · <kbd>Q</kbd><kbd>E</kbd> estantes · <kbd>Intro</kbd> sacar</span>`;
+    if (np > 1) h += `<div class="pager"><button class="pbtn icon" type="button" data-act="prevPage" aria-label="${T('Página anterior')}"${curPage === 0 ? ' disabled' : ''}>‹</button><span class="pg">${curPage + 1} / ${np}</span><button class="pbtn next" type="button" data-act="nextPage"${curPage >= np - 1 ? ' disabled' : ''}>${T('Siguiente')} <i aria-hidden="true">›</i></button></div>`;
+    h += coarse ? `<span class="hint">${T('Toca un lomo para sacar el juego')}</span>` : `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>`;
   }
   if (mode === 'inspect' && active) {
     if (active.wrap) {
       if (prefs.seal !== 'auto') h += `<span class="hint tear" id="tearHint">${tearHintText(active)}</span>`;
-      if (prefs.seal !== 'manual') h += btn('Intro', prefs.seal === 'auto' ? 'Abrir la caja' : 'Quitar precinto', 'unwrap', true);
-    } else h += btn('Intro', 'Abrir la caja', 'open', true);
-    h += btn('F', active.flipT ? 'Ver portada' : 'Ver contraportada', 'flip') + btn('Esc', 'Devolver', 'back');
+      if (prefs.seal !== 'manual') h += btn(T('Intro'), prefs.seal === 'auto' ? T('Abrir la caja') : T('Quitar precinto'), 'unwrap', true);
+    } else h += btn(T('Intro'), T('Abrir la caja'), 'open', true);
+    h += btn('F', active.flipT ? T('Ver portada') : T('Ver contraportada'), 'flip') + btn('Esc', T('Devolver'), 'back');
   }
-  if (mode === 'open') h = btn('M', 'Leer el manual', 'manual') + btn('Intro', active && active.g.real && !active.g.installed ? 'Meter el disco (instalar)' : 'Meter el disco', 'insert', true) + btn('Esc', 'Cerrar la caja', 'close');
-  if (mode === 'playing') h = btn('Esc', PLAYNITE ? 'Sacar el disco' : 'Cerrar el juego', 'quit', true);
+  if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), active && active.g.real && !active.g.installed ? T('Meter el disco (instalar)') : T('Meter el disco'), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
+  if (mode === 'playing') h = btn('Esc', PLAYNITE ? T('Sacar el disco') : T('Cerrar el juego'), 'quit', true);
   el.innerHTML = h;
 }
 $('#prompts').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) { sfx.init(); doAct(b.dataset.act); } });
@@ -65,7 +66,7 @@ function doAct(a) {
 /* ---------- header: brand count and the pills that choose what is on the shelf ---------- */
 function renderBrand() {
   const gr = groups[curGroup], n = gr ? gr.games.length : 0;
-  $('#brandCount').textContent = `${n} de ${GAMES.length} ${GAMES.length === 1 ? 'juego' : 'juegos'}`;
+  $('#brandCount').textContent = T(GAMES.length === 1 ? '{0} de {1} juego' : '{0} de {1} juegos', n, GAMES.length);
 }
 function renderPills() {
   const el = $('#pills');
@@ -94,6 +95,10 @@ function setGroup(i, quiet) {
   if (!groups.length || mode !== 'shelf' || busy) return; i = ((i % groups.length) + groups.length) % groups.length;
   if (i === curGroup) return;
   prefs.shelf = groups[i].key; savePrefs();
+  if (isCases()) {
+    curGroup = i; curPage = 0; layoutPage(); setView('shelf'); renderPills(); renderBrand(); renderPrompts(); applySearch(true);
+    if (!quiet) sfx.whoosh(); return Promise.resolve();
+  }
   return swapShelf(() => { curGroup = i; curPage = 0; if (cam.view !== 'shelf') setView('shelf'); }, quiet);
 }
 function setPage(p, quiet) {
@@ -105,22 +110,24 @@ function setPage(p, quiet) {
 /* ---------- inspect card: status and categories ---------- */
 function renderInfo(force) {
   const el = $('#info'), tab = $('#infoTab'), show = active && (cam.view === 'shelf' || cam.view === 'browse') && !['shelf', 'loading', 'manual'].includes(mode);
-  if (!show) { el.hidden = true; tab.hidden = true; lastInfoKey = ''; infoEdit = false; infoOpen = false; return; }
-  if (prefs.card === 'hide') { el.hidden = true; lastInfoKey = ''; tab.hidden = false; tab.innerHTML = `<span>Ficha</span><b>${esc(active.g.t)}</b><i aria-hidden="true">▾</i>`; return; }
+  if (!show) { el.hidden = true; tab.hidden = true; lastInfoKey = ''; infoEdit = false; infoOpen = false; newStatus = false; return; }
+  placeCard();
+  if (prefs.card === 'hide') { el.hidden = true; lastInfoKey = ''; tab.hidden = false; tab.innerHTML = `<span>${T('Ficha')}</span><b>${esc(active.g.t)}</b><i aria-hidden="true">▾</i>`; return; }
   tab.hidden = true;
-  const g = active.g, key = [g.id, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, prefs.cats.length, Math.round(g.dust * 4)].join('|');
+  const g = active.g, key = [g.id, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
   const idle = g.last === null || g.last === undefined ? g.added : g.last;
-  const dustTxt = g.wrapped ? 'Ninguno, está precintado' : g.dust > .6 ? 'Mucho' : g.dust > .25 ? 'Algo' : g.dust > .04 ? 'Poco' : 'Limpio';
-  const note = PLAYNITE ? 'Los cambios se guardan en Playnite al momento.' : 'Si cambias el estado, al devolverlo irá a ese estante.';
+  const dustTxt = T(g.wrapped ? 'Ninguno, está precintado' : g.dust > .6 ? 'Mucho' : g.dust > .25 ? 'Algo' : g.dust > .04 ? 'Poco' : 'Limpio');
+  const note = T(PLAYNITE ? 'Los cambios se guardan en Playnite al momento.' : 'Si cambias el estado, al devolverlo irá a ese estante.');
   const statuses = g.status && !STATUSES.includes(g.status) ? [g.status, ...STATUSES] : STATUSES;
   el.classList.toggle('open', infoOpen);
-  el.innerHTML = `<div class="info-bar"><button type="button" class="info-more" data-more="1" aria-expanded="${infoOpen}">${infoOpen ? 'Menos' : 'Estado y categorías'}</button><button type="button" class="info-hide" data-hide="1" aria-label="Ocultar la ficha" title="Ocultar la ficha (I)">Ocultar <i aria-hidden="true">▴</i></button></div><div class="eyebrow">${esc([g.genre, g.year, g.real ? g.plat : DIMS[g.fmt].name].filter(Boolean).join(' · '))}</div><h2>${esc(g.t)}</h2>
-    <dl><dt>Jugado</dt><dd>${fmtH(g.hours)}${g.sessions ? ` · ${g.sessions} ${g.sessions === 1 ? 'vez' : 'veces'}` : ''}</dd><dt>Última vez</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>Logros</dt><dd>${g.ach[0]} de ${g.ach[1]}</dd>` : ''}<dt>Polvo</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ` · ${spanText(idle)} sin tocar` : ''}</dd></dl>
-    <div class="frow"><label for="stSel">Estado</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : '<option value="" selected>Sin estado</option>'}${statuses.map(s => `<option${s === g.status ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></div>
-    <div class="cats"><span class="lbl">Categorías</span><div class="chips">${g.cats.length ? g.cats.map(c => `<span class="chip">${esc(c)}</span>`).join('') : '<em>Ninguna</em>'}<button type="button" class="chip add" data-edit="1">${infoEdit ? 'Listo' : 'Editar'}</button></div></div>
-    ${infoEdit ? `<div class="cat-edit">${prefs.cats.map(c => `<label><input type="checkbox" data-catbox="${esc(c)}"${g.cats.includes(c) ? ' checked' : ''}><span>${esc(c)}</span></label>`).join('')}
-      <form class="cat-new"><input id="catNew" type="text" placeholder="Nueva categoría" maxlength="40" autocomplete="off"><button type="submit">Añadir</button></form></div>` : ''}
+  el.innerHTML = `<div class="info-bar"><button type="button" class="info-more" data-more="1" aria-expanded="${infoOpen}">${infoOpen ? T('Menos') : T('Estado y categorías')}</button><button type="button" class="info-hide" data-hide="1" aria-label="${T('Ocultar la ficha')}" title="${T('Ocultar la ficha')} (I) · ${T('Arrastra para moverla')}">${T('Ocultar')} <i aria-hidden="true">▴</i></button></div><div class="eyebrow">${esc([g.genre, g.year, g.real ? g.plat : T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</div><h2>${esc(g.t)}</h2>
+    <dl><dt>${T('Jugado')}</dt><dd>${fmtH(g.hours)}${g.sessions ? ' · ' + T(g.sessions === 1 ? '{0} vez' : '{0} veces', g.sessions) : ''}</dd><dt>${T('Última vez')}</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>${T('Logros')}</dt><dd>${T('{0} de {1}', g.ach[0], g.ach[1])}</dd>` : ''}<dt>${T('Polvo')}</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : ''}</dd></dl>
+    <div class="frow"><label for="stSel">${T('Estado')}</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : `<option value="" selected>${T('Sin estado')}</option>`}${statuses.map(s => `<option value="${esc(s)}"${s === g.status ? ' selected' : ''}>${esc(TD(s))}</option>`).join('')}<option value="__new">+ ${T('Nuevo estado…')}</option></select></div>
+    ${newStatus ? `<form class="cat-new st-new"><input id="stNew" type="text" placeholder="${T('Nombre del estado nuevo')}" maxlength="40" autocomplete="off"><button type="submit">${T('Crear')}</button></form>` : ''}
+    <div class="cats"><span class="lbl">${T('Categorías')}</span><div class="chips">${g.cats.length ? g.cats.map(c => `<span class="chip">${esc(TD(c))}</span>`).join('') : `<em>${T('Ninguna')}</em>`}<button type="button" class="chip add" data-edit="1">${infoEdit ? T('Listo') : '+ ' + T('Categorías')}</button></div></div>
+    ${infoEdit ? `<div class="cat-edit">${prefs.cats.map(c => `<label><input type="checkbox" data-catbox="${esc(c)}"${g.cats.includes(c) ? ' checked' : ''}><span>${esc(TD(c))}</span></label>`).join('')}
+      <form class="cat-new"><input id="catNew" type="text" placeholder="${T('Nueva categoría')}" maxlength="40" autocomplete="off"><button type="submit">${T('Añadir')}</button></form></div>` : ''}
     <p class="note">${note}</p>`;
 }
 function gameChanged(c, fields, regroup) {
@@ -129,7 +136,8 @@ function gameChanged(c, fields, regroup) {
 }
 $('#info').addEventListener('change', e => {
   if (!active) return; const c = active, g = c.g;
-  if (e.target.id === 'stSel') { const old = g.status; g.status = e.target.value; gameChanged(c, ['status'], prefs.group === 'status'); if (prefs.group === 'status' && old !== g.status && groups[curGroup].key !== '__all') toast(`Al devolverlo irá al estante «${STATUS_SHELF[g.status] || g.status}»`); }
+  if (e.target.id === 'stSel' && e.target.value === '__new') { newStatus = true; renderInfo(true); const i = $('#stNew'); if (i) i.focus(); return; }
+  if (e.target.id === 'stSel') { const old = g.status; g.status = e.target.value; gameChanged(c, ['status'], prefs.group === 'status'); if (prefs.group === 'status' && old !== g.status && groups[curGroup].key !== '__all') toast(T('Al devolverlo irá al estante «{0}»', STATUS_SHELF[g.status] || g.status)); }
   const box = e.target.closest('[data-catbox]');
   if (box) { const name = box.dataset.catbox; if (box.checked) { if (!g.cats.includes(name)) g.cats.push(name); } else g.cats = g.cats.filter(x => x !== name); gameChanged(c, ['cats'], prefs.group === 'cat'); }
 });
@@ -140,11 +148,35 @@ $('#info').addEventListener('click', e => {
   if (e.target.closest('[data-edit]')) { infoEdit = !infoEdit; renderInfo(true); if (infoEdit) { const i = $('#catNew'); if (i && !coarse) i.focus(); } }
 });
 $('#info').addEventListener('submit', e => {
-  e.preventDefault(); if (!active) return; const inp = $('#catNew'), name = inp.value.trim().replace(/\s+/g, ' ');
+  e.preventDefault(); if (!active) return;
+  if (e.target.closest('.st-new')) {
+    const name = $('#stNew').value.trim().replace(/\s+/g, ' '); newStatus = false; if (!name) { renderInfo(true); return; }
+    if (!STATUSES.includes(name)) { STATUSES.push(name); STATUS_SHELF[name] = name; STATUS_KIND[name] = statusKind(name); STATUS_CLASS[name] = KIND_CLASS[STATUS_KIND[name]]; }
+    const g = active.g; g.status = name; saveGame(g); active.dirty = true; active.ensureDetail(); renderInfo(true); pendingRelayout = prefs.group === 'status';
+    if (PLAYNITE) LIB.send('createStatus', { id: g.id, name }); toast(T('Estado «{0}» creado', name)); return;
+  }
+  const inp = $('#catNew'), name = inp.value.trim().replace(/\s+/g, ' ');
   if (!name) return; if (!prefs.cats.includes(name)) { prefs.cats.push(name); savePrefs(); }
   const g = active.g; if (!g.cats.includes(name)) g.cats.push(name);
-  gameChanged(active, ['cats'], prefs.group === 'cat'); toast(`Categoría «${name}» añadida`);
+  gameChanged(active, ['cats'], prefs.group === 'cat'); toast(T('Categoría «{0}» añadida', name));
 });
+/* the card can be dragged by its top bar anywhere on screen; the place is remembered (double click: back home) */
+function placeCard() {
+  const el = $('#info'), tab = $('#infoTab'), p = prefs.cardPos;
+  [el, tab].forEach(n => { if (p) { n.style.left = clamp(p.x * innerWidth, 8, innerWidth - 120) + 'px'; n.style.top = clamp(p.y * innerHeight, 8, innerHeight - 60) + 'px'; } else { n.style.left = ''; n.style.top = ''; } });
+}
+let cardDrag = null;
+$('#info').addEventListener('pointerdown', e => {
+  if (!e.target.closest('.info-bar') || e.target.closest('button')) return;
+  const r = $('#info').getBoundingClientRect(); cardDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+  try { $('#info').setPointerCapture(e.pointerId); } catch (_) { } e.preventDefault();
+});
+$('#info').addEventListener('pointermove', e => {
+  if (!cardDrag) return; const el = $('#info'), w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = clamp(e.clientX - cardDrag.dx, 8, innerWidth - w - 8) + 'px'; el.style.top = clamp(e.clientY - cardDrag.dy, 8, innerHeight - Math.min(h, 80)) + 'px';
+});
+$('#info').addEventListener('pointerup', () => { if (!cardDrag) return; cardDrag = null; const r = $('#info').getBoundingClientRect(); prefs.cardPos = { x: r.left / innerWidth, y: r.top / innerHeight }; savePrefs(); placeCard(); });
+$('#info').addEventListener('dblclick', e => { if (e.target.closest('.info-bar') && !e.target.closest('button')) { prefs.cardPos = null; savePrefs(); placeCard(); } });
 function setCard(v) { prefs.card = v; savePrefs(); lastInfoKey = ''; renderInfo(true); sfx.tick(); if (v === 'show') { const b = $('#info .info-hide'); if (b && !coarse) b.focus(); } else $('#infoTab').focus(); }
 $('#infoTab').addEventListener('click', () => setCard('show'));
 
@@ -155,7 +187,7 @@ function applySearch(stay) {
   const q = norm(qEl.value.trim()), gr = groups[curGroup]; if (!gr) return;
   const hits = q ? gr.games.filter(g => searchText(g).includes(q)) : [];
   navOrder.forEach(c => { c.match = !!q && hits.includes(c.g); c.setDim(!!q && !c.match); });
-  countEl.hidden = !q; countEl.textContent = hits.length === 1 ? '1 juego' : `${hits.length} juegos`;
+  countEl.hidden = !q; countEl.textContent = T(hits.length === 1 ? '{0} juego' : '{0} juegos', hits.length);
   if (!stay && q && hits.length && !navOrder.some(c => c.match) && mode === 'shelf') { const p = pageOf(hits[0]); if (p >= 0 && p !== curPage) setPage(p, true); }
 }
 qEl.addEventListener('input', () => applySearch());
@@ -163,10 +195,10 @@ qEl.addEventListener('keydown', e => { if (e.key === 'Enter') { const m = navOrd
 
 /* ---------- settings ---------- */
 const setBtn = $('#setBtn'), setPop = $('#settings');
-function renderSettings() { setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
+function renderSettings() { const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
 function renderRoomPick() {
   const el = $('#roomPick'); if (!el) return;
-  el.innerHTML = ROOM_ORDER.map(k => { const R = ROOMS[k]; return `<button type="button" class="room" data-room="${k}" aria-pressed="${prefs.room === k}"><i style="background:linear-gradient(90deg,${R.sw[0]} 0 45%,${R.sw[1]} 45% 72%,${R.sw[2]} 72%)"></i><span>${R.name}</span></button>`; }).join('');
+  el.innerHTML = ROOM_ORDER.map(k => { const R = ROOMS[k]; return `<button type="button" class="room" data-room="${k}" aria-pressed="${prefs.room === k}"><i style="background:linear-gradient(90deg,${R.sw[0]} 0 45%,${R.sw[1]} 45% 72%,${R.sw[2]} 72%)"></i><span>${T(R.name)}</span></button>`; }).join('');
 }
 let roomBusy = false;
 async function switchRoom(name) {
@@ -175,14 +207,20 @@ async function switchRoom(name) {
   const f = $('#fade'); f.classList.add('on'); await new Promise(r => setTimeout(r, RM ? 30 : 240));
   try { applyRoom(name); } catch (e) { console.error(e); }
   requestAnimationFrame(() => requestAnimationFrame(() => { f.classList.remove('on'); roomBusy = false; }));
-  toast(`Ambiente: ${ROOMS[name].name}`, 1800);
+  toast(T('Ambiente: {0}', T(ROOMS[name].name)), 1800);
 }
 $('#roomPick').addEventListener('click', e => { const b = e.target.closest('[data-room]'); if (b) switchRoom(b.dataset.room); });
 setBtn.addEventListener('click', () => { setPop.hidden = !setPop.hidden; setBtn.setAttribute('aria-expanded', String(!setPop.hidden)); renderSettings(); });
+setPop.addEventListener('input', e => {
+  if (e.target.id === 'volRange') { prefs.vol = +e.target.value; sfx.setVolume(prefs.vol / 100); $('#volVal').textContent = prefs.vol + ' %'; savePrefs(); if (trailer.video) trailer.video.volume = trailerVolume(); }
+});
+setPop.addEventListener('change', e => { if (e.target.id === 'volRange') sfx.tick(); });
 setPop.addEventListener('click', e => {
   const b = e.target.closest('button[data-v]'); if (!b) return; const k = b.closest('[data-pref]').dataset.pref; if (prefs[k] === b.dataset.v) return; prefs[k] = b.dataset.v; savePrefs(); renderSettings();
   if (k === 'light') applyLight(prefs.light);
-  if (k === 'sound') { sfx.on = prefs.sound !== 'off'; if (sfx.on) sfx.tick(); }
+  if (k === 'sound') { sfx.on = prefs.sound !== 'off'; if (sfx.on) sfx.tick(); if (trailer.video) trailer.video.volume = trailerVolume(); }
+  if (k === 'trailer') { if (active && (mode === 'inspect' || mode === 'open')) { stopTrailer(); startTrailer(active); } }
+  if (k === 'layout') setLayout(prefs.layout);
   if (k === 'seal') renderPrompts();
   if (k === 'sort') relayout({ full: true });
   if (k === 'group') { prefs.shelf = '__all'; savePrefs(); relayout({ full: true, reset: true }); }
@@ -201,7 +239,7 @@ const tweenReal = (sec, fn, ease) => tween(sec / SPEED, fn, ease);
 function pick(c) {
   if (mode !== 'shelf' || busy || !c) return;
   return guarded(async () => {
-    active = c; setHovered(null); tipEl.hidden = true; c.hoverT = 0; infoEdit = false;
+    active = c; setHovered(null); tipEl.hidden = true; c.hoverT = 0; infoEdit = false; prefs.card = prefs.cardStart;
     if (cam.view === 'browse') setView('shelf');
     setMode('busy');
     if (c.g.real) await LIB.prepare(c.g, 1500);
@@ -213,10 +251,10 @@ function pick(c) {
     await tweenReal(h, t => { c.pullHold = t; }, easeIO);
     c.mode = 'pulled'; c.pullHold = 0; c.fast = false; await wait(110);
     c.mode = 'inspect'; c.flipT = 0; await wait(380);
-    setMode('inspect');
+    setMode('inspect'); startTrailer(c);
     const idle = c.g.last === null || c.g.last === undefined ? c.g.added : c.g.last;
-    if (c.g.wrapped) toast(prefs.seal === 'auto' ? 'Precintado. Al abrirlo se quitará el precinto solo.' : 'Precintado. Tira de la lengüeta roja o déjalo como está.', 3400);
-    else if (c.g.dust > .3 && idle != null) toast(`Lleva ${spanText(idle)} sin tocarse. Frota la caja para quitarle el polvo.`, 3600);
+    if (c.g.wrapped) toast(T(prefs.seal === 'auto' ? 'Precintado. Al abrirlo se quitará el precinto solo.' : 'Precintado. Tira de la lengüeta roja o déjalo como está.'), 3400);
+    else if (c.g.dust > .3 && idle != null) toast(T('Lleva {0} sin tocarse. Frota la caja para quitarle el polvo.', spanText(idle)), 3600);
   });
 }
 function flipCase() { if (!active || busy || mode !== 'inspect') return; active.flipT = active.flipT ? 0 : Math.PI; sfx.handle(active.g.fmt); renderPrompts(); }
@@ -224,7 +262,7 @@ function flipCase() { if (!active || busy || mode !== 'inspect') return; active.
 async function swingOpen(c) { const h = sfx.caseOpen(c.g.fmt); await waitReal(h - .01); await tween(.75, t => { c.openA = t; }, easeIO); }
 function openCase() {
   if (!active || mode !== 'inspect') return;
-  if (active.wrap) { if (prefs.seal === 'manual') { toast('Primero quita el precinto tirando de la lengüeta roja'); return; } return unwrapAction(); }
+  if (active.wrap) { if (prefs.seal === 'manual') { toast(T('Primero quita el precinto tirando de la lengüeta roja')); return; } return unwrapAction(); }
   return guarded(async () => {
     const c = active; setMode('busy');
     if (c.flipT) { c.flipT = 0; await wait(450); }
@@ -256,7 +294,7 @@ async function finishWrap(c) {
   c.dragging = false; sfx.wrap(); const w = c.wrap, st = c.strip, mat = c.wrapMat, stick = w.children[0];
   c.tearDone = Math.PI * 2;
   await tween(.75, t => { w.position.y = -t * 5; w.scale.setScalar(1 + t * .06); mat.opacity = .2 * (1 - t); if (stick) stick.scale.setScalar(Math.max(.01, 1 - t)); st.position.y = -t * 9; st.rotation.z = t * .7; });
-  c.removeWrapNow(); saveGame(c.g); buildShelfPicks(); toast('Precinto retirado'); renderPrompts();
+  c.removeWrapNow(); saveGame(c.g); buildShelfPicks(); toast(T('Precinto retirado')); renderPrompts();
 }
 function closeCase(internal) {
   /* the lid speeds up and lands exactly on the recorded snap */
@@ -276,7 +314,7 @@ function putBack() {
     c.mode = 'home'; c.pullHold = 1; c.leaving = true; c.fast = true;
     await tweenReal(h, t => { c.pullHold = 1 - t; }, t => t * t);
     c.pullHold = 0; await wait(90); c.fast = false; c.leaving = false; c.setShadow(false); c.placeExtras();
-    c.releaseDetail(); active = null; setMode('shelf');
+    stopTrailer(); c.releaseDetail(); active = null; setMode('shelf');
   }).then(() => { if (pendingRelayout) { pendingRelayout = false; relayout({ follow: back }); } });
 }
 const _p0 = new V3(), _p1 = new V3(), _p2 = new V3(), _q0 = new Q4(), _q2 = new Q4(), _qz = new Q4(), _qt = new Q4(), ZAX = new V3(0, 0, 1);
@@ -287,7 +325,7 @@ function insertDisc() {
   if (!active || mode !== 'open') return;
   return guarded(async () => {
     const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR;
-    setMode('busy'); hoverPart = null; c.discLabelMat.emissive.set('#000000');
+    setMode('busy'); hoverPart = null; c.discLabelMat.emissive.set('#000000'); stopTrailer();
     await waitReal(sfx.discOut() - .005);
     await tween(.28, t => { d.position.z = home.z + 1.4 * t; d.rotation.x = -.06 * t; });
     await tween(.6, t => { d.position.y = lerp(home.y, above.y, t); d.position.z = lerp(home.z + 1.4, above.z, t); });
@@ -317,9 +355,22 @@ function insertDisc() {
     setMode('playing');
   });
 }
+/* the shelf was (re)opened while a game is running: its disc is already in the console */
+async function restorePlaying(id, seconds) {
+  const g = GAMES.find(q => q.id === id); if (!g || active) return;
+  const gi = groups.findIndex(gr => gr.games.includes(g)), p = gi >= 0 ? pageOf(g, gi) : -1;
+  if (gi >= 0 && (gi !== curGroup || p !== curPage)) { curGroup = gi; curPage = Math.max(0, p); layoutPage(); renderPills(); renderBrand(); }
+  const c = navOrder.find(q => q.g === g) || getCase(g); if (!c) return;
+  if (g.real) await LIB.prepare(g, 1200);
+  active = c; c.ensureDetail(); c.setShadow(true); c.openA = 1; c.mode = 'parked'; c.leaving = true; c.placeExtras();
+  const d = c.disc, R = c.dim.discR; scene.attach(d); d.position.set(SLOT.x, SLOT.y, SLOT.z - R - 1.2); d.quaternion.copy(QFLAT); d.scale.setScalar(1); d.visible = false;
+  setLed(true); tvSet('play', c); playStart = performance.now() - (seconds || 0) * 1000;
+  PN_STATE.running = id; PN_STATE.waiting = false; $('#playTitle').textContent = g.t; renderPlayBanner();
+  setView('console'); setMode('playing');
+}
 function renderPlayBanner() {
-  $('#playNote').textContent = PLAYNITE ? (PN_STATE.waiting ? 'Playnite está abriendo el juego. Si no arranca, saca el disco con Esc.' : 'Playnite cuenta el tiempo. Al cerrar el juego, el disco vuelve solo a su caja.') : 'En esta demo cada segundo cuenta como un minuto de partida.';
-  $('#playEyebrow').textContent = PLAYNITE && PN_STATE.waiting ? 'Arrancando' : 'En marcha';
+  $('#playNote').textContent = T(PLAYNITE ? (PN_STATE.waiting ? 'Playnite está abriendo el juego. Si no arranca, saca el disco con Esc.' : PN_STATE.selfTrack ? 'Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y el disco sale cuando lo cierres.' : 'Playnite cuenta el tiempo. Al cerrar el juego, el disco vuelve solo a su caja.') : 'En esta demo cada segundo cuenta como un minuto de partida.');
+  $('#playEyebrow').textContent = T(PLAYNITE && PN_STATE.waiting ? 'Arrancando' : 'En marcha');
 }
 /* ejects the disc and puts it back in its case. Inside Playnite it runs when the game closes (o.auto),
    or when you pull the disc yourself while the game keeps running */
@@ -328,7 +379,10 @@ function closeGame(o = {}) {
   return guarded(async () => {
     const c = active, d = c.disc, g = c.g, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR;
     const mins = Math.max(1, Math.floor((performance.now() - playStart) / 1000));
-    PN_STATE.waiting = false; if (!o.keepRunning) PN_STATE.running = null;
+    /* pulled out by hand while only the shelf was keeping track: stop counting from here */
+    const released = PLAYNITE && o.keepRunning && PN_STATE.selfTrack;
+    if (released) { LIB.send('release', { id: g.id }); o = Object.assign({}, o, { keepRunning: false, msg: T('Disco fuera. El tiempo hasta ahora se suma a {0} en Playnite.', g.t) }); }
+    PN_STATE.waiting = false; PN_STATE.selfTrack = false; if (!o.keepRunning) PN_STATE.running = null;
     setMode('busy'); tvSet('standby'); setLed(false); sfx.tvOff();
     await waitReal(.15); sfx.slotOut(); await waitReal(1.02);
     d.visible = true; const zIn = d.position.z, zOut = SLOT.z + R - 3.6;
@@ -346,18 +400,18 @@ function closeGame(o = {}) {
     let msg, moved = false;
     if (PLAYNITE) {
       const s = o.seconds || 0;
-      msg = o.msg || (o.keepRunning ? 'El juego sigue abierto: Playnite seguirá contando el tiempo.' : s >= 60 ? `+${Math.round(s / 60)} min en ${g.t}. Playnite ya lo ha apuntado.` : s > 0 ? `Partida corta en ${g.t}.` : 'Disco fuera.');
+      msg = o.msg || (o.keepRunning ? T('El juego sigue abierto: Playnite seguirá contando el tiempo.') : s >= 60 ? T('+{0} min en {1}. Playnite ya lo ha apuntado.', Math.round(s / 60), g.t) : s > 0 ? T('Partida corta en {0}.', g.t) : T('Disco fuera.'));
       if (s > 0 || o.auto) { g.dust = 0; c.setDust(0); saveGame(g); }
     } else {
       g.hours += mins / 60; g.sessions += 1; g.last = 0;
       if (prefs.autoStatus === 'on' && !['playing', 'beaten', 'completed'].includes(kindOf(g))) { const s = STATUSES.find(n => STATUS_KIND[n] === 'playing'); if (s) { g.status = s; moved = true; } }
       c.setDust(0); g.dust0 = 0; saveGame(g);
-      msg = moved ? `+${mins} min. Ahora está en «${g.status}».` : `+${mins} min en ${g.t}. Tus horas ya están en la caja.`;
+      msg = moved ? T('+{0} min. Ahora está en «{1}».', mins, g.status) : T('+{0} min en {1}. Tus horas ya están en la caja.', mins, g.t);
     }
     c.dirty = true; c.ensureDetail(); c.refreshSpine(); if (moved) pendingRelayout = true; focus = c;
     c.mode = 'inspect'; setView('shelf'); await wait(700);
     toast(msg);
-    setMode('open');
+    setMode('open'); startTrailer(c);
   });
 }
 
@@ -369,6 +423,11 @@ async function relayout(opts = {}) {
   let gi = groups.findIndex(g => g.key === (opts.reset ? '__all' : keyNow)); if (gi < 0) gi = 0;
   let pi = opts.full ? 0 : clamp(curPage, 0, groups[gi].pages.length - 1);
   if (opts.follow && !opts.full) { const p = pageOf(opts.follow.g, gi); if (p >= 0) pi = p; }
+  if (isCases()) {
+    if (opts.follow) { const u = groups.findIndex(gr => gr.games.includes(opts.follow.g)); if (u >= 0) gi = u; }
+    if (gi >= groups.length) gi = 0;
+    await swapShelf(() => { curGroup = gi; curPage = 0; setView('shelf'); }); return;
+  }
   if (opts.full || gi !== curGroup) { await swapShelf(() => { curGroup = gi; curPage = pi; }); return; }
   /* same shelf: cases that moved slide out a little, change place and slide back; the ones that left go into the wall */
   busy = true; setHovered(null);
@@ -400,6 +459,16 @@ async function relayout(opts = {}) {
 /* ---------- keyboard / pad focus along the shelf ---------- */
 function moveFocus(dir) {
   if (!navOrder.length) return; kbNav = true;
+  if (isCases()) {
+    if (!focus || !navOrder.includes(focus)) focus = hovered && navOrder.includes(hovered) ? hovered : navOrder[0];
+    else if (dir === 'left' || dir === 'right') {
+      const j = navOrder.indexOf(focus) + (dir === 'right' ? 1 : -1);
+      if ((j < 0 || j >= navOrder.length) && groups.length > 1) { const last = j < 0; setGroup(curGroup + (last ? -1 : 1), true); focus = last ? navOrder[navOrder.length - 1] : navOrder[0]; }
+      else focus = navOrder[clamp(j, 0, navOrder.length - 1)];
+    } else { const r = focus.row + (dir === 'down' ? 1 : -1), cand = navOrder.filter(c => c.row === r); if (cand.length) focus = cand.reduce((b, c) => Math.abs(c.home.x - focus.home.x) < Math.abs(b.home.x - focus.home.x) ? c : b); }
+    if (focus) setHovered(focus);
+    return;
+  }
   if (!focus || !navOrder.includes(focus)) focus = hovered && navOrder.includes(hovered) ? hovered : navOrder[0];
   else {
     const step = dir === 'right' ? 1 : dir === 'left' ? -1 : dir === 'down' ? 8 : -8, i = navOrder.indexOf(focus), j = i + step;

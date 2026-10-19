@@ -296,7 +296,7 @@ const sfx = {
       this.lib = makeFoley(c.sampleRate);
       this.master = c.createGain(); this.master.gain.value = .85;
       const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 3; comp.attack.value = .003; comp.release.value = .12;
-      this.master.connect(comp); comp.connect(c.destination);
+      this.out = c.createGain(); this.out.gain.value = (this.vol ?? 1) * (this.vol ?? 1); this.master.connect(comp); comp.connect(this.out); this.out.connect(c.destination);
       this.loadRec();
       this.rev = c.createConvolver(); const ir = this.lib.impulse(), b = c.createBuffer(2, ir[0].length, c.sampleRate); b.copyToChannel(ir[0], 0); b.copyToChannel(ir[1], 1); this.rev.buffer = b; this.rev.connect(this.master);
       const warm = ['page|', 'tick|', 'crinkle|', 'click|', 'whoosh|', 'slotIn|', 'tvOn|', 'boot|', 'slotOut|', 'tvOff|', 'wrap|', 'brush|', 'caseOpen|dvd', 'caseClose|dvd', 'slideOut|dvd', 'slideIn|dvd'];
@@ -325,6 +325,8 @@ const sfx = {
       });
     }
   },
+  vol: 1,
+  setVolume(v) { this.vol = clamp(v, 0, 1); if (this.out) this.out.gain.setTargetAtTime(this.vol * this.vol, this.ctx.currentTime, .03); },
   ok() { if (!this.on) return false; this.init(); if (!this.ctx) return false; if (this.ctx.state === 'suspended') this.ctx.resume(); return true; },
   buffer(name, arg) {
     const key = name + '|' + (arg || ''), list = this.cache.get(key) || [], want = SFX_VARIANTS[name] || 1;

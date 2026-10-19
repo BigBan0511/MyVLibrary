@@ -10,7 +10,10 @@ Cada juego es una caja en una balda de pared. La sacas, le quitas el precinto, l
 
 - **Tu biblioteca real.** Carátulas, fondos, descripciones, tiempo jugado, estados y categorías salen de Playnite.
 - **Estantes.** Arriba a la derecha eliges qué hay en la balda: todos los juegos o un estado (Jugando, Superados…). También puedes agruparlos por categoría o plataforma. Si no caben, la balda tiene páginas («Siguiente»).
-- **Jugar de verdad.** Al meter el disco, Playnite arranca el juego. Mientras juegas, la tele lo enseña. Al cerrar el juego, el disco vuelve solo a su caja.
+- **Dos diseños.** Una sola balda larga sobre la mesa con la tele y la consola, o una fila de estanterías (una por estado, categoría o plataforma). Se cambia en Ajustes → Diseño.
+- **Jugar de verdad.** Al meter el disco, Playnite arranca el juego. Mientras juegas, la tele lo enseña. Al cerrar el juego, el disco vuelve solo a su caja. Si Playnite da el juego por cerrado pero sigue abierto algún programa de su carpeta, el disco se queda dentro hasta que lo cierres y ese tiempo se suma a tus horas.
+- **Tráiler.** La tele y la contraportada ponen el tráiler del juego: el de Extra Metadata Loader si lo tienes, o el vídeo que venga en la descripción.
+- **Tu idioma.** La estantería sigue el idioma de Playnite (por ahora español e inglés).
 - **Juegos sin estrenar.** Si nunca lo has abierto, llega precintado. Puedes tirar de la lengüeta roja para quitar el precinto.
 - **Polvo.** Lo que llevas tiempo sin tocar coge polvo, y se quita frotando la caja.
 - **Cambios que se guardan en Playnite.** Estado, categorías, valoración (estrellas) y notas. Nada cambia solo: solo cuando tú lo cambias.
@@ -67,6 +70,7 @@ Tienes tres formas de abrir la estantería:
 - Abrir al iniciar en pantalla completa.
 - LB + RB para abrir y cerrar.
 - Incluir los juegos ocultos.
+- Mantener el disco dentro mientras el juego siga abierto.
 - Herramientas de desarrollo (F12).
 
 ## Qué se guarda y dónde
@@ -106,8 +110,8 @@ node build.mjs                 # web/dist/, lo que lleva la extensión
 
 - La extensión sirve la carpeta `web` en `https://app.myvlibrary/` y las carátulas en `https://media.myvlibrary/cover/{id}?w=…`, reducidas y guardadas en caché.
 - Página y extensión se pasan mensajes JSON con `chrome.webview.postMessage`.
-- La página pide: `ready`, `detail`, `start`, `update`, `openUrl` y `close`.
-- La extensión responde con `library`, `games`, `removed`, `detail`, `started`, `stopped`, `cancelled`, `notInstalled`, `pad` y `focus`.
+- La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory` y `release`.
+- La extensión responde con `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad` y `focus`.
 
 ## Licencia
 

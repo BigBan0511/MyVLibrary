@@ -26,7 +26,7 @@ function onDrag(px, py) {
       const v = Math.max(0, c.g.dust - dist * .0011); c.setDust(v);
       if (Math.random() < .7) emit(h.point, 2, .8, .8);
       drag.acc += dist; if (drag.acc > 60) { sfx.brush(); drag.acc = 0; }
-      if (v <= .01 && !drag.done) { drag.done = true; toast('Limpio como el primer día'); }
+      if (v <= .01 && !drag.done) { drag.done = true; toast(T('Limpio como el primer día')); }
       renderInfo();
     }
   }
@@ -91,7 +91,7 @@ function handleKey(k) {
   if ((mode === 'inspect' || mode === 'open') && (k === 'i' || k === 'I')) { setCard(prefs.card === 'hide' ? 'show' : 'hide'); return true; }
   if (mode === 'inspect') {
     if (k === 'f' || k === 'F' || k === 'ArrowLeft' || k === 'ArrowRight') { flipCase(); return true; }
-    if (k === 'Enter' || k === 'o' || k === 'O') { if (active && active.wrap) { if (prefs.seal === 'manual') toast('Tira de la lengüeta roja para quitar el precinto'); else unwrapAction(); } else openCase(); return true; }
+    if (k === 'Enter' || k === 'o' || k === 'O') { if (active && active.wrap) { if (prefs.seal === 'manual') toast(T('Tira de la lengüeta roja para quitar el precinto')); else unwrapAction(); } else openCase(); return true; }
     if (k === 'Escape' || k === 'Backspace') { putBack(); return true; }
   } else if (mode === 'open') {
     if (k === 'm' || k === 'M') { openManual(); return true; }
@@ -148,7 +148,7 @@ function frame(now) {
     if (on) active.disc.rotation.z += dt * (hoverPart === 'disc' ? 1.2 : 0);
   }
   updateParticles(dt); updateMotes(dt, now); updateContacts();
-  drawTV(now); updateTvLight(now); drawBoard();
+  drawTV(now); updateTvLight(now); drawBoard(); updateBackTrailer(now);
   if (mode === 'playing') { const m = Math.max(0, Math.floor((now - playStart) / 1000)); $('#playTime').textContent = PLAYNITE ? `${String(Math.floor(m / 3600)).padStart(2, '0')}:${String(Math.floor(m / 60) % 60).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
   renderer.render(scene, camera);
   if (!tipEl.hidden) placeTip();
@@ -164,12 +164,13 @@ async function loadFonts() {
 }
 async function boot() {
   await loadFonts();
-  buildSharedMaterials(); applyLight(prefs.light);
   if (PLAYNITE) {
-    $('#loadMsg').textContent = 'Leyendo tu biblioteca de Playnite…';
+    $('#loadMsg').textContent = T('Leyendo tu biblioteca de Playnite…');
     const ok = await Promise.race([LIB.boot().then(() => true), new Promise(r => setTimeout(() => r(false), 20000))]);
-    if (!ok) { $('#loadMsg').textContent = 'Playnite no ha contestado. Cierra la estantería y vuelve a abrirla.'; return; }
+    if (!ok) { $('#loadMsg').textContent = T('Playnite no ha contestado. Cierra la estantería y vuelve a abrirla.'); return; }
   } else initDemoGames();
+  /* printed parts (stickers, the tray, the pull tab) are drawn once the language is known */
+  buildSharedMaterials(); applyLight(prefs.light);
   document.documentElement.classList.toggle('is-demo', !PLAYNITE);
   buildGroups();
   curGroup = Math.max(0, groups.findIndex(g => g.key === prefs.shelf)); curPage = 0;
@@ -181,7 +182,8 @@ async function boot() {
   if (sfx.on) setTimeout(() => sfx.init(), 400);
   setMode('shelf');
   requestAnimationFrame(t => { lastT = t; frame(t); const l = $('#load'); l.classList.add('gone'); setTimeout(() => { l.hidden = true; }, 600); });
-  if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
+  if (PLAYNITE && LIB.running && LIB.running.length) { const r = LIB.running[0]; setTimeout(() => restorePlaying(r.id, r.seconds), 600); }
+  else if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
 }
-window.__mvl = { room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, state: () => ({ mode, busy, view: cam.view, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB };
+window.__mvl = { room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, state: () => ({ mode, busy, view: cam.view, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB, games: () => navOrder.map(c => ({ id: c.g.id, t: c.g.t, installed: c.g.installed })), ui: () => ({ toast: $('#toast').textContent, note: $('#playNote').textContent, eyebrow: $('#playEyebrow').textContent, pn: Object.assign({}, PN_STATE, { pendingEject: !!PN_STATE.pendingEject }), playnite: PLAYNITE }) };
 boot();

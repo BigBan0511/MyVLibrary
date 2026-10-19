@@ -587,9 +587,9 @@ const ROOMS = {
     skirt: '#2b3240', frame: '#2b3240', cloth: null, props: false, lamp: false,
     sky: '#f2f6ff', ground: '#5d6676', hemiMul: 2.4, keyMul: .8, keyTint: '#f0f6ff', envMul: 1.25, expMul: 1.02, led: '#f3f8ff', ledMul: 1.1, bg: '#1d2230',
     decor() {
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(76, 15.8), M(THREE.MeshStandardMaterial, { map: tex(makeSignBoard('VIDEOCLUB', '#c8202c', '#ffffff', 'ALQUILER Y VENTA · ABIERTO')), roughness: .5 }, .6));
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(76, 15.8), M(THREE.MeshStandardMaterial, { map: tex(makeSignBoard(T('VIDEOCLUB'), '#c8202c', '#ffffff', T('ALQUILER Y VENTA · ABIERTO'))), roughness: .5 }, .6));
       sign.position.set(SHELF.cx, SHELF.top + SHELF.th + 12, WALL_Z + 1.4); decorGroup.add(sign); DM.sign = sign.material;
-      const signs = [[['ALQUILER', 46], ['3 DÍAS', 64, '#ffd23f'], ['300 PTA', 40]], [['MARTES', 44], ['2×1', 80, '#ff6b5e'], ['EN NOVEDADES', 26]]];
+      const signs = [[[T('ALQUILER'), 46], [T('3 DÍAS'), 64, '#ffd23f'], [T('300 PTA'), 40]], [[T('MARTES'), 44], ['2×1', 80, '#ff6b5e'], [T('EN NOVEDADES'), 26]]];
       [[SLOTS.wallL[0], 0], [SLOTS.wallR[0], 1]].forEach(([x, i]) => {
         const face = M(THREE.MeshStandardMaterial, { map: tex(makeAFrame(signs[i], 90 + i)), roughness: .8 }, .5); DM['af' + i] = face;
         const m = new THREE.Mesh(new THREE.PlaneGeometry(22, 34), face); m.position.set(x, 118, WALL_Z + .4); decorGroup.add(m);
@@ -602,7 +602,7 @@ const ROOMS = {
     floor: () => rtex('floor', () => makeRealWood(1024, 1024, '#2a2826', 64, { planks: 8 }), [6, 2.2]), floorRough: .35,
     wood: () => ({ map: null, color: '#1a1a1d', rough: .45, metal: .1 }), shelf: () => ({ map: null, color: '#141416', rough: .4, metal: .1 }), dark: () => ({ map: null, color: '#0f0f11', rough: .6 }),
     skirt: '#111113', frame: '#111113', cloth: null, props: false, lamp: false,
-    sky: '#7f6bff', ground: '#120c18', hemiMul: .9, keyMul: .45, keyTint: '#a8b4ff', envMul: .45, expMul: 1.08, led: '#9b5cff', ledMul: 1.7, rgb: true, bg: '#0b0a0e',
+    sky: '#8a84c4', ground: '#16121a', hemiMul: .75, keyMul: .62, keyTint: '#d4d8ff', envMul: .5, expMul: 1.08, fillMul: 1.15, led: '#9b5cff', ledMul: 1.4, rgb: true, bg: '#0b0a0e',
     decor() {
       const halo = haloMat('gHalo', '#9b5cff', .45), tubeMat = dmat('tube', () => new THREE.MeshBasicMaterial({ color: '#9b5cff', toneMapped: false }));
       RGB.mats.push(halo, tubeMat);
@@ -646,13 +646,15 @@ const ROOM_ORDER = ['salon', 'nordico', 'acogedor', 'cabana', 'japones', 'biblio
 let RP = ROOMS.salon;
 const decorLight = new THREE.PointLight('#ffffff', 0, 90, 2); scene.add(decorLight);
 const ledBase = new THREE.Color('#ffd59a');
+/* a soft, shadowless fill in front of the shelf so the spines read in every room */
+const shelfFill = [-60, 55].map(dx => { const l = new THREE.PointLight('#ffe9d2', 0, 260, 2); l.position.set(SHELF.cx + dx, SHELF.board + 26, SHELF.front + 75); scene.add(l); return l; });
 const ledLights = [-62, 0, 62].map(dx => { const l = new THREE.PointLight('#ffd59a', 0, 120, 2); l.position.set(SHELF.cx + dx, SHELF.top - 3, SHELF.front + 4); scene.add(l); return l; });
 
 /* ---------- light presets ---------- */
 const LIGHT = {
-  noche: { exp: .95, env: .45, hemi: .1, key: .75, keyCol: '#ffc28a', lamp: 1.7, shade: .95, led: 1.35, motes: .16, bg: '#0b0a0c' },
-  tarde: { exp: 1.05, env: .75, hemi: .2, key: 1.25, keyCol: '#ffcc98', lamp: 1.05, shade: .6, led: .95, motes: .28, bg: '#141210' },
-  dia: { exp: 1.12, env: 1.1, hemi: .45, key: 1.6, keyCol: '#fff2e2', lamp: .25, shade: .15, led: .35, motes: .22, bg: '#26232a' }
+  noche: { exp: .95, env: .45, hemi: .12, key: .8, keyCol: '#ffc28a', lamp: 1.7, shade: .95, led: 1.35, motes: .16, fill: .55, bg: '#0b0a0c' },
+  tarde: { exp: 1.05, env: .7, hemi: .22, key: 1.15, keyCol: '#ffcc98', lamp: 1.05, shade: .6, led: .95, motes: .26, fill: .8, bg: '#141210' },
+  dia: { exp: 1.1, env: 1.0, hemi: .45, key: 1.4, keyCol: '#fff2e2', lamp: .25, shade: .15, led: .35, motes: .2, fill: .95, bg: '#26232a' }
 };
 let LP = LIGHT.tarde;
 function applyLight(name) { LP = LIGHT[name] || LIGHT.tarde; applyEnv(); }
@@ -679,13 +681,20 @@ function applyRoom(name) {
   if (RP.decorLight) { const D = RP.decorLight; decorLight.position.set(D.x, D.y, D.z); decorLight.color.set(D.color); decorLight.distance = D.dist; }
   buildDecor(); applyEnv();
 }
-function buildDecor() { freeDecor(); RGB.mats = []; FX.twinkle = []; FX.flames = []; if (RP.decor) RP.decor(); }
+let decorLayout = '';
+function buildDecor() {
+  freeDecor(); RGB.mats = []; FX.twinkle = []; FX.flames = []; decorLayout = prefs.layout;
+  if (RP.decor) RP.decor();
+  /* with the bookcases standing on the right, what would collide with them stays out */
+  if (prefs.layout === 'cases') { const p = new V3(); decorGroup.children.forEach(o => { o.getWorldPosition(p); if (p.x > 96) o.visible = false; }); }
+}
 function applyEnv() {
   const L = LP, R = RP;
   renderer.toneMappingExposure = L.exp * (R.expMul || 1); setEnvK(L.env * R.envMul);
   hemi.color.set(R.sky); hemi.groundColor.set(R.ground); hemi.intensity = L.hemi * R.hemiMul;
   key.intensity = L.key * R.keyMul; key.color.set(L.keyCol).lerp(new THREE.Color(R.keyTint), .55);
   lampLight.intensity = R.lamp ? L.lamp : 0; lampShadeMat.emissiveIntensity = R.lamp ? L.shade : 0;
+  shelfFill.forEach(l => { l.intensity = L.fill * (R.fillMul ?? 1); l.color.set(R.keyTint).lerp(new THREE.Color('#ffffff'), .5); });
   ledBase.set(R.led); stripLedMat.color.copy(ledBase).multiplyScalar(.25 + L.led * R.ledMul * .9); ledLights.forEach(l => { l.color.copy(ledBase); l.intensity = L.led * R.ledMul * .55; });
   const bg = new THREE.Color(R.bg).lerp(new THREE.Color(L.bg), .35); scene.background.copy(bg); scene.fog.color.copy(bg);
 }
