@@ -1,119 +1,121 @@
 # MyVLibrary
 
-Tu biblioteca de Playnite convertida en una estantería de juegos físicos.
+**English** · [Español](README.es.md)
 
-Cada juego es una caja en una balda de pared. La sacas, le quitas el precinto, la abres y metes el disco en la consola para jugar. La descripción y la ficha del juego están en el manual de dentro, y la contraportada lleva el resumen. Debajo de la balda hay una mesa con una tele de tubo, una pizarra que apunta a rotulador lo que tienes en la mano y la consola.
+Your Playnite library turned into a shelf of physical games.
 
-![La estantería](docs/estanteria.png)
+Every game is a case on a wall shelf. You take it down, peel off the shrink wrap, open it and put the disc in the console to play. The description and the game's details are in the manual inside, and the back cover has the summary. Under the shelf there is a table with a CRT TV, a whiteboard that writes down in marker whatever you are holding, and the console.
 
-## Qué hace
+![The shelf](docs/estanteria.png)
 
-- **Tu biblioteca real.** Carátulas, fondos, descripciones, tiempo jugado, estados y categorías salen de Playnite.
-- **Estantes.** Arriba a la derecha eliges qué hay en la balda: todos los juegos o un estado (Jugando, Superados…). También puedes agruparlos por categoría o plataforma. Si no caben, la balda tiene páginas («Siguiente»).
-- **Dos diseños.** Una sola balda larga sobre la mesa con la tele y la consola, o una fila de estanterías (una por estado, categoría o plataforma). Se cambia en Ajustes → Diseño.
-- **Jugar de verdad.** Al meter el disco, Playnite arranca el juego. Mientras juegas, la tele lo enseña. Al cerrar el juego, el disco vuelve solo a su caja. Si Playnite da el juego por cerrado pero sigue abierto algún programa de su carpeta, el disco se queda dentro hasta que lo cierres y ese tiempo se suma a tus horas.
-- **Tráiler.** La tele y la contraportada ponen el tráiler del juego: el de Extra Metadata Loader si lo tienes, o el vídeo que venga en la descripción.
-- **Tu idioma.** La estantería sigue el idioma de Playnite (por ahora español e inglés).
-- **Juegos sin estrenar.** Si nunca lo has abierto, llega precintado. Puedes tirar de la lengüeta roja para quitar el precinto.
-- **Polvo.** Lo que llevas tiempo sin tocar coge polvo, y se quita frotando la caja.
-- **Cambios que se guardan en Playnite.** Estado, categorías, valoración (estrellas) y notas. Nada cambia solo: solo cuando tú lo cambias.
-- **Ambientes.** Salón (el de la imagen), Nórdico, Acogedor, Cabaña, Japonés, Biblioteca, Loft, Videoclub, Gamer y Nave. También hay tres luces: noche, tarde y día.
+## What it does
 
-![Caja abierta con el disco y el manual](docs/caja-abierta.png)
+- **Your real library.** Covers, backgrounds, descriptions, playtime, completion statuses and categories come from Playnite.
+- **Shelves.** At the top right you choose what is on the shelf: all your games or one status (Playing, Beaten…). You can also group them by category or platform. If they don't fit, the shelf has pages ("Next").
+- **Two designs.** One long wall shelf above the table with the TV and the console, or a row of bookcases (one per status, category or platform). Change it in Settings → Design.
+- **Actually playing.** When you put the disc in, Playnite starts the game. While you play, the TV shows it. When you close the game, the disc goes back to its case on its own. If Playnite thinks the game has closed but a program from its folder is still open, the disc stays in until you close it, and that time is added to your playtime.
+- **Trailer.** The TV and the back cover play the game's trailer: the one from Extra Metadata Loader if you have it, or a video found in the description.
+- **Your language.** The shelf follows Playnite's language (Spanish and English for now).
+- **Unplayed games.** If you have never opened a game, it arrives shrink-wrapped. Pull the red tab to peel the wrap off.
+- **Dust.** Games you haven't touched in a while gather dust, and you wipe it off by rubbing the case.
+- **Changes saved to Playnite.** Status, categories, rating (stars) and notes. Nothing changes by itself, only when you change it.
+- **Rooms.** Living room (the one in the picture), Nordic, Cosy, Cabin, Japanese, Library, Industrial loft, Video store, Gamer and Spaceship. There are also three lights: night, evening and day.
 
-## Instalar
+![Open case with the disc and the manual](docs/caja-abierta.png)
 
-Necesitas:
+## Install
 
-- Playnite 10.36 o posterior.
-- WebView2 de Microsoft. Ya viene con Windows 10 y 11; si te falta, la extensión te avisa.
+You need:
 
-Pasos:
+- Playnite 10.36 or later.
+- Microsoft WebView2. It comes with Windows 10 and 11; if it's missing, the extension tells you.
 
-1. Descarga el último `MyVLibrary_x_y_z.pext`. Está en [Releases](../../releases) o, para la última versión en desarrollo, en la pestaña **Actions**: abre la última ejecución y baja el artefacto `MyVLibrary-pext`, que viene dentro de un .zip.
-2. Haz doble clic en el `.pext`, o arrástralo encima de la ventana de Playnite.
-3. Reinicia Playnite cuando te lo pida.
+Steps:
 
-## Usar
+1. Download the latest `MyVLibrary_x_y_z.pext`. It's in [Releases](../../releases) or, for the latest development build, in the **Actions** tab: open the latest run and download the `MyVLibrary-pext` artifact, which comes inside a .zip.
+2. Double-click the `.pext`, or drag it onto the Playnite window.
+3. Restart Playnite when it asks you to.
 
-**Modo escritorio**
+## Use
 
-Tienes tres formas de abrir la estantería:
+**Desktop mode**
 
-- En la barra lateral, con el icono del disco.
-- Desde el menú principal: **Extensiones → MyVLibrary → Abrir la estantería en una ventana**.
-- Con clic derecho sobre un juego: **MyVLibrary → Ver en la estantería**. Abre la estantería justo en ese juego.
+There are three ways to open the shelf:
 
-**Modo pantalla completa**
+- From the sidebar, with the disc icon.
+- From the main menu: **Extensions → MyVLibrary → Open the shelf in a window**.
+- Right-click a game: **MyVLibrary → Show on the shelf**. The shelf opens right on that game.
 
-- Se abre sola al arrancar Playnite. Se puede desactivar en los ajustes de la extensión.
-- **LB + RB** a la vez la abren y la cierran.
-- **B** en la estantería vuelve a Playnite.
+**Fullscreen mode**
 
-**Controles**
+- It opens on its own when Playnite starts. You can turn this off in the extension's settings.
+- **LB + RB** together open and close it.
+- **B** on the shelf goes back to Playnite.
 
-| | Ratón | Teclado | Mando |
+**Controls**
+
+| | Mouse | Keyboard | Controller |
 |---|---|---|---|
-| Recorrer la balda | pasar por encima | ← → (↑ ↓ saltan de 8 en 8) | cruceta / stick |
-| Sacar un juego | clic en el lomo | Intro | A |
-| Girar la caja | clic en la caja | F | Y |
-| Quitar el precinto | arrastrar la lengüeta | Intro | A |
-| Abrir la caja / meter el disco | botones de abajo | Intro | A |
-| Leer el manual | clic en el manual | M | X |
-| Cambiar de estante | pastillas de arriba | Q / E | LB / RB |
-| Cambiar de página | «Siguiente» | Re Pág / Av Pág | LT / RT |
-| Volver | | Esc | B |
-| Cambiar de ambiente | Ajustes | H | |
+| Move along the shelf | hover | ← → (↑ ↓ jump 8 at a time) | d-pad / stick |
+| Take a game out | click the spine | Enter | A |
+| Turn the case | click the case | F | Y |
+| Peel off the shrink wrap | drag the tab | Enter | A |
+| Open the case / insert the disc | buttons at the bottom | Enter | A |
+| Read the manual | click the manual | M | X |
+| Change shelf | pills at the top | Q / E | LB / RB |
+| Change page | "Next" | Page Up / Page Down | LT / RT |
+| Go back | | Esc | B |
+| Change room | Settings | H | |
 
-**Ajustes de la extensión** (Playnite → Complementos → MyVLibrary):
+**Extension settings** (Playnite → Add-ons → MyVLibrary):
 
-- Abrir al iniciar en pantalla completa.
-- LB + RB para abrir y cerrar.
-- Incluir los juegos ocultos.
-- Mantener el disco dentro mientras el juego siga abierto.
-- Herramientas de desarrollo (F12).
+- Open the shelf when Playnite starts in fullscreen.
+- LB + RB to open and close it.
+- Include hidden games.
+- Keep the disc in while the game is still open.
+- Developer tools (F12).
 
-## Qué se guarda y dónde
+## What is saved, and where
 
-- **En Playnite:** estado de juego, categorías, puntuación de usuario (cada estrella son 20 puntos) y notas.
-- **En los datos de la extensión:** el precinto y el polvo de cada caja, las preferencias de la estantería (ambiente, luz, orden) y una caché de carátulas reducidas.
+- **In Playnite:** completion status, categories, user score (each star is 20 points) and notes.
+- **In the extension's data:** the shrink wrap and dust of each case, the shelf preferences (room, light, sort order) and a cache of downsized covers.
 
-## Desarrollo
+## Development
 
 ```
 MyVLibrary/
-├─ web/          la estantería (three.js), en trozos dentro de web/src
-│  └─ build.mjs  la une en web/dist (para la extensión) o en web/dist-demo (demo de navegador)
-├─ extension/    la extensión de Playnite (C#, .NET Framework 4.6.2, WebView2)
-└─ .github/workflows/build.yml   compila todo y genera el .pext
+├─ web/          the shelf (three.js), split into pieces in web/src
+│  └─ build.mjs  joins them into web/dist (for the extension) or web/dist-demo (browser demo)
+├─ extension/    the Playnite extension (C#, .NET Framework 4.6.2, WebView2)
+└─ .github/workflows/build.yml   builds everything and packs the .pext
 ```
 
-**La estantería en el navegador**
+**The shelf in the browser**
 
 ```
 cd web
 npm install
-node build.mjs --target=demo   # web/dist-demo/index.html, con juegos de ejemplo
-node build.mjs                 # web/dist/, lo que lleva la extensión
+node build.mjs --target=demo   # web/dist-demo/index.html, with sample games
+node build.mjs                 # web/dist/, what the extension ships
 ```
 
-- Abre `web/dist/index.html` con un servidor estático (por ejemplo `npx serve web`) y verás la biblioteca de ejemplo.
-- Con `?mock` al final de la dirección, la página finge estar dentro de Playnite. Así se prueba el camino real: carátulas, colores sacados de la carátula, arranque y cierre del juego, y cambios devueltos.
+- Open `web/dist/index.html` from a static server (for example `npx serve web`) to see the sample library.
+- Add `?mock` to the end of the address and the page pretends to be inside Playnite. This tests the real path: covers, colours taken from the cover, starting and closing a game, and changes sent back.
 
-**La extensión**
+**The extension**
 
-- Compílala con `dotnet build extension/MyVLibrary.csproj -c Release`, en Windows y después de construir la web.
-- GitHub Actions lo hace en cada cambio y deja el `.pext` como artefacto.
-- Si subes una etiqueta `v*` (por ejemplo `v0.2.0`), además se publica una versión en Releases.
-- **Versión.** Está en `extension/extension.yaml` (y repetida en `web/package.json`). La DLL y la estantería la toman de ahí; se ve al final de Ajustes. Cada PR tiene que subirla: si no, la comprobación de GitHub Actions falla. La etiqueta de una versión tiene que coincidir con ella.
+- Build it with `dotnet build extension/MyVLibrary.csproj -c Release`, on Windows, after building the web part.
+- GitHub Actions does this on every change and keeps the `.pext` as an artifact.
+- If you push a `v*` tag (for example `v0.2.0`), it also publishes a release.
+- **Version.** It lives in `extension/extension.yaml` (and is repeated in `web/package.json`). The DLL and the shelf read it from there; you can see it at the bottom of Settings. Every PR that touches `extension/` or `web/` must raise it, or the GitHub Actions check fails. A release tag must match it.
 
-**Cómo se hablan las dos partes**
+**How the two parts talk**
 
-- La extensión sirve la carpeta `web` en `https://app.myvlibrary/` y las carátulas en `https://media.myvlibrary/cover/{id}?w=…`, reducidas y guardadas en caché.
-- Página y extensión se pasan mensajes JSON con `chrome.webview.postMessage`.
-- La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory` y `release`.
-- La extensión responde con `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad` y `focus`.
+- The extension serves the `web` folder at `https://app.myvlibrary/` and covers at `https://media.myvlibrary/cover/{id}?w=…`, downsized and cached.
+- The page and the extension exchange JSON messages with `chrome.webview.postMessage`.
+- The page sends: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory` and `release`.
+- The extension answers with `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad` and `focus`.
 
-## Licencia
+## License
 
-GPL-3.0. Los juegos de la demo son inventados, y la consola y la tele son diseños propios.
+GPL-3.0. The demo games are made up, and the console and the TV are original designs.
