@@ -9,6 +9,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
@@ -24,6 +25,7 @@ namespace MyVLibrary
         public int? score { get; set; }
         public string notes { get; set; }
         public string url { get; set; }
+        public string name { get; set; }
         public List<string> fields { get; set; }
     }
 
@@ -46,8 +48,23 @@ namespace MyVLibrary
         private readonly HashSet<Guid> changed = new HashSet<Guid>();
         private readonly HashSet<Guid> removed = new HashSet<Guid>();
         private readonly DispatcherTimer flushTimer;
+        private readonly Dictionary<Guid, DateTime> running = new Dictionary<Guid, DateTime>();
+        private readonly HashSet<string> fetching = new HashSet<string>();
         private bool subscribed;
         private string cacheDir;
+
+        internal string ExtraRoot => Path.Combine(api.Paths.ConfigurationPath, "ExtraMetadata", "games");
+        internal string RemoteDir
+        {
+            get
+            {
+                var dir = Path.Combine(plugin.GetPluginUserDataPath(), "cache", "remote");
+                Directory.CreateDirectory(dir);
+                return dir;
+            }
+        }
+
+        private string Extra(Guid id, string file) => Path.Combine(ExtraRoot, id.ToString(), file);
 
         public LibraryBridge(MyVLibraryPlugin plugin)
         {
@@ -172,11 +189,199 @@ namespace MyVLibrary
 
         // ---------- game events ----------
 
-        public void GameStarted(Game g) => Broadcast(new Dictionary<string, object> { ["type"] = "started", ["id"] = g.Id.ToString() });
+        /// <summary>A game Playnite has given up on whose programs are still open: the shelf keeps it in the console.</summary>
+        private class Leftover
+        {
+            public string Folder;
+            public HashSet<int> Exclude;
+            public ulong PlayniteSeconds;
+            public DateTime Since;
+            public DateTime LastSeen;
+            public int Misses;
+            public bool Checking;
+        }
 
-        public void GameStopped(Game g, ulong seconds) => Broadcast(new Dictionary<string, object> { ["type"] = "stopped", ["id"] = g.Id.ToString(), ["seconds"] = seconds });
+        private readonly Dictionary<Guid, HashSet<int>> before = new Dictionary<Guid, HashSet<int>>();
+        private readonly Dictionary<Guid, Leftover> leftovers = new Dictionary<Guid, Leftover>();
+        private DispatcherTimer leftoverTimer;
+        private static readonly TimeSpan LeftoverTick = TimeSpan.FromSeconds(4);
+        private static readonly TimeSpan LeftoverLimit = TimeSpan.FromHours(12);
 
-        public void GameCancelled(Game g) => Broadcast(new Dictionary<string, object> { ["type"] = "cancelled", ["id"] = g.Id.ToString() });
+        private string GameFolder(Game g)
+        {
+            var dir = g?.InstallDirectory;
+            if (string.IsNullOrWhiteSpace(dir)) return null;
+            try { dir = api.ExpandGameVariables(g, dir); } catch { }
+            return ProcessWatch.Folder(dir);
+        }
+
+        /// <summary>Before launching: whatever already runs from the game's folder (a tray tool, say) never counts as the game.</summary>
+        public void GameStarting(Game g)
+        {
+            before.Remove(g.Id);
+            if (!plugin.Settings.KeepTracking) return;
+            try
+            {
+                var folder = GameFolder(g);
+                if (folder != null) before[g.Id] = ProcessWatch.In(folder);
+            }
+            catch (Exception e)
+            {
+                logger.Warn(e, "MyVLibrary: no se han podido mirar los procesos");
+            }
+        }
+
+        public void GameStarted(Game g)
+        {
+            leftovers.Remove(g.Id);
+            running[g.Id] = DateTime.Now;
+            Broadcast(new Dictionary<string, object> { ["type"] = "started", ["id"] = g.Id.ToString() });
+        }
+
+        /// <summary>
+        /// Playnite says the game has closed. If a program from its folder is still open (Playnite lost track of it),
+        /// the disc stays in until that program closes too, and the missing time is added to Playnite afterwards.
+        /// </summary>
+        public void GameStopped(Game g, ulong seconds)
+        {
+            if (plugin.Settings.KeepTracking && running.ContainsKey(g.Id) && !leftovers.ContainsKey(g.Id))
+            {
+                try
+                {
+                    var folder = GameFolder(g);
+                    if (folder != null)
+                    {
+                        var exclude = before.TryGetValue(g.Id, out var b) ? b : new HashSet<int>();
+                        var still = ProcessWatch.In(folder);
+                        still.ExceptWith(exclude);
+                        if (still.Count > 0)
+                        {
+                            logger.Info($"MyVLibrary: Playnite ha dado por cerrado {g.Name}, pero siguen abiertos {still.Count} programas de su carpeta");
+                            leftovers[g.Id] = new Leftover { Folder = folder, Exclude = exclude, PlayniteSeconds = seconds, Since = DateTime.Now, LastSeen = DateTime.Now };
+                            Broadcast(new Dictionary<string, object> { ["type"] = "tracking", ["id"] = g.Id.ToString() });
+                            StartLeftoverTimer();
+                            return;
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    logger.Warn(e, "MyVLibrary: no se han podido mirar los procesos");
+                }
+            }
+
+            before.Remove(g.Id);
+            Stopped(g.Id, seconds);
+        }
+
+        /// <summary>Each shelf is told whether it is on screen right now, so it can wait to animate the disc coming out.</summary>
+        private void Stopped(Guid id, ulong seconds)
+        {
+            running.Remove(id);
+            foreach (var h in hosts.ToList())
+            {
+                h.Post(new Dictionary<string, object> { ["type"] = "stopped", ["id"] = id.ToString(), ["seconds"] = seconds, ["active"] = h.IsOnScreen });
+            }
+        }
+
+        public void GameCancelled(Game g)
+        {
+            running.Remove(g.Id);
+            before.Remove(g.Id);
+            leftovers.Remove(g.Id);
+            Broadcast(new Dictionary<string, object> { ["type"] = "cancelled", ["id"] = g.Id.ToString() });
+        }
+
+        private void StartLeftoverTimer()
+        {
+            if (leftoverTimer == null)
+            {
+                leftoverTimer = new DispatcherTimer(DispatcherPriority.Background, api.MainView.UIDispatcher) { Interval = LeftoverTick };
+                leftoverTimer.Tick += (s, e) => CheckLeftovers();
+            }
+
+            leftoverTimer.Start();
+        }
+
+        private void CheckLeftovers()
+        {
+            if (leftovers.Count == 0)
+            {
+                leftoverTimer.Stop();
+                return;
+            }
+
+            foreach (var pair in leftovers.ToList())
+            {
+                var id = pair.Key;
+                var w = pair.Value;
+                if (w.Checking) continue;
+                if (DateTime.Now - w.Since > LeftoverLimit)
+                {
+                    FinishLeftover(id, true);
+                    continue;
+                }
+
+                w.Checking = true;
+                Task.Run(() =>
+                {
+                    var still = ProcessWatch.In(w.Folder);
+                    still.ExceptWith(w.Exclude);
+                    return still.Count;
+                }).ContinueWith(t =>
+                {
+                    api.MainView.UIDispatcher.BeginInvoke(new Action(() =>
+                    {
+                        w.Checking = false;
+                        if (!leftovers.TryGetValue(id, out var cur) || cur != w) return;
+                        var open = t.Status == TaskStatus.RanToCompletion && t.Result > 0;
+                        if (open)
+                        {
+                            w.LastSeen = DateTime.Now;
+                            w.Misses = 0;
+                        }
+                        else if (++w.Misses >= 2)
+                        {
+                            FinishLeftover(id, true);
+                        }
+                    }));
+                });
+            }
+        }
+
+        /// <summary>The game's last program has closed (or the disc was pulled out): add the time Playnite missed.</summary>
+        private void FinishLeftover(Guid id, bool announce)
+        {
+            if (!leftovers.TryGetValue(id, out var w)) return;
+            leftovers.Remove(id);
+            before.Remove(id);
+            var extra = (ulong)Math.Max(0, Math.Round((w.LastSeen - w.Since).TotalSeconds + LeftoverTick.TotalSeconds / 2));
+            try
+            {
+                var g = Db.Games.Get(id);
+                if (g != null && extra > 0)
+                {
+                    g.Playtime += extra;
+                    g.LastActivity = DateTime.Now;
+                    Db.Games.Update(g);
+                    logger.Info($"MyVLibrary: {g.Name} ha seguido abierto {extra} s más; sumados a su tiempo de juego");
+                }
+            }
+            catch (Exception e)
+            {
+                logger.Error(e, "MyVLibrary: no se ha podido sumar el tiempo de juego");
+            }
+
+            if (announce) Stopped(id, w.PlayniteSeconds + extra);
+            else running.Remove(id);
+        }
+
+        /// <summary>Playnite is closing: keep the time of any game still being watched.</summary>
+        public void Shutdown()
+        {
+            foreach (var id in leftovers.Keys.ToList()) FinishLeftover(id, false);
+            leftoverTimer?.Stop();
+        }
 
         // ---------- the library, as the page wants it ----------
 
@@ -253,6 +458,7 @@ namespace MyVLibrary
                 ["community"] = g.CommunityScore,
                 ["hasCover"] = !string.IsNullOrEmpty(g.CoverImage),
                 ["hasBg"] = !string.IsNullOrEmpty(g.BackgroundImage),
+                ["hasLogo"] = File.Exists(Extra(g.Id, "Logo.png")),
                 ["ver"] = Version(g),
                 ["sum"] = Summary(g.Description)
             };
@@ -273,6 +479,8 @@ namespace MyVLibrary
             var showHidden = plugin.Settings.ShowHidden;
             var message = Lists("library");
             message["mode"] = host.ModeName;
+            message["lang"] = api.ApplicationSettings.Language;
+            message["running"] = running.Select(r => new Dictionary<string, object> { ["id"] = r.Key.ToString(), ["seconds"] = (int)(DateTime.Now - r.Value).TotalSeconds }).ToList();
             message["hostPad"] = host.Kind == ShelfHost.HostKind.Fullscreen;
             message["games"] = Db.Games.Where(g => showHidden || !g.Hidden).Select(Record).ToList();
             if (host.FocusGame.HasValue)
@@ -323,6 +531,19 @@ namespace MyVLibrary
                     case "close":
                         plugin.CloseHost(host);
                         break;
+                    case "fetch":
+                        Fetch(host, m.url);
+                        break;
+                    case "createStatus":
+                        CreateStatus(m);
+                        break;
+                    case "release":
+                        // the disc was pulled out by hand while the shelf was the one keeping track
+                        if (Guid.TryParse(m.id, out var rid)) FinishLeftover(rid, false);
+                        break;
+                    case "createCategory":
+                        if (!string.IsNullOrWhiteSpace(m.name)) Db.Categories.Add(m.name.Trim());
+                        break;
                 }
             }
             catch (Exception e)
@@ -343,6 +564,10 @@ namespace MyVLibrary
                 ["id"] = id,
                 ["desc"] = g.Description,
                 ["notes"] = g.Notes,
+                ["images"] = MediaIn(g.Description, ImgSrc),
+                ["videos"] = MediaIn(g.Description, VideoSrc),
+                ["trailer"] = File.Exists(Extra(g.Id, "VideoTrailer.mp4")) ? $"https://extra.myvlibrary/{g.Id}/VideoTrailer.mp4"
+                            : File.Exists(Extra(g.Id, "VideoMicrotrailer.mp4")) ? $"https://extra.myvlibrary/{g.Id}/VideoMicrotrailer.mp4" : null,
                 ["links"] = (g.Links?.ToList() ?? new List<Link>()).Where(l => l != null).Select(l => new Dictionary<string, object> { ["name"] = l.Name, ["url"] = l.Url }).ToList()
             });
         }
@@ -353,13 +578,13 @@ namespace MyVLibrary
             Func<string, string, Dictionary<string, object>> msg = (type, reason) => new Dictionary<string, object> { ["type"] = type, ["id"] = id, ["reason"] = reason };
             if (g == null)
             {
-                host.Post(msg("failed", "Ese juego ya no está en tu biblioteca."));
+                host.Post(msg("failed", Loc.S("Ese juego ya no está en tu biblioteca.", "That game is no longer in your library.")));
                 return;
             }
 
             if (g.IsRunning || g.IsLaunching)
             {
-                host.Post(msg("failed", "Ese juego ya está en marcha."));
+                host.Post(msg("failed", Loc.S("Ese juego ya está en marcha.", "That game is already running.")));
                 return;
             }
 
@@ -414,6 +639,109 @@ namespace MyVLibrary
             if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
             {
                 Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            }
+        }
+
+        // ---------- pictures and trailers mentioned in the description ----------
+
+        private static readonly Regex ImgSrc = new Regex("<img[^>]+?src\\s*=\\s*[\"']([^\"']+)[\"']", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex VideoSrc = new Regex("<(?:video|source)[^>]+?src\\s*=\\s*[\"']([^\"']+)[\"']", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static List<string> MediaIn(string html, Regex re)
+        {
+            if (string.IsNullOrEmpty(html)) return new List<string>();
+            return re.Matches(html).Cast<Match>().Select(m => WebUtility.HtmlDecode(m.Groups[1].Value).Trim())
+                .Where(u => u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                .Distinct().Take(12).ToList();
+        }
+
+        /// <summary>Downloads a picture or video from the description once and serves it from https://cache.myvlibrary/remote/.</summary>
+        private void Fetch(ShelfHost host, string url)
+        {
+            var dispatcher = api.MainView.UIDispatcher;
+            Action<string> reply = served => dispatcher.BeginInvoke(new Action(() => host.Post(new Dictionary<string, object> { ["type"] = "fetched", ["url"] = url, ["local"] = served })));
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                reply(null);
+                return;
+            }
+
+            var ext = Path.GetExtension(uri.AbsolutePath).ToLowerInvariant();
+            if (ext.Length > 6 || ext.Length < 2) ext = ".bin";
+            var name = Hash(url) + Hash(url + "#") + ext;
+            var file = Path.Combine(RemoteDir, name);
+            var local = "https://cache.myvlibrary/" + name;
+            if (File.Exists(file))
+            {
+                reply(local);
+                return;
+            }
+
+            lock (fetching)
+            {
+                if (fetching.Contains(url)) return;
+                fetching.Add(url);
+            }
+
+            Task.Run(() =>
+            {
+                var tmp = file + ".part";
+                try
+                {
+                    ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+                    var req = (HttpWebRequest)WebRequest.Create(uri);
+                    req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Playnite MyVLibrary";
+                    req.Timeout = 30000;
+                    req.ReadWriteTimeout = 60000;
+                    using (var res = (HttpWebResponse)req.GetResponse())
+                    {
+                        var type = (res.ContentType ?? "").ToLowerInvariant();
+                        if (!type.StartsWith("image/") && !type.StartsWith("video/") && !type.StartsWith("application/octet-stream"))
+                        {
+                            reply(null);
+                            return;
+                        }
+
+                        using (var input = res.GetResponseStream())
+                        using (var output = File.Create(tmp))
+                        {
+                            var buffer = new byte[81920];
+                            long total = 0;
+                            int read;
+                            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                            {
+                                total += read;
+                                if (total > 80L * 1024 * 1024) throw new IOException("demasiado grande");
+                                output.Write(buffer, 0, read);
+                            }
+                        }
+                    }
+
+                    File.Move(tmp, file);
+                    reply(local);
+                }
+                catch (Exception e)
+                {
+                    logger.Warn(e, "MyVLibrary: no se ha podido descargar " + url);
+                    try { File.Delete(tmp); } catch { }
+                    reply(null);
+                }
+                finally
+                {
+                    lock (fetching) fetching.Remove(url);
+                }
+            });
+        }
+
+        private void CreateStatus(PageMessage m)
+        {
+            if (string.IsNullOrWhiteSpace(m.name)) return;
+            var st = Db.CompletionStatuses.FirstOrDefault(s => string.Equals(s.Name, m.name.Trim(), StringComparison.OrdinalIgnoreCase)) ?? Db.CompletionStatuses.Add(m.name.Trim());
+            var g = Find(m.id);
+            if (g != null && st != null)
+            {
+                g.CompletionStatusId = st.Id;
+                Db.Games.Update(g);
             }
         }
 

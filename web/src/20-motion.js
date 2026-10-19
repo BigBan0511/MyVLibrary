@@ -12,6 +12,12 @@ function bez(a, b, c, t, out) { const u = 1 - t; return out.set(u * u * a.x + 2 
 const cam = { pos: new V3(), look: new V3(), tPos: new V3(), tLook: new V3(), view: 'shelf', par: { x: 0, y: 0 }, browseX: 0 };
 function viewPose(name, outPos, outLook) {
   const narrow = camera.aspect < .95; let box, dir;
+  if (isCases() && (name === 'shelf' || name === 'browse')) {
+    /* the earlier design: the camera stands in front of one bookcase */
+    const u = units[curGroup], H = u ? u.H : 80;
+    box = { cx: u ? u.x : SH.x0, cy: H / 2 + 11 + (narrow ? 6 : 0), w: narrow ? 46 : 62, h: Math.max(H + 38, 64) }; dir = new V3(0, .17, 1);
+    dir.normalize(); outLook.set(box.cx, box.cy, 2); outPos.copy(outLook).addScaledVector(dir, fitDist(box.w, box.h)); return;
+  }
   if (name === 'browse') {
     const x = clamp(cam.browseX, SHELF.x0 + 30, SHELF.x1 - 30);
     box = { cx: x, cy: SHELF.board + 11, w: narrow ? 46 : 82, h: 40 }; dir = new V3(0, .06, 1);
@@ -30,7 +36,14 @@ function updateCamera(dt) {
   cam.par.x += ((wantPar ? pointer.x * 5 : 0) - cam.par.x) * (1 - Math.exp(-3 * dt));
   cam.par.y += ((wantPar ? pointer.y * 3 : 0) - cam.par.y) * (1 - Math.exp(-3 * dt));
   camera.position.copy(cam.pos); camera.position.x += cam.par.x; camera.position.y += cam.par.y; camera.lookAt(cam.look);
+  /* with the bookcases the ceiling light follows you along the room; over the wall shelf it stays put */
+  const k = 1 - Math.exp(-2.5 * dt / SPEED);
+  if (isCases()) { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(_KOFF); key.position.lerp(_kp, k); }
+  else { key.target.position.lerp(KEY_AIM, k); key.position.lerp(KEY_POS, k); }
+  key.target.updateMatrixWorld();
+  if (typeof shelfFill !== 'undefined') shelfFill.forEach((l, i) => { _kl.set(isCases() ? cam.look.x + (i ? 22 : -22) : SHELF.cx + (i ? 55 : -60), isCases() ? cam.look.y + 6 : SHELF.board + 26, isCases() ? 70 : SHELF.front + 75); l.position.lerp(_kl, k); });
 }
+const _kl = new V3(), _kp = new V3(), _KOFF = new V3(66, 222, 236);
 function updateRowLights() { }
 
 /* ---------- dust particles: puffs and ambient motes in the light ---------- */
@@ -59,4 +72,4 @@ function updateMotes(dt, now) {
 }
 const _sp = new V3();
 function spineWorld(c, out) { return c.spine.getWorldPosition(out); }
-function spanText(d) { if (d < 30) return d === 1 ? '1 día' : `${d} días`; if (d < 365) { const m = Math.round(d / 30); return m === 1 ? '1 mes' : `${m} meses`; } const y = Math.round(d / 365); return y === 1 ? '1 año' : `${y} años`; }
+function spanText(d) { if (d < 30) return d === 1 ? T('1 día') : T('{0} días', d); if (d < 365) { const m = Math.round(d / 30); return m === 1 ? T('1 mes') : T('{0} meses', m); } const y = Math.round(d / 365); return y === 1 ? T('1 año') : T('{0} años', y); }

@@ -48,7 +48,7 @@ function boardKey() {
   const gr = groups[curGroup];
   if (play && g) return ['play', g.id, Math.floor((performance.now() - playStart) / 60000), PN_STATE.waiting].join('|');
   if (g) return ['game', g.id, g.status, Math.round(g.hours * 10), g.last, g.rating, g.wrapped, g.cats.join(',')].join('|');
-  return ['shelf', gr ? gr.key + gr.games.length : '', curPage, prefs.group].join('|');
+  return ['shelf', gr ? gr.key + gr.games.length : '', curPage, prefs.group, LANG].join('|');
 }
 function drawBoard(force) {
   const key = boardKey(); if (key === bd.key && !force) return; bd.key = key;
@@ -62,11 +62,11 @@ function drawBoard(force) {
     const s = fitMarker(x, gr.label.toUpperCase(), maxW - 80, 66), w = marker(x, gr.label.toUpperCase(), L + 70, 116, s);
     scribbleLine(x, L + 66, L + 74 + w, 138);
     const hrs = gr.games.reduce((a, b) => a + (b.hours || 0), 0), np = gr.pages.length;
-    marker(x, `${gr.games.length === 1 ? '1 juego' : gr.games.length + ' juegos'} · ${fmtH(hrs)} jugadas`, L, 250, 44);
-    if (np > 1) marker(x, `Página ${curPage + 1} de ${np}`, L, 320, 40, { col: INK2 });
+    marker(x, T(gr.games.length === 1 ? '{0} juego' : '{0} juegos', gr.games.length) + ' · ' + T('{0} jugadas', fmtH(hrs)), L, 250, 44);
+    if (np > 1) marker(x, T('Página {0} de {1}', curPage + 1, np), L, 320, 40, { col: INK2 });
     const lastG = gr.games.filter(q => q.last !== null && q.last !== undefined).sort((a, b) => a.last - b.last)[0];
-    if (lastG) wrapMarker(x, `Lo último: ${lastG.t}`, L, np > 1 ? 380 : 320, maxW * .8, 36, 46, 1);
-    marker(x, 'Elige uno de la estantería', L, BH * .64, 40, { col: INK3, rot: -.03 });
+    if (lastG) wrapMarker(x, T('Lo último: {0}', lastG.t), L, np > 1 ? 380 : 320, maxW * .8, 36, 46, 1);
+    marker(x, T('Elige uno de la estantería'), L, BH * .64, 40, { col: INK3, rot: -.03 });
     arrowDoodle(x, BW - 110, BH * .58);
   } else if (g) {
     let s = fitMarker(x, g.t.toUpperCase(), maxW, 64, 34), title = g.t.toUpperCase(), y = 112;
@@ -74,21 +74,21 @@ function drawBoard(force) {
     else { const w = marker(x, title, L, y, s); scribbleLine(x, L - 6, L + w + 8, y + 22); }
     y += 96;
     if (kind === 'play') {
-      marker(x, PN_STATE.waiting ? 'ARRANCANDO…' : 'JUGANDO AHORA', L, y + 20, 70, { col: INK3, rot: -.025 });
+      marker(x, T(PN_STATE.waiting ? 'ARRANCANDO…' : 'JUGANDO AHORA'), L, y + 20, 70, { col: INK3, rot: -.025 });
       const m = Math.max(0, Math.floor((performance.now() - playStart) / 60000));
-      marker(x, PN_STATE.waiting ? 'Playnite está abriendo el juego' : `Esta sesión: ${m < 1 ? 'acaba de empezar' : m === 1 ? '1 minuto' : m + ' minutos'}`, L, y + 110, 40);
-      wrapMarker(x, PLAYNITE ? 'Al cerrar el juego, el disco vuelve solo a su caja' : 'Esc para sacar el disco', L, y + 190, maxW * .9, 34, 44, 2, INK2);
+      marker(x, PN_STATE.waiting ? T('Playnite está abriendo el juego') : T('Esta sesión: {0}', m < 1 ? T('acaba de empezar') : m === 1 ? T('1 minuto') : T('{0} minutos', m)), L, y + 110, 40);
+      wrapMarker(x, T(PLAYNITE ? 'Al cerrar el juego, el disco vuelve solo a su caja' : 'Esc para sacar el disco'), L, y + 190, maxW * .9, 34, 44, 2, INK2);
       boardTex.needsUpdate = true; return;
     }
-    const st = g.status || 'Sin estado';
+    const st = g.status ? TD(g.status) : T('Sin estado');
     marker(x, `${st} · ${fmtH(g.hours)}`, L, y, 44, { col: kindOf(g) === 'playing' ? INK3 : INK });
-    marker(x, `Última vez: ${lastText(g.last).toLowerCase()}`, L, y + 62, 38);
+    marker(x, T('Última vez: {0}', lastText(g.last).toLowerCase()), L, y + 62, 38);
     const meta = [g.genre, g.year].filter(Boolean).join(' · ');
     let yy = y + 120; if (meta) { wrapMarker(x, meta, L, yy, maxW, 34, 44, 1, INK2); yy += 56; }
-    if (g.wrapped) { marker(x, '¡Precintado!', BW - L - 250, y - 6, 44, { col: INK3, rot: .06 }); x.save(); x.strokeStyle = INK3; x.lineWidth = 4; x.globalAlpha = .8; x.beginPath(); x.ellipse(BW - L - 128, y - 22, 150, 46, .06, 0, 7); x.stroke(); x.restore(); }
+    if (g.wrapped) { marker(x, T('¡Precintado!'), BW - L - 250, y - 6, 44, { col: INK3, rot: .06 }); x.save(); x.strokeStyle = INK3; x.lineWidth = 4; x.globalAlpha = .8; x.beginPath(); x.ellipse(BW - L - 128, y - 22, 150, 46, .06, 0, 7); x.stroke(); x.restore(); }
     if (g.sum) wrapMarker(x, g.sum, L, yy + 10, maxW, 31, 42, Math.max(1, Math.floor((BH - 120 - yy) / 42)), '#3b3e46');
     if (g.rating) starsDoodle(x, L + 14, BH - 72, g.rating, 34);
-    if (g.cats.length) { const t = g.cats.slice(0, 3).map(c => '#' + c.replace(/\s+/g, '')).join('  '); marker(x, t, BW - L, BH - 60, fitMarker(x, t, maxW * .62, 32, 20), { col: INK2, align: 'right', rot: -.02 }); }
+    if (g.cats.length) { const t = g.cats.slice(0, 3).map(c => '#' + TD(c).replace(/\s+/g, '')).join('  '); marker(x, t, BW - L, BH - 60, fitMarker(x, t, maxW * .62, 32, 20), { col: INK2, align: 'right', rot: -.02 }); }
   }
   boardTex.needsUpdate = true;
 }

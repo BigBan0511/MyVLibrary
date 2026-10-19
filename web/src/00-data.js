@@ -173,18 +173,18 @@ function mix(a, b, t) { const A = hexRgb(a), B = hexRgb(b); return '#' + A.map((
 function hexA(h, a) { const [r, g, b] = hexRgb(h); return `rgba(${r},${g},${b},${a})`; }
 function lum(h) { const [r, g, b] = hexRgb(h).map(v => v / 255); return .2126 * r + .7152 * g + .0722 * b; }
 function inkAccent(g) { const a = g.pal[2]; return lum(a) > .42 ? mix(a, '#000000', .5) : a; }
-function fmtH(h) { if (!h) return '0 h'; if (h < 1) return Math.round(h * 60) + ' min'; if (h >= 100) return Math.round(h) + ' h'; return h.toFixed(1).replace('.', ',') + ' h'; }
+function fmtH(h) { if (!h) return '0 h'; if (h < 1) return Math.round(h * 60) + ' min'; if (h >= 100) return Math.round(h) + ' h'; return h.toFixed(1).replace('.', T('.')) + ' h'; }
 function lastText(d) {
-  if (d === null || d === undefined) return 'Nunca';
-  if (d === 0) return 'Hoy'; if (d === 1) return 'Ayer';
-  if (d < 14) return `Hace ${d} días`;
-  if (d < 60) return `Hace ${Math.round(d / 7)} semanas`;
-  if (d < 365) { const m = Math.round(d / 30); return m === 1 ? 'Hace 1 mes' : `Hace ${m} meses`; }
-  const y = Math.round(d / 365); return y === 1 ? 'Hace 1 año' : `Hace ${y} años`;
+  if (d === null || d === undefined) return T('Nunca');
+  if (d === 0) return T('Hoy'); if (d === 1) return T('Ayer');
+  if (d < 14) return T('Hace {0} días', d);
+  if (d < 60) return T('Hace {0} semanas', Math.round(d / 7));
+  if (d < 365) { const m = Math.round(d / 30); return m === 1 ? T('Hace 1 mes') : T('Hace {0} meses', m); }
+  const y = Math.round(d / 365); return y === 1 ? T('Hace 1 año') : T('Hace {0} años', y);
 }
 function shortAgo(d) {
-  if (d === null || d === undefined) return 'nunca';
-  if (d < 1) return 'hoy'; if (d < 30) return d + ' d'; if (d < 365) return Math.round(d / 30) + ' m'; return Math.round(d / 365) + ' a';
+  if (d === null || d === undefined) return T('nunca');
+  if (d < 1) return T('hoy'); if (d < 30) return d + ' d'; if (d < 365) return Math.round(d / 30) + ' m'; return Math.round(d / 365) + ' ' + T('a');
 }
 let STATUS_CLASS = { 'No jugado': 'st-sin', 'Planeado': 'st-pla', 'Jugando': 'st-jug', 'Jugado': 'st-jdo', 'En espera': 'st-esp', 'Abandonado': 'st-aba', 'Superado': 'st-sup', 'Completado': 'st-com' };
 /* what a status means, whatever the user called it (Playnite lets you rename and add them) */
@@ -213,7 +213,7 @@ const HOST = (window.chrome && window.chrome.webview) || null;
 const MOCK = /[?&]mock\b/.test(location.search);
 const PLAYNITE = !!HOST || MOCK;
 /* what Playnite is doing with the game in the console (only used inside Playnite) */
-const PN_STATE = { waiting: false, running: null, mode: 'desktop' };
+const PN_STATE = { waiting: false, running: null, mode: 'desktop', selfTrack: false };
 
 /* ---------- persistence (per viewer, optional) ----------
    In the demo everything lives here. Inside Playnite, status, categories, notes, score
@@ -236,7 +236,7 @@ const CAT0 = { faro: ['Partidas cortas', 'Favoritos'], turbo: ['Con amigos', 'Fa
 
 /* viewer preferences */
 const PREF_KEY = 'myvlibrary:prefs';
-const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'tarde', seal: 'ask', sound: 'on', autoStatus: 'off', card: 'show', room: 'salon', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
+const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'tarde', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'wall', room: 'salon', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}); } catch (e) { }
 function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) { } }
 

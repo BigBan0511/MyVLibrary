@@ -10,12 +10,12 @@ function realManualPages(c) {
   const desc = g.descText || g.sum || '';
   const paras = desc ? desc.split(/\n{2,}|\n/).map(t => t.trim()).filter(Boolean).slice(0, 40).map(t => `<p>${esc(t)}</p>`).join('') : '<p class="small">Este juego no tiene descripción en tu biblioteca de Playnite. Puedes añadirla desde Playnite (Editar → Descripción) o con un proveedor de metadatos.</p>';
   const pages = [
-    () => `<div class="mp cover"><img src="${cov}" alt="Portada de ${esc(g.t)}"><div class="cv-band"><span>Manual de instrucciones</span><b>${esc(g.t)}</b></div></div>`,
+    () => `<div class="mp cover"><img class="bgimg" src="${cov}" alt=""><img class="fg" src="${cov}" alt="${esc(T('Portada de {0}', g.t))}"><div class="cv-band"><span>Manual de instrucciones</span><b>${esc(g.t)}</b></div></div>`,
     k => `<div class="mp"><div class="warn"><strong>Aviso sobre la salud</strong><p>Un pequeño porcentaje de personas puede sufrir ataques al ver ciertas luces o destellos. Si notas mareos, visión alterada o movimientos involuntarios, deja de jugar y consulta a un médico.</p><p>Juega en una habitación bien iluminada y descansa 15 minutos cada hora.</p></div>
       <h4>Índice</h4><ol class="toc">${[['Historia', 3], ['Ficha técnica', 4], ['Tus partidas', 5], ...(g.links && g.links.length ? [['Enlaces', 6]] : []), ['Notas', g.links && g.links.length ? 7 : 6], ['Tarjeta de registro', g.links && g.links.length ? 8 : 7]].map(([t, p]) => `<li><span>${t}</span><i></i><b>${p}</b></li>`).join('')}</ol>${pn(k)}</div>`,
     k => `<div class="mp"><span class="eye">Capítulo 1</span><h3>Historia</h3><div class="lead story">${paras}</div>${shotUrl ? `<img class="shot" src="${shotUrl}" alt="">` : ''}${pn(k)}</div>`,
     k => `<div class="mp"><span class="eye">Capítulo 2</span><h3>Ficha técnica</h3>
-      <dl class="spec">${row('Género', g.genres && g.genres.join(', '))}${row('Estudio', g.dev)}${row('Distribuye', g.pub)}${row('Lanzamiento', g.release || (g.year ? String(g.year) : ''))}${row('Plataforma', g.platName)}${row('Origen', g.src)}${row('Serie', g.series)}${row('Edad', g.ageRating)}${row('Funciones', g.features && g.features.slice(0, 6).join(', '))}${row('Instalado', g.installed ? 'Sí' : 'No')}${row('En tu biblioteca', g.added != null ? lastText(g.added).replace('Hace', 'Desde hace') : '')}</dl>
+      <dl class="spec">${row('Género', g.genres && g.genres.join(', '))}${row('Estudio', g.dev)}${row('Distribuye', g.pub)}${row('Lanzamiento', g.release || (g.year ? String(g.year) : ''))}${row('Plataforma', g.platName)}${row('Origen', g.src)}${row('Serie', g.series)}${row('Edad', g.ageRating)}${row('Funciones', g.features && g.features.slice(0, 6).join(', '))}${row('Instalado', g.installed ? 'Sí' : 'No')}${row('En tu biblioteca', g.added != null ? lastText(g.added) : '')}</dl>
       <p class="small">Esta ficha sale de los metadatos de Playnite.</p>${pn(k)}</div>`,
     k => `<div class="mp"><span class="eye">Capítulo 3</span><h3>Tus partidas</h3>
       <div class="big4"><div><b>${fmtH(g.hours)}</b><span>Tiempo jugado</span></div><div><b>${g.sessions || 0}</b><span>Veces jugado</span></div><div><b>${lastText(g.last)}</b><span>Última partida</span></div><div><b>${esc(g.status || 'Sin estado')}</b><span>Estado</span></div></div>
@@ -24,11 +24,11 @@ function realManualPages(c) {
   ];
   if (g.links && g.links.length) pages.push(k => `<div class="mp"><span class="eye">Capítulo 4</span><h3>Enlaces</h3><ul class="links">${g.links.slice(0, 10).map((l, i) => `<li><button type="button" class="lnk" data-link="${i}"><b>${esc(l.name || 'Enlace')}</b><small>${esc((l.url || '').replace(/^https?:\/\//, '').slice(0, 48))}</small></button></li>`).join('')}</ul><p class="small">Se abren en tu navegador.</p>${pn(k)}</div>`);
   pages.push(
-    k => `<div class="mp"><span class="eye">Notas</span><h3>Notas</h3><textarea class="notes" aria-label="Tus notas sobre ${esc(g.t)}" placeholder="Dónde te quedaste, contraseñas de nivel, a quién se lo prestaste…">${esc(g.notes || '')}</textarea><p class="small">Se guardan en las notas del juego en Playnite.</p>${pn(k)}</div>`,
+    k => `<div class="mp"><span class="eye">Notas</span><h3>Notas</h3><textarea class="notes" aria-label="${esc(T('Tus notas sobre {0}', g.t))}" placeholder="${T('Dónde te quedaste, contraseñas de nivel, a quién se lo prestaste…')}">${esc(g.notes || '')}</textarea><p class="small">Se guardan en las notas del juego en Playnite.</p>${pn(k)}</div>`,
     k => `<div class="mp"><span class="eye">Tarjeta</span><h3>Tarjeta de registro</h3><div class="card">
       <span class="cut">Recorta por la línea de puntos</span>
       <dl class="spec"><dt>Juego</dt><dd>${esc(g.t)}</dd><dt>Estado</dt><dd>${esc(g.status || 'Sin estado')}</dd></dl>
-      <div><span class="eye">Tu valoración</span><div class="stars" role="group" aria-label="Valoración">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-star="${n}" class="${n <= g.rating ? 'on' : ''}" aria-label="${n} de 5">★</button>`).join('')}</div></div>
+      <div><span class="eye">Tu valoración</span><div class="stars" role="group" aria-label="Valoración">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-star="${n}" class="${n <= g.rating ? 'on' : ''}" aria-label="${T('{0} de 5', n)}">★</button>`).join('')}</div></div>
       <p class="small">Tu valoración va a la puntuación de usuario de Playnite (cada estrella son 20 puntos).</p></div>${pn(k)}</div>`,
     k => `<div class="mp" style="justify-content:flex-end"><img class="barcode" src="${bcUrl}" alt=""><p class="small">${g.year ? '© ' + g.year + ' ' : ''}${esc(g.dev || g.pub || '')}</p><p class="small">Manual generado por MyVLibrary con los datos de tu biblioteca de Playnite.</p>${pn(k)}</div>`
   );
@@ -45,7 +45,7 @@ function manualPages(c) {
   const pct = Math.round(100 * g.ach[0] / Math.max(1, g.ach[1]));
   const pn = k => `<span class="pn">${k + 1}</span>`;
   return [
-    () => `<div class="mp cover"><img src="${cov}" alt="Portada de ${esc(g.t)}"><div class="cv-band"><span>Manual de instrucciones</span><b>${esc(g.t)}</b></div></div>`,
+    () => `<div class="mp cover"><img class="bgimg" src="${cov}" alt=""><img class="fg" src="${cov}" alt="${esc(T('Portada de {0}', g.t))}"><div class="cv-band"><span>Manual de instrucciones</span><b>${esc(g.t)}</b></div></div>`,
     k => `<div class="mp"><div class="warn"><strong>Aviso sobre la salud</strong><p>Un pequeño porcentaje de personas puede sufrir ataques al ver ciertas luces o destellos. Si notas mareos, visión alterada o movimientos involuntarios, deja de jugar y consulta a un médico.</p><p>Juega en una habitación bien iluminada y descansa 15 minutos cada hora.</p></div>
       <h4>Índice</h4><ol class="toc">${[['Historia', 3], ['Ficha técnica', 4], ['Controles', 5], ['Tus partidas', 6], ['Logros', 7], ['Notas', 8], ['Tarjeta de registro', 9]].map(([t, p]) => `<li><span>${t}</span><i></i><b>${p}</b></li>`).join('')}</ol>${pn(k)}</div>`,
     k => `<div class="mp"><span class="eye">Capítulo 1</span><h3>Historia</h3><p class="lead">${esc(g.desc)}</p><img class="shot" src="${shotUrl}" alt="">${pn(k)}</div>`,
@@ -56,26 +56,27 @@ function manualPages(c) {
       <p class="small">Puedes cambiar los controles en el menú de opciones del juego.</p>${pn(k)}</div>`,
     k => `<div class="mp"><span class="eye">Capítulo 4</span><h3>Tus partidas</h3>
       <div class="big4"><div><b>${fmtH(g.hours)}</b><span>Tiempo jugado</span></div><div><b>${g.sessions}</b><span>Sesiones</span></div><div><b>${lastText(g.last)}</b><span>Última partida</span></div><div><b>${esc(g.status)}</b><span>Estado</span></div></div>
-      <h4>Logros · ${g.ach[0]} de ${g.ach[1]}</h4><div class="bar" role="img" aria-label="${pct} % de logros"><i style="width:${pct}%"></i></div>
+      <h4>${T('Logros · {0} de {1}', g.ach[0], g.ach[1])}</h4><div class="bar" role="img" aria-label="${T('{0} % de logros', pct)}"><i style="width:${pct}%"></i></div>
       <p class="small">Estos datos ya los registra Playnite: tiempo de juego, sesiones, última partida y estado.</p>${pn(k)}</div>`,
     k => `<div class="mp"><span class="eye">Capítulo 5</span><h3>Logros</h3><ul class="ach">${achs.map(([t, dsc], i) => `<li class="${i < unlocked ? 'on' : 'off'}"><span class="ico">${i < unlocked ? '✓' : '?'}</span><span><b>${i < unlocked ? t : 'Logro oculto'}</b><small>${i < unlocked ? dsc : 'Sigue jugando para descubrirlo'}</small></span></li>`).join('')}</ul>${pn(k)}</div>`,
-    k => `<div class="mp"><span class="eye">Capítulo 6</span><h3>Notas</h3><textarea class="notes" aria-label="Tus notas sobre ${esc(g.t)}" placeholder="Dónde te quedaste, contraseñas de nivel, a quién se lo prestaste…">${esc(g.notes || '')}</textarea>${pn(k)}</div>`,
+    k => `<div class="mp"><span class="eye">Capítulo 6</span><h3>Notas</h3><textarea class="notes" aria-label="${esc(T('Tus notas sobre {0}', g.t))}" placeholder="${T('Dónde te quedaste, contraseñas de nivel, a quién se lo prestaste…')}">${esc(g.notes || '')}</textarea>${pn(k)}</div>`,
     k => `<div class="mp"><span class="eye">Capítulo 7</span><h3>Tarjeta de registro</h3><div class="card">
       <span class="cut">Recorta por la línea de puntos</span>
       <dl class="spec"><dt>Juego</dt><dd>${esc(g.t)}</dd><dt>En tu biblioteca</dt><dd>${lastText(g.added)}</dd><dt>Estado</dt><dd>${esc(g.status)}</dd></dl>
-      <div><span class="eye">Tu valoración</span><div class="stars" role="group" aria-label="Valoración">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-star="${n}" class="${n <= g.rating ? 'on' : ''}" aria-label="${n} de 5">★</button>`).join('')}</div></div>
+      <div><span class="eye">Tu valoración</span><div class="stars" role="group" aria-label="Valoración">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-star="${n}" class="${n <= g.rating ? 'on' : ''}" aria-label="${T('{0} de 5', n)}">★</button>`).join('')}</div></div>
       <p class="small">En Playnite, esta nota iría al campo de puntuación del usuario.</p></div>${pn(k)}</div>`,
     k => `<div class="mp" style="justify-content:flex-end"><img class="barcode" src="${bcUrl}" alt=""><p class="small">© ${g.year} ${esc(g.dev)}. Todos los derechos reservados. Juego y estudio inventados para este prototipo.</p><p class="small">Manual generado por MyVLibrary con los datos de tu biblioteca.</p>${pn(k)}</div>`
   ];
 }
-function pageAt(k) { return (k < 0 || k >= book.pages.length) ? null : book.pages[k](k); }
+function pageAt(k) { return (k < 0 || k >= book.pages.length) ? null : trHtml(book.pages[k](k)); }
 function fillSlot(slot, k) { const h = pageAt(k); slot.classList.toggle('empty', h === null); slot.innerHTML = h || ''; }
-function maxSpread() { return book.single ? book.pages.length - 1 : Math.ceil(book.pages.length / 2); }
+/* spread i shows pages 2i-1 and 2i, so the last spread is the one that holds the last page */
+function maxSpread() { return book.single ? book.pages.length - 1 : Math.floor(book.pages.length / 2); }
 function renderSpread() { if (book.single) fillSlot(book.R, book.i); else { fillSlot(book.L, 2 * book.i - 1); fillSlot(book.R, 2 * book.i); } updateCount(); }
 function updateCount() {
   const n = book.pages.length; let t;
-  if (book.single) t = book.i === 0 ? 'Portada' : `${book.i + 1} / ${n}`;
-  else { const a = 2 * book.i - 1, b = 2 * book.i; t = book.i === 0 ? 'Portada' : b >= n ? `${a + 1} / ${n}` : `${a + 1}–${b + 1} / ${n}`; }
+  if (book.single) t = book.i === 0 ? T('Portada') : `${book.i + 1} / ${n}`;
+  else { const a = 2 * book.i - 1, b = 2 * book.i; t = book.i === 0 ? T('Portada') : b >= n ? `${a + 1} / ${n}` : `${a + 1}–${b + 1} / ${n}`; }
   $('#mCount').textContent = t; $('#mPrev').disabled = book.i === 0; $('#mNext').disabled = book.i >= maxSpread();
   $('#mPrev').style.opacity = book.i === 0 ? .4 : 1; $('#mNext').style.opacity = book.i >= maxSpread() ? .4 : 1;
 }

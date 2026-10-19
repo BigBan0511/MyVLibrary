@@ -32,6 +32,18 @@ namespace MyVLibrary
         private bool disposed;
 
         public HostKind Kind { get; }
+
+        /// <summary>True when the window holding the shelf is the one in front.</summary>
+        public bool IsOnScreen
+        {
+            get
+            {
+                var w = Window.GetWindow(this);
+                return w != null && w.IsActive && w.WindowState != WindowState.Minimized;
+            }
+        }
+
+        private Window hostWindow;
         public Guid? FocusGame { get; set; }
         public string ModeName => Kind == HostKind.Fullscreen ? "fullscreen" : Kind == HostKind.Window ? "window" : "desktop";
 
@@ -43,7 +55,7 @@ namespace MyVLibrary
             root = new Grid { Background = new SolidColorBrush(Color.FromRgb(18, 17, 16)) };
             status = new TextBlock
             {
-                Text = "Colocando los juegos en la estantería…",
+                Text = Loc.S("Colocando los juegos en la estantería…", "Putting the games on the shelf…"),
                 Foreground = new SolidColorBrush(Color.FromRgb(188, 176, 160)),
                 FontSize = 16,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -54,7 +66,38 @@ namespace MyVLibrary
             };
             root.Children.Add(status);
             Content = root;
-            Loaded += async (s, e) => await InitAsync();
+            Loaded += async (s, e) =>
+            {
+                HookWindow();
+                await InitAsync();
+            };
+            Unloaded += (s, e) => UnhookWindow();
+        }
+
+        private void HookWindow()
+        {
+            UnhookWindow();
+            hostWindow = Window.GetWindow(this);
+            if (hostWindow != null)
+            {
+                hostWindow.Activated += OnWindowActivated;
+                hostWindow.StateChanged += OnWindowActivated;
+            }
+        }
+
+        private void UnhookWindow()
+        {
+            if (hostWindow != null)
+            {
+                hostWindow.Activated -= OnWindowActivated;
+                hostWindow.StateChanged -= OnWindowActivated;
+                hostWindow = null;
+            }
+        }
+
+        private void OnWindowActivated(object sender, EventArgs e)
+        {
+            if (IsOnScreen) Post(new System.Collections.Generic.Dictionary<string, object> { ["type"] = "activated" });
         }
 
         private static Task<CoreWebView2Environment> GetEnvironment(MyVLibraryPlugin plugin)
@@ -97,7 +140,7 @@ namespace MyVLibrary
             {
                 if (!File.Exists(Path.Combine(plugin.WebDir, "index.html")))
                 {
-                    status.Text = "Falta la carpeta «web» de la extensión. Reinstala MyVLibrary.";
+                    status.Text = Loc.S("Falta la carpeta «web» de la extensión. Reinstala MyVLibrary.", "The extension's «web» folder is missing. Reinstall MyVLibrary.");
                     return;
                 }
 
@@ -122,6 +165,13 @@ namespace MyVLibrary
                 core.Settings.IsZoomControlEnabled = false;
                 core.Settings.AreBrowserAcceleratorKeysEnabled = plugin.Settings.DevTools;
                 core.SetVirtualHostNameToFolderMapping(AppHost, plugin.WebDir, CoreWebView2HostResourceAccessKind.Deny);
+                // trailers and logos from Extra Metadata Loader, and pictures downloaded from descriptions
+                if (Directory.Exists(plugin.Bridge.ExtraRoot))
+                {
+                    core.SetVirtualHostNameToFolderMapping("extra.myvlibrary", plugin.Bridge.ExtraRoot, CoreWebView2HostResourceAccessKind.Allow);
+                }
+
+                core.SetVirtualHostNameToFolderMapping("cache.myvlibrary", plugin.Bridge.RemoteDir, CoreWebView2HostResourceAccessKind.Allow);
                 core.AddWebResourceRequestedFilter(MediaPrefix + "*", CoreWebView2WebResourceContext.All);
                 core.WebResourceRequested += OnResourceRequested;
                 core.WebMessageReceived += OnWebMessage;
@@ -149,14 +199,16 @@ namespace MyVLibrary
             }
             catch (WebView2RuntimeNotFoundException)
             {
-                status.Text = "La estantería necesita el componente WebView2 de Microsoft, que no está instalado.\n" +
-                              "Descárgalo gratis buscando «WebView2 Runtime» en la web de Microsoft, instálalo y vuelve a abrir la estantería.";
+                status.Text = Loc.S("La estantería necesita el componente WebView2 de Microsoft, que no está instalado.\n" +
+                                    "Descárgalo gratis buscando «WebView2 Runtime» en la web de Microsoft, instálalo y vuelve a abrir la estantería.",
+                                    "The shelf needs Microsoft's WebView2 component, which is not installed.\n" +
+                                    "Get it free by searching for «WebView2 Runtime» on Microsoft's website, install it and open the shelf again.");
                 RemoveWeb();
             }
             catch (Exception e)
             {
                 logger.Error(e, "MyVLibrary: no se ha podido iniciar WebView2");
-                status.Text = "No se ha podido abrir la estantería:\n" + e.Message;
+                status.Text = Loc.S("No se ha podido abrir la estantería:\n", "Could not open the shelf:\n") + e.Message;
                 RemoveWeb();
             }
         }
@@ -254,6 +306,7 @@ namespace MyVLibrary
             }
 
             disposed = true;
+            UnhookWindow();
             plugin.Bridge.Detach(this);
             if (web != null)
             {
