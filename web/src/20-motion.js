@@ -37,7 +37,7 @@ function updateCamera(dt) {
   cam.par.y += ((wantPar ? pointer.y * 3 : 0) - cam.par.y) * (1 - Math.exp(-3 * dt));
   camera.position.copy(cam.pos); camera.position.x += cam.par.x; camera.position.y += cam.par.y; camera.lookAt(cam.look);
   /* with the bookcases the ceiling light follows you along the room; over the wall shelf it stays put */
-  const k = 1 - Math.exp(-2.5 * dt / SPEED);
+  const k = cam.snap ? 1 : 1 - Math.exp(-2.5 * dt / SPEED); cam.snap = false;
   if (isCases()) { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(_KOFF); key.position.lerp(_kp, k); }
   else { key.target.position.lerp(KEY_AIM, k); key.position.lerp(KEY_POS, k); }
   key.target.updateMatrixWorld();

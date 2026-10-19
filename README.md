@@ -104,7 +104,8 @@ node build.mjs                 # web/dist/, lo que lleva la extensión
 
 - Compílala con `dotnet build extension/MyVLibrary.csproj -c Release`, en Windows y después de construir la web.
 - GitHub Actions lo hace en cada cambio y deja el `.pext` como artefacto.
-- Si subes una etiqueta `v*` (por ejemplo `v0.1.0`), además se publica una versión en Releases.
+- Si subes una etiqueta `v*` (por ejemplo `v0.2.0`), además se publica una versión en Releases.
+- **Versión.** Está en `extension/extension.yaml` (y repetida en `web/package.json`). La DLL y la estantería la toman de ahí; se ve al final de Ajustes. Cada PR tiene que subirla: si no, la comprobación de GitHub Actions falla. La etiqueta de una versión tiene que coincidir con ella.
 
 **Cómo se hablan las dos partes**
 

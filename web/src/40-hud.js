@@ -77,12 +77,14 @@ $('#pills').addEventListener('click', e => { const b = e.target.closest('[data-g
 
 /* switching shelf contents goes through a short dip to black, then the new cases settle in a wave */
 let swapBusy = false;
-async function swapShelf(fn, quiet) {
+async function swapShelf(fn, quiet, snap) {
   if (swapBusy) return; swapBusy = true; busy = true; setHovered(null);
   try {
     if (!quiet) sfx.slide();
     const f = $('#fade'); f.classList.add('on'); await new Promise(r => setTimeout(r, RM ? 20 : 200));
     fn(); layoutPage(); renderPills(); renderBrand(); renderPrompts();
+    /* frame what is there now; after a change of design the camera jumps while the screen is dark */
+    if (cam.view === 'shelf' || cam.view === 'browse') { setView(cam.view); if (snap) { cam.pos.copy(cam.tPos); cam.look.copy(cam.tLook); cam.snap = true; } }
     navOrder.forEach(c => { c.pullHold = .35; c.root.position.copy(c.home.pos); c.root.quaternion.copy(c.home.quat); });
     requestAnimationFrame(() => f.classList.remove('on'));
     navOrder.forEach((c, i) => setTimeout(() => { tween(.35, t => { c.pullHold = .35 * (1 - t); }, easeOut); }, i * 6 * SPEED));
@@ -418,6 +420,7 @@ function closeGame(o = {}) {
 /* ---------- re-arranging the shelf after a change ---------- */
 async function relayout(opts = {}) {
   if (mode !== 'shelf' || busy) { pendingRelayout = true; return; }
+  if (layoutChanged) { layoutChanged = false; opts = Object.assign({}, opts, { full: true, layout: true }); }
   const keyNow = groups[curGroup] ? groups[curGroup].key : '__all';
   buildGroups();
   let gi = groups.findIndex(g => g.key === (opts.reset ? '__all' : keyNow)); if (gi < 0) gi = 0;
@@ -426,9 +429,9 @@ async function relayout(opts = {}) {
   if (isCases()) {
     if (opts.follow) { const u = groups.findIndex(gr => gr.games.includes(opts.follow.g)); if (u >= 0) gi = u; }
     if (gi >= groups.length) gi = 0;
-    await swapShelf(() => { curGroup = gi; curPage = 0; setView('shelf'); }); return;
+    await swapShelf(() => { curGroup = gi; curPage = 0; setView('shelf'); }, false, opts.layout); return;
   }
-  if (opts.full || gi !== curGroup) { await swapShelf(() => { curGroup = gi; curPage = pi; }); return; }
+  if (opts.full || gi !== curGroup) { await swapShelf(() => { curGroup = gi; curPage = pi; if (opts.layout) setView('shelf'); }, false, opts.layout); return; }
   /* same shelf: cases that moved slide out a little, change place and slide back; the ones that left go into the wall */
   busy = true; setHovered(null);
   try {

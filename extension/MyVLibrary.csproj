@@ -6,7 +6,8 @@
     <RootNamespace>MyVLibrary</RootNamespace>
     <UseWPF>true</UseWPF>
     <LangVersion>7.3</LangVersion>
-    <Version>0.1.0</Version>
+    <!-- the version lives only in extension.yaml; the DLL takes it from there -->
+    <Version>$([System.Text.RegularExpressions.Regex]::Replace($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)extension.yaml')), '(?s).*?\nVersion:\s*([0-9][0-9.]*).*', '$1'))</Version>
     <Product>MyVLibrary</Product>
     <Description>Estantería 3D para tu biblioteca de Playnite</Description>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
