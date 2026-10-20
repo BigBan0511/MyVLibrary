@@ -114,8 +114,8 @@ function pgeo(fmt, kind) {
 }
 function caseGeo(fmt) {
   if (GEO[fmt]) return GEO[fmt];
-  const { w, h, d, split } = DIMS[fmt], shellD = split + d / 2, lidD = d / 2 - split;
-  const rc = fmt === 'big' ? .3 : fmt === 'jewel' ? .25 : .6, b = fmt === 'big' ? .12 : fmt === 'jewel' ? .06 : .15;
+  const { w, h, d, split, shell } = DIMS[fmt], shellD = split + d / 2, lidD = d / 2 - split;
+  const rc = shell === 'card' ? .3 : shell === 'clear' ? .25 : .6, b = shell === 'card' ? .12 : shell === 'clear' ? .06 : .15;
   GEO[fmt] = { shell: slabGeometry(w, h, shellD, rc, Math.min(b, shellD * .3)), lid: slabGeometry(w, h, lidD, rc, Math.min(b, lidD * .3)), wrap: slabGeometry(w + .1, h + .1, d + .1, rc + .05, .03), bevel: b };
   return GEO[fmt];
 }
@@ -124,7 +124,8 @@ function caseGeo(fmt) {
 const MAT = {
   edge: {
     dvd: M(THREE.MeshStandardMaterial, { color: '#131418', roughness: .5, metalness: .05 }, 1),
-    jewel: M(THREE.MeshPhysicalMaterial, { color: '#5d6670', roughness: .1, metalness: .15, clearcoat: 1, clearcoatRoughness: .02 }, 1.4)
+    jewel: M(THREE.MeshPhysicalMaterial, { color: '#5d6670', roughness: .1, metalness: .15, clearcoat: 1, clearcoatRoughness: .02 }, 1.4),
+    bigjewel: M(THREE.MeshPhysicalMaterial, { color: '#3e454e', roughness: .1, metalness: .15, clearcoat: 1, clearcoatRoughness: .02 }, 1.4)
   },
   tray: {}, lid: {},
   discBottom: M(THREE.MeshStandardMaterial, { color: '#ffffff', roughness: .14, metalness: .95 }, 1.5),
@@ -135,9 +136,10 @@ const MAT = {
 };
 let TEXS = {};
 function buildSharedMaterials() {
-  ['dvd', 'jewel', 'big'].forEach(f => {
-    MAT.tray[f] = M(THREE.MeshPhysicalMaterial, { map: tex(makeTrayCanvas(f)), roughness: f === 'big' ? .85 : .4, clearcoat: f === 'big' ? 0 : .5, clearcoatRoughness: .2 }, f === 'big' ? .5 : 1);
-    MAT.lid[f] = M(THREE.MeshPhysicalMaterial, { map: tex(makeLidCanvas(f)), roughness: f === 'big' ? .85 : .4, clearcoat: f === 'big' ? 0 : .5, clearcoatRoughness: .2 }, f === 'big' ? .5 : 1);
+  FMTS.forEach(f => {
+    const card = DIMS[f].shell === 'card';
+    MAT.tray[f] = M(THREE.MeshPhysicalMaterial, { map: tex(makeTrayCanvas(f)), roughness: card ? .85 : .4, clearcoat: card ? 0 : .5, clearcoatRoughness: .2 }, card ? .5 : 1);
+    MAT.lid[f] = M(THREE.MeshPhysicalMaterial, { map: tex(makeLidCanvas(f)), roughness: card ? .85 : .4, clearcoat: card ? 0 : .5, clearcoatRoughness: .2 }, card ? .5 : 1);
   });
   MAT.discBottom.map = tex(makeRainbowCanvas()); MAT.discBottom.needsUpdate = true;
   TEXS = {
@@ -150,7 +152,7 @@ function buildSharedMaterials() {
     tab: tex(makeTabCanvas()),
     foot: {}
   };
-  ['dvd', 'jewel', 'big'].forEach(f => { const { w, d } = DIMS[f]; TEXS.foot[f] = new THREE.CanvasTexture(makeFootCanvas(d / (d + 1.8), w / (w + 1.2))); });
+  FMTS.forEach(f => { const { w, d } = DIMS[f]; TEXS.foot[f] = new THREE.CanvasTexture(makeFootCanvas(d / (d + 1.8), w / (w + 1.2))); });
   TEXS.contact = new THREE.CanvasTexture(makeContactCanvas());
   MAT.acrylic = M(THREE.MeshPhysicalMaterial, { color: '#f4f8ff', transparent: true, opacity: .22, roughness: .02, clearcoat: 1, clearcoatRoughness: .01, depthWrite: false }, 2.4);
   MAT.sticker = M(THREE.MeshStandardMaterial, { map: TEXS.sticker, transparent: true, roughness: .4 }, .8);
@@ -164,6 +166,42 @@ function makeDisc(R, labelMat) {
   grp.add(top, bot, side); grp.traverse(m => { if (m.isMesh) m.castShadow = true; });
   return grp;
 }
+/* a 3½" disk, upright in its XY plane: the metal shutter on top, the label below it, the hub on the back */
+let FLGEO = null, CAGEO = null;
+const MEDIA_MAT = {
+  shutter: M(THREE.MeshStandardMaterial, { color: '#c3c7cd', roughness: .28, metalness: .9 }, 1.3),
+  hole: new THREE.MeshBasicMaterial({ color: '#0d0d10' }),
+  ridge: M(THREE.MeshStandardMaterial, { color: '#55585f', roughness: .6 }, .7)
+};
+function makeFloppy(labelMat, bodyMat) {
+  const { w, h, t } = MSIZE.floppy;
+  const G = FLGEO || (FLGEO = { body: slabGeometry(w, h, t, .28, .05), shutter: new THREE.BoxGeometry(5, 3.2, t + .04), win: new THREE.PlaneGeometry(1.15, 2.1), label: new THREE.PlaneGeometry(7.2, 5.6), hub: new THREE.CircleGeometry(1.3, 28) });
+  Object.values(G).forEach(q => { q.userData.shared = true; });
+  const grp = new THREE.Group();
+  const body = new THREE.Mesh(G.body, bodyMat);
+  const sh = new THREE.Mesh(G.shutter, MEDIA_MAT.shutter); sh.position.set(.3, h / 2 - 1.6, 0);
+  const wf = new THREE.Mesh(G.win, MEDIA_MAT.hole); wf.position.set(.9, h / 2 - 1.75, t / 2 + .025);
+  const wb = new THREE.Mesh(G.win, MEDIA_MAT.hole); wb.position.set(.9, h / 2 - 1.75, -t / 2 - .025); wb.rotation.y = Math.PI;
+  const lab = new THREE.Mesh(G.label, labelMat); lab.position.set(0, -1.6, t / 2 + .006);
+  const hub = new THREE.Mesh(G.hub, MEDIA_MAT.shutter); hub.position.set(0, -.2, -t / 2 - .006); hub.rotation.y = Math.PI;
+  grp.add(body, sh, wf, wb, lab, hub); grp.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  return grp;
+}
+/* a 16-bit cartridge, upright: the label up top, grip ridges below it, the contacts along the bottom edge */
+function makeCart(labelMat, bodyMat) {
+  const { w, h, t } = MSIZE.cart;
+  const G = CAGEO || (CAGEO = { body: slabGeometry(w, h, t, .8, .25), label: new THREE.PlaneGeometry(10.4, 5.4), ridge: new THREE.BoxGeometry(9.6, .14, .12) });
+  Object.values(G).forEach(q => { q.userData.shared = true; });
+  const grp = new THREE.Group();
+  const body = new THREE.Mesh(G.body, bodyMat), lab = new THREE.Mesh(G.label, labelMat); lab.position.set(0, .95, t / 2 + .012);
+  grp.add(body, lab);
+  for (let i = 0; i < 4; i++) { const rdg = new THREE.Mesh(G.ridge, MEDIA_MAT.ridge); rdg.position.set(0, -2.35 - i * .42, t / 2 + .02); grp.add(rdg); }
+  grp.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  return grp;
+}
+/* half the media's height, so it can leave the case upwards without touching it */
+function mediaHalfH(c) { const m = c.dim.media; return m === 'disc' ? c.dim.discR : MSIZE[m].h / 2; }
+const FLOPPY_COLS = ['#22252b', '#1d2b4a', '#55595f', '#2a2a2d', '#3b1e22'];
 const STRIP_GEO = new THREE.BoxGeometry(1, .32, .03);
 const UNIT_PLANE = new THREE.PlaneGeometry(1, 1);
 let IGEO = null; const MGEO = {};
@@ -183,7 +221,7 @@ function viewW(dist) { return viewH(dist) * camera.aspect; }
 class Case {
   constructor(g) {
     this.g = g; const D = this.dim = DIMS[g.fmt], { w, h, d, split } = D, G = caseGeo(g.fmt);
-    const isJ = g.fmt === 'jewel', isB = g.fmt === 'big';
+    const isJ = D.shell === 'clear', isB = D.shell === 'card';
     this.root = new THREE.Group(); this.inner = new THREE.Group(); this.root.add(this.inner); scene.add(this.root);
     this.edge = isB ? M(THREE.MeshStandardMaterial, { color: g.spine || g.pal[0], roughness: .7 }, .6) : MAT.edge[g.fmt];
     const cp = isB ? { roughness: .62, clearcoat: .3, clearcoatRoughness: .4 } : isJ ? { roughness: .45, clearcoat: .7, clearcoatRoughness: .08 } : { roughness: .52, clearcoat: .55, clearcoatRoughness: .14 };
@@ -217,7 +255,10 @@ class Case {
     this.web = new THREE.Mesh(UNIT_PLANE, this.webMat); this.web.visible = false; scene.add(this.web);
     /* the inside (hub, clips, disc, manual) is only built while the case is in your hands */
     this.disc = null; this.manual = null; this.interior = null;
-    this.discHome = new V3(D.discX, 0, split + .075);
+    /* where the media rests in the open case: the disc on its hub, the disks in a stack, the cartridge in its dent */
+    this.discHome = D.media === 'disc' ? new V3(D.discX, 0, split + .075)
+      : D.media === 'floppy' ? new V3(.6, -h * .1, split + .05 + MSIZE.floppy.t * (D.disks - .5))
+      : new V3(0, -h * .13, split + MSIZE.cart.t / 2 + .05);
     this.discLabelMat = M(THREE.MeshPhysicalMaterial, { color: g.pal[0], roughness: .4, metalness: .05, clearcoat: .8, clearcoatRoughness: .1, emissive: new THREE.Color('#000000') }, 1);
     this.manMat = M(THREE.MeshStandardMaterial, { color: '#efe9dc', roughness: .7, emissive: new THREE.Color('#000000') }, .8);
     this.shell.receiveShadow = this.lid.receiveShadow = true; this.spine.receiveShadow = true;
@@ -277,14 +318,31 @@ class Case {
   }
   buildInterior() {
     if (this.interior) return;
-    const g = this.g, D = this.dim, { w, h, split } = D, isJ = g.fmt === 'jewel', isB = g.fmt === 'big', parts = [];
+    const g = this.g, D = this.dim, { w, h, split } = D, isJ = g.fmt === 'jewel', isB = D.shell === 'card', parts = [];
     if (!isB) {
       const m = isJ ? MAT.edge.jewel : MAT.edge.dvd, G = interiorGeo();
       const hub = new THREE.Mesh(G.hub, m); hub.rotation.x = Math.PI / 2; hub.position.set(D.discX, 0, split + .17); this.inner.add(hub); parts.push([this.inner, hub]);
       for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, tooth = new THREE.Mesh(G.tooth, m); tooth.position.set(D.discX + Math.cos(a) * .55, Math.sin(a) * .55, split + .2); tooth.rotation.z = a; this.inner.add(tooth); parts.push([this.inner, tooth]); }
       [1, -1].forEach(sy => { const clip = new THREE.Mesh(G.clip, m); clip.position.set(w - .9, sy * (h / 2 - 1.3), -.13); this.pivot.add(clip); parts.push([this.pivot, clip]); });
     }
-    this.disc = makeDisc(D.discR, this.discLabelMat); this.disc.position.copy(this.discHome); this.inner.add(this.disc);
+    /* thick media would show through a closed lid: they only appear once it has swung far enough */
+    this.thick = []; this.thickAt = D.media === 'cart' ? .5 : .15;
+    if (D.media === 'disc') this.disc = makeDisc(D.discR, this.discLabelMat);
+    else {
+      this.mediaMat = M(THREE.MeshPhysicalMaterial, { color: D.media === 'cart' ? '#8d9098' : FLOPPY_COLS[hash(g.id) % FLOPPY_COLS.length], roughness: .5, clearcoat: .25, clearcoatRoughness: .4 }, .9);
+      this.disc = D.media === 'cart' ? makeCart(this.discLabelMat, this.mediaMat) : makeFloppy(this.discLabelMat, this.mediaMat);
+      this.thick.push(this.disc);
+      if (D.media === 'floppy') {
+        /* the other disks of the set, fanned out under the first one */
+        this.extraLabelMats = [];
+        for (let k = 1; k < D.disks; k++) {
+          const lm = M(THREE.MeshStandardMaterial, { color: '#f3efe4', roughness: .7 }, .7), f = makeFloppy(lm, this.mediaMat);
+          f.position.set(this.discHome.x + k * .55, this.discHome.y - k * .4, this.discHome.z - k * MSIZE.floppy.t); f.rotation.z = -k * .06;
+          this.inner.add(f); parts.push([this.inner, f]); this.thick.push(f); this.extraLabelMats.push(lm);
+        }
+      }
+    }
+    this.disc.position.copy(this.discHome); this.inner.add(this.disc);
     const [mw, mh] = D.man;
     this.manual = new THREE.Mesh(manualGeo(g.fmt), [MAT.paper, MAT.paper, MAT.paper, MAT.paper, MAT.paper, this.manMat]);
     this.manual.position.set(w / 2 - .1, 0, -.09); this.pivot.add(this.manual);
@@ -296,7 +354,9 @@ class Case {
     this.interior.forEach(([p, m]) => p.remove(m));
     if (this.disc) { this.disc.parent && this.disc.parent.remove(this.disc); this.disc.children.forEach(m => { if (m.geometry && !m.geometry.userData.shared) m.geometry.dispose(); }); }
     if (this.manual) this.pivot.remove(this.manual);
-    this.disc = null; this.manual = null; this.interior = null;
+    if (this.extraLabelMats) { this.extraLabelMats.forEach(m => { if (m.map) m.map.dispose(); unM(m); }); this.extraLabelMats = null; }
+    if (this.mediaMat) { unM(this.mediaMat); this.mediaMat = null; }
+    this.disc = null; this.manual = null; this.interior = null; this.thick = null;
   }
   setShadow(on) { this.shell.castShadow = this.lid.castShadow = on; }
   ensureStand() {
@@ -312,7 +372,7 @@ class Case {
     [this.root, this.foot, this.contact, this.web, this.stand].forEach(o => { if (o) scene.remove(o); });
     if (this.stand) this.stand.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
     [this.spineTex, this.coverTex, this.backTex, this.discTex, this.manTex].forEach(t => t && t.dispose());
-    if (this.g.fmt === 'big') unM(this.edge);
+    if (this.dim.shell === 'card') unM(this.edge);
     [this.frontMat, this.backMat, this.spineMat, this.dustMat, this.filmMat, this.topMat, this.footMat, this.discLabelMat, this.manMat].forEach(unM);
     this.contactMat.dispose(); this.webMat.dispose();
     this.disposed = true;
@@ -350,7 +410,8 @@ class Case {
     this.ensureCover();
     [this.backTex, this.discTex, this.manTex].forEach(t => t && t.dispose());
     this.backTex = tex(drawBack(this.g, this.coverCanvas)); this.backMat.map = this.backTex; this.backMat.color.set('#ffffff'); this.backMat.needsUpdate = true;
-    this.discTex = tex(drawDisc(this.g, this.coverCanvas)); this.discLabelMat.map = this.discTex; this.discLabelMat.color.set('#ffffff'); this.discLabelMat.needsUpdate = true;
+    this.discTex = tex(drawMediaLabel(this.g, this.coverCanvas)); this.discLabelMat.map = this.discTex; this.discLabelMat.color.set('#ffffff'); this.discLabelMat.needsUpdate = true;
+    if (this.extraLabelMats) this.extraLabelMats.forEach((m, k) => { if (m.map) m.map.dispose(); m.map = tex(drawFloppyLabel(this.g, this.coverCanvas, k + 1, this.dim.disks)); m.needsUpdate = true; });
     this.manTex = tex(drawManualCover(this.g, this.coverCanvas)); this.manMat.map = this.manTex; this.manMat.color.set('#ffffff'); this.manMat.needsUpdate = true;
     this.detail = true; this.dirty = false;
   }
@@ -366,7 +427,7 @@ class Case {
   }
   dropCover() { if (!this.coverTex) return; this.coverTex.dispose(); this.coverTex = null; this.coverCanvas = null; this.frontMat.map = null; this.frontMat.color.set(this.g.pal[0]); this.frontMat.needsUpdate = true; }
   refreshSpine() { const c = drawSpine(this.g), x = this.spineCanvas.getContext('2d'); x.clearRect(0, 0, c.width, c.height); x.drawImage(c, 0, 0); this.spineTex.needsUpdate = true; if (!this.g.real || this.g.pal) { this.edgeTint(); } }
-  edgeTint() { if (this.g.fmt === 'big') this.edge.color.set(this.g.spine || this.g.pal[0]); if (!this.frontMat.map) this.frontMat.color.set(this.g.pal[0]); if (!this.backMat.map) this.backMat.color.set(this.g.pal[0]); if (!this.discLabelMat.map) this.discLabelMat.color.set(this.g.pal[0]); }
+  edgeTint() { if (this.dim.shell === 'card') this.edge.color.set(this.g.spine || this.g.pal[0]); if (!this.frontMat.map) this.frontMat.color.set(this.g.pal[0]); if (!this.backMat.map) this.backMat.color.set(this.g.pal[0]); if (!this.discLabelMat.map) this.discLabelMat.color.set(this.g.pal[0]); }
   targetPose() {
     const P = _tp.pos, Qt = _tp.quat;
     if (this.mode === 'home' || this.mode === 'pulled') {
@@ -403,8 +464,9 @@ class Case {
     if (!this.wrap && this.tearDone && Math.abs(this.tearA - this.tearDone) < .01) { this.tearA = 0; this.tearDone = 0; }
     const tp = this.targetPose(), k = this.fast ? 26 : (this.mode === 'inspect' || this.mode === 'parked') ? 7 : 9, a = 1 - Math.exp(-k * s);
     this.root.position.lerp(tp.pos, a); this.root.quaternion.slerp(tp.quat, a);
-    const sc = this.root.scale.x + ((this.mode === 'parked' ? PARK_SCALE : 1) - this.root.scale.x) * a; this.root.scale.setScalar(sc);
+    const sc = this.root.scale.x + ((this.mode === 'parked' ? PARK_SCALE : 1) * (this.vanish ? .02 : 1) - this.root.scale.x) * a; this.root.scale.setScalar(sc);
     const o = this.openA; this.pivot.rotation.y = -Math.PI * o; this.inner.position.x = this.dim.w / 2 * o;
+    if (this.thick) { const show = o > this.thickAt; for (const m of this.thick) if (m.parent === this.inner) m.visible = show; }
     this.spineMat.emissiveIntensity = this.glowA * .5;
     if (this.wrap && !this.dragging && this.tear > .02) { this.dropHand(); this.updateStrip(); }
   }

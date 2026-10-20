@@ -26,15 +26,24 @@ function titleText(g) { return g.font === 'fraunces' ? g.t : g.t.toUpperCase(); 
 function imgW(i) { return i.naturalWidth || i.videoWidth || i.width; }
 function imgH(i) { return i.naturalHeight || i.videoHeight || i.height; }
 function coverFit(x, img, X, Y, W, H, fx = .5, fy = .5) { const iw = imgW(img), ih = imgH(img); if (!iw || !ih) return; const sc = Math.max(W / iw, H / ih); x.drawImage(img, X + (W - iw * sc) * fx, Y + (H - ih * sc) * fy, iw * sc, ih * sc); }
-function fmtLabel(g) { return g.real ? (g.fmt === 'jewel' ? `${g.plat} · CD` : g.fmt === 'big' ? `${g.plat} · ${T('CAJA')}` : `${g.plat} · DVD`) : DIMS[g.fmt].label; }
+function fmtLabel(g) {
+  if (!g.real) return T(DIMS[g.fmt].label);
+  return `${g.plat} · ` + ({ jewel: 'CD', bigjewel: 'CD', big: T('CAJA'), floppy: '3½" HD', cart: T('CARTUCHO') }[g.fmt] || 'DVD');
+}
+const isClear = g => DIMS[g.fmt].shell === 'clear', isCard = g => DIMS[g.fmt].shell === 'card', isWide = g => !!DIMS[g.fmt].wide;
 function placeholderArt(x, W, H, g) {
   x.fillStyle = lg(x, 0, 0, W * .3, H, [[0, mix(g.pal[1], '#ffffff', .08)], [1, g.pal[0]]]); x.fillRect(0, 0, W, H);
   x.globalAlpha = .18; x.strokeStyle = g.pal[3]; x.lineWidth = Math.max(1, W * .004); for (let i = 0; i < 9; i++) { x.beginPath(); x.arc(W * .5, H * .62, W * (.12 + i * .07), 0, 7); x.stroke(); } x.globalAlpha = 1;
   let s = W * .14; x.font = titleFont(g, s); const t = titleText(g); while (x.measureText(t).width > W * .84 && s > 10) { s *= .94; x.font = titleFont(g, s); }
   x.fillStyle = g.pal[4]; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(t, W / 2, H * .3);
 }
-function coverSize(g) { return g.fmt === 'jewel' ? [512, 452] : g.fmt === 'big' ? [512, 592] : [512, 720]; }
-function spineSize(g) { if (g.real) return g.fmt === 'big' ? [224, 1036] : g.fmt === 'jewel' ? [80, 704] : [72, 976]; return g.fmt === 'big' ? [224, 1036] : g.fmt === 'jewel' ? [72, 900] : [64, 868]; }
+function coverSize(g) { return { jewel: [512, 452], bigjewel: [512, 470], big: [512, 592], floppy: [512, 694], cart: [512, 686] }[g.fmt] || [512, 720]; }
+function spineSize(g) {
+  const s = { big: [224, 1036], floppy: [200, 1080], cart: [192, 1060], bigjewel: [104, 760] }[g.fmt];
+  if (s) return s;
+  if (g.real) return g.fmt === 'jewel' ? [80, 704] : [72, 976];
+  return g.fmt === 'jewel' ? [72, 900] : [64, 868];
+}
 const AGE_COL = { 3: '#3aa655', 7: '#3aa655', 12: '#e3a02f', 16: '#e3a02f', 18: '#d83a3a' };
 
 function ageBadge(x, X, Y, s, age) {
@@ -115,13 +124,15 @@ function drawCover(g) {
 }
 function finishCover(x, g, W, H, r, real) {
   const c = x.canvas;
-  const band = g.fmt === 'jewel' ? H * .07 : g.fmt === 'big' ? H * .06 : H * .052;
+  const band = isClear(g) ? H * .07 : isCard(g) ? H * .06 : H * .052;
   x.fillStyle = 'rgba(10,10,14,.88)'; x.fillRect(0, 0, W, band);
   x.fillStyle = g.pal[2]; x.fillRect(0, band, W, 3);
   x.fillStyle = '#ffffff'; x.textBaseline = 'middle'; x.textAlign = 'left'; x.font = `800 ${Math.round(band * .56)}px ${F.saira}`; setLS(x, 1.5);
-  x.fillText(fmtLabel(g).toUpperCase(), g.fmt === 'jewel' ? W * .11 : W * .04, band * .54);
+  x.fillText(fmtLabel(g).toUpperCase(), isClear(g) ? W * .11 : W * .04, band * .54);
   x.textAlign = 'right'; x.font = `700 ${Math.round(band * .36)}px ${F.mono}`; x.fillText('MYVLIBRARY', W * .96, band * .54); setLS(x, 0);
   x.fillStyle = 'rgba(255,255,255,.9)'; x.beginPath(); x.arc(W * .96 - x.measureText('MYVLIBRARY').width - band * .45, band * .52, band * .2, 0, 7); x.fill();
+  /* 16-bit boxes: four coloured stripes under the band, like the shop copies of the era */
+  if (g.fmt === 'cart') ['#d83a3a', '#e3a02f', '#3aa655', '#3a7bd5'].forEach((c, i) => { x.fillStyle = c; x.fillRect(0, band + 3 + i * H * .007, W, H * .007); });
   if (!real) {
     drawTitle(x, g, W, H, band);
     const s = W * .1; ageBadge(x, W * .045, H - s * 1.18 - W * .045, s, g.age);
@@ -132,8 +143,17 @@ function finishCover(x, g, W, H, r, real) {
   const full = kindOf(g) === 'completed' || (g.ach[1] > 0 && g.ach[0] >= g.ach[1]);
   if (full) sticker(x, W * .17, band + W * .19, W * .1, [{ t: '100%', f: `800 ${Math.round(W * .055)}px ${F.saira}` }, { t: T('LOGROS'), f: `700 ${Math.round(W * .022)}px ${F.mono}` }], '#f2c94c', '#4a3200', -.15, true);
   else if (kindOf(g) === 'beaten') sticker(x, W * .17, band + W * .18, W * .095, [{ t: T('SUPE-'), f: `800 ${Math.round(W * .038)}px ${F.saira}` }, { t: T('RADO'), f: `800 ${Math.round(W * .038)}px ${F.saira}` }], '#f6efe0', '#1e6b3a', -.2);
+  if (g.fmt === 'floppy') {
+    /* the little panel late-90s boxes had: what is inside and what drive you need */
+    const pw = W * .3, ph = W * .1, px = W * .955 - pw, py = H - (real ? W * .05 : W * .13) - ph;
+    x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 8; rr(x, px, py, pw, ph, ph * .18); x.fillStyle = '#f4f1e8'; x.fill(); x.restore();
+    x.fillStyle = '#16161a'; rr(x, px + ph * .14, py + ph * .14, ph * .72, ph * .72, ph * .06); x.fill();
+    x.fillStyle = '#b8bcc4'; x.fillRect(px + ph * .3, py + ph * .14, ph * .38, ph * .26); x.fillStyle = '#f4f1e8'; x.fillRect(px + ph * .24, py + ph * .52, ph * .52, ph * .3);
+    x.fillStyle = '#16161a'; x.textAlign = 'left'; x.textBaseline = 'middle'; x.font = `800 ${Math.round(ph * .38)}px ${F.saira}`; x.fillText(T('{0} DISQUETES', DIMS.floppy.disks), px + ph * 1.02, py + ph * .36);
+    x.font = `700 ${Math.round(ph * .2)}px ${F.mono}`; x.fillText('3½" · 1,44 MB', px + ph * 1.02, py + ph * .72);
+  }
   if (g.hours >= 40) wear(x, W, H, r, clamp(g.hours / 100, .4, 1));
-  if (g.fmt === 'jewel') {
+  if (isClear(g)) {
     const hw = W * .085; x.fillStyle = 'rgba(16,18,22,.66)'; x.fillRect(0, 0, hw, H);
     x.fillStyle = 'rgba(255,255,255,.13)'; for (let yy = 2; yy < H; yy += 5) x.fillRect(0, yy, hw, 1.6);
     x.fillStyle = 'rgba(255,255,255,.3)'; x.fillRect(hw - 2, 0, 2, H); x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(hw, 0, 3, H);
@@ -194,7 +214,7 @@ function drawBack(g, coverCanvas) {
   x.fillStyle = base; x.fillRect(0, 0, W, H);
   x.globalAlpha = .2; x.drawImage(coverCanvas, 0, 0); x.globalAlpha = 1;
   x.fillStyle = lg(x, 0, 0, 0, H, [[0, hexA(base, .6)], [1, hexA(base, .95)]]); x.fillRect(0, 0, W, H);
-  const pad = W * .07, compact = g.fmt === 'jewel'; let y = pad * .8;
+  const pad = W * .07, compact = isClear(g); let y = pad * .8;
   x.textAlign = 'left'; x.textBaseline = 'top'; x.fillStyle = ink;
   let ts = W * .075; x.font = titleFont(g, ts); while (x.measureText(titleText(g)).width > W - 2 * pad && ts > 14) { ts *= .94; x.font = titleFont(g, ts); }
   x.fillText(titleText(g), pad, y); y += ts * 1.08;
@@ -260,10 +280,10 @@ function drawRealSpine(g) {
   const [W, H] = spineSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal, r = rng(hash(g.id) + 11);
   const { base, ink, light } = spineColors(g);
   x.fillStyle = lg(x, 0, 0, W, 0, [[0, mix(base, '#000000', .22)], [.18, base], [.82, base], [1, mix(base, '#000000', .22)]]); x.fillRect(0, 0, W, H);
-  const bandH = Math.round(W * (g.fmt === 'big' ? .26 : .78));
+  const wide = isWide(g), bandH = Math.round(W * (wide ? .26 : .78));
   x.fillStyle = light ? '#18181c' : '#0b0b0d'; x.fillRect(0, 0, W, bandH);
   x.fillStyle = '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  let ls = W * (g.fmt === 'big' ? .2 : .36); const lab = (g.plat || 'PC').toUpperCase(); x.font = `800 ${Math.round(ls)}px ${F.saira}`;
+  let ls = W * (wide ? .2 : .36); const lab = (g.plat || 'PC').toUpperCase(); x.font = `800 ${Math.round(ls)}px ${F.saira}`;
   while (x.measureText(lab).width > W * .84 && ls > 6) { ls *= .92; x.font = `800 ${Math.round(ls)}px ${F.saira}`; }
   x.fillText(lab, W / 2, bandH * .54);
   x.fillStyle = p[2]; x.fillRect(0, bandH, W, Math.max(2, W * .04));
@@ -277,11 +297,11 @@ function drawRealSpine(g) {
     /* Extra Metadata Loader's clear logo, laid along the spine like on a shop copy */
     const lw = imgW(g.logo), lh = imgH(g.logo), sc = Math.min(maxLenL / lw, (W * .78) / lh);
     x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = W * .08; x.drawImage(g.logo, -lw * sc / 2, -lh * sc / 2, lw * sc, lh * sc); x.shadowBlur = 0; x.restore();
-    x.fillStyle = hexA(ink, .75); x.font = `700 ${Math.round(W * (g.fmt === 'big' ? .1 : .24))}px ${F.mono}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillStyle = hexA(ink, .75); x.font = `700 ${Math.round(W * (wide ? .1 : .24))}px ${F.mono}`; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText(g.year ? String(g.year) : initials(g.dev || g.t), W / 2, H - W * .45);
     return c;
   }
-  const text = g.t.toUpperCase(), maxLen = (bottom - top) * .92, maxH = W * (g.fmt === 'big' ? .34 : .66);
+  const text = g.t.toUpperCase(), maxLen = (bottom - top) * .92, maxH = W * (wide ? .34 : .66);
   let size = maxH; x.font = `800 ${Math.round(size)}px ${F.saira}`;
   while (x.measureText(text).width > maxLen && size > 7) { size *= .95; x.font = `800 ${Math.round(size)}px ${F.saira}`; }
   if (x.measureText(text).width > maxLen && text.includes(' ') && g.fmt !== 'jewel') {
@@ -293,7 +313,7 @@ function drawRealSpine(g) {
     x.fillStyle = ink; x.textBaseline = 'middle'; x.fillText(best.a, 0, -size * .5); x.fillText(best.b, 0, size * .52);
   } else { x.fillStyle = ink; x.textBaseline = 'middle'; x.fillText(text, 0, size * .04); }
   x.restore();
-  x.fillStyle = hexA(ink, .75); x.font = `700 ${Math.round(W * (g.fmt === 'big' ? .1 : .24))}px ${F.mono}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillStyle = hexA(ink, .75); x.font = `700 ${Math.round(W * (wide ? .1 : .24))}px ${F.mono}`; x.textAlign = 'center'; x.textBaseline = 'middle';
   x.fillText(g.year ? String(g.year) : initials(g.dev || g.t), W / 2, H - W * .45);
   if (g.hours >= 40) wear(x, W, H, r, clamp(g.hours / 100, .4, 1));
   return c;
@@ -303,26 +323,27 @@ function drawSpine(g) {
   const [W, H] = spineSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal, r = rng(hash(g.id) + 11);
   const base = g.spine || p[0], ink = g.scol || p[4];
   x.fillStyle = lg(x, 0, 0, W, 0, [[0, mix(base, '#000000', .3)], [.5, base], [1, mix(base, '#000000', .3)]]); x.fillRect(0, 0, W, H);
-  if (g.fmt === 'big') { x.globalAlpha = .35; x.save(); x.translate(W, 0); x.rotate(Math.PI / 2); const a = mkCanvas(H, W), ax = a.getContext('2d'); drawArt(ax, H, W, g, 5); x.drawImage(a, 0, 0); x.restore(); x.globalAlpha = 1; x.fillStyle = hexA(base, .55); x.fillRect(0, 0, W, H); }
-  const bandH = g.fmt === 'big' ? H * .1 : H * .08;
-  const light = g.fmt === 'jewel';
+  const wide = isWide(g);
+  if (wide) { x.globalAlpha = .35; x.save(); x.translate(W, 0); x.rotate(Math.PI / 2); const a = mkCanvas(H, W), ax = a.getContext('2d'); drawArt(ax, H, W, g, 5); x.drawImage(a, 0, 0); x.restore(); x.globalAlpha = 1; x.fillStyle = hexA(base, .55); x.fillRect(0, 0, W, H); }
+  const bandH = wide ? H * .1 : H * .08;
+  const light = isClear(g);
   x.fillStyle = light ? '#ece8df' : '#0e0e12'; x.fillRect(0, 0, W, bandH);
   x.fillStyle = p[2]; x.fillRect(0, bandH, W, Math.max(3, H * .006));
   x.fillStyle = light ? '#16161a' : '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.font = `800 ${Math.round(g.fmt === 'big' ? W * .2 : W * .38)}px ${F.saira}`; x.fillText(DIMS[g.fmt].short, W / 2, bandH * .52);
+  x.font = `800 ${Math.round(wide ? W * .2 : W * .38)}px ${F.saira}`; x.fillText(DIMS[g.fmt].short, W / 2, bandH * .52);
   x.save(); x.translate(W / 2, H * .55); x.rotate(-Math.PI / 2);
-  const text = titleText(g), maxLen = H * .66, maxH = W * (g.fmt === 'big' ? .36 : g.font === 'press' ? .3 : .64);
+  const text = titleText(g), maxLen = H * .66, maxH = W * (wide ? .36 : g.font === 'press' ? .3 : .64);
   let size = maxH; x.font = titleFont(g, size);
   while (x.measureText(text).width > maxLen && size > 6) { size *= .95; x.font = titleFont(g, size); }
   x.fillStyle = ink; x.textBaseline = 'middle';
-  if (g.font === 'bungee' || g.font === 'press') { x.strokeStyle = 'rgba(0,0,0,.45)'; x.lineWidth = size * .12; x.lineJoin = 'round'; x.strokeText(text, 0, g.fmt === 'big' ? -W * .1 : 0); }
-  x.fillText(text, 0, g.fmt === 'big' ? -W * .1 : 0);
-  if (g.fmt === 'big') { x.font = `700 ${Math.round(W * .1)}px ${F.fig}`; x.globalAlpha = .9; x.fillText(g.tag.toUpperCase(), 0, W * .2); x.globalAlpha = 1; }
+  if (g.font === 'bungee' || g.font === 'press') { x.strokeStyle = 'rgba(0,0,0,.45)'; x.lineWidth = size * .12; x.lineJoin = 'round'; x.strokeText(text, 0, wide ? -W * .1 : 0); }
+  x.fillText(text, 0, wide ? -W * .1 : 0);
+  if (wide) { x.font = `700 ${Math.round(W * .1)}px ${F.fig}`; x.globalAlpha = .9; x.fillText(g.tag.toUpperCase(), 0, W * .2); x.globalAlpha = 1; }
   x.restore();
   const by = H * .935;
   x.strokeStyle = hexA(ink, .8); x.lineWidth = Math.max(2, W * .04); x.beginPath(); x.arc(W / 2, by - W * .45, W * .2, 0, 7); x.stroke();
   x.fillStyle = hexA(ink, .8); x.beginPath(); x.arc(W / 2, by - W * .45, W * .05, 0, 7); x.fill();
-  x.font = `700 ${Math.round(W * (g.fmt === 'big' ? .12 : .25))}px ${F.mono}`; x.fillText(initials(g.dev), W / 2, by + W * .05);
+  x.font = `700 ${Math.round(W * (wide ? .12 : .25))}px ${F.mono}`; x.fillText(initials(g.dev), W / 2, by + W * .05);
   if (g.hours >= 40) wear(x, W, H, r, clamp(g.hours / 100, .4, 1));
   addGrain(x, W, H, r, 12);
   return c;
@@ -347,6 +368,48 @@ function drawDisc(g, coverCanvas) {
   x.restore();
   return c;
 }
+/* the art a small label uses: the real cover, or the demo's own painting */
+function labelArt(x, g, coverCanvas, X, Y, W, H, seed, fy = .3) {
+  if (g.real) { const src = g.cover || g.coverSmall || coverCanvas; if (src) coverFit(x, src, X, Y, W, H, .5, fy); else { x.save(); x.translate(X, Y); placeholderArt(x, W, H, g); x.restore(); } return; }
+  const a = mkCanvas(Math.round(W), Math.round(H)), ax = a.getContext('2d'); drawArt(ax, a.width, a.height, g, seed); gradeArt(ax, a.width, a.height, rng(hash(g.id) + seed)); x.drawImage(a, X, Y, W, H);
+}
+/* a 3½" disk label: paper, a coloured band with the title, a thumbnail of the cover and the disk number */
+function drawFloppyLabel(g, coverCanvas, i, n) {
+  const W = 512, H = 398, c = mkCanvas(W, H), x = c.getContext('2d'), acc = inkAccent(g), r = rng(hash(g.id) + 70 + i);
+  x.fillStyle = '#f3efe4'; x.fillRect(0, 0, W, H);
+  for (let k = 0; k < 900; k++) { x.fillStyle = `rgba(${r() > .5 ? '255,255,255' : '120,100,70'},${r() * .06})`; x.fillRect(r() * W, r() * H, 2, 2); }
+  const bh = H * .27; x.fillStyle = acc; x.fillRect(0, 0, W, bh);
+  x.fillStyle = 'rgba(255,255,255,.18)'; x.fillRect(0, bh - 5, W, 2);
+  let ts = bh * .56; x.font = `800 ${Math.round(ts)}px ${F.saira}`; const tt = g.t.toUpperCase();
+  while (x.measureText(tt).width > W * .9 && ts > 14) { ts *= .94; x.font = `800 ${Math.round(ts)}px ${F.saira}`; }
+  x.fillStyle = '#ffffff'; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText(tt, W * .05, bh * .52);
+  const th = H * .52, ty = bh + H * .08;
+  x.save(); x.beginPath(); x.rect(W * .05, ty, th, th); x.clip(); labelArt(x, g, coverCanvas, W * .05, ty, th, th, 3); x.restore();
+  x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 2; x.strokeRect(W * .05, ty, th, th);
+  const tx = W * .05 + th + W * .05, room = W * .95 - tx, num = T('DISCO {0} DE {1}', i + 1, n); x.fillStyle = '#1b1a1f';
+  let ns = H * .13; x.font = `800 ${Math.round(ns)}px ${F.saira}`; while (x.measureText(num).width > room && ns > 12) { ns *= .94; x.font = `800 ${Math.round(ns)}px ${F.saira}`; }
+  x.fillText(num, tx, ty + H * .07);
+  x.fillStyle = acc; x.font = `700 ${Math.round(H * .055)}px ${F.mono}`; setLS(x, 1.5);
+  x.fillText(T(i === 0 ? 'INSTALACIÓN' : i === n - 1 ? 'DATOS' : 'PROGRAMA'), tx, ty + H * .18); setLS(x, 0);
+  x.fillStyle = '#4a463e'; x.font = `600 ${Math.round(H * .05)}px ${F.fig}`;
+  x.fillText((g.dev || '').toUpperCase().slice(0, 22), tx, ty + H * .29); x.fillText(`${g.year ? '© ' + g.year + ' · ' : ''}3½" · 1,44 MB`, tx, ty + H * .37);
+  x.fillStyle = '#8a8478'; x.font = `500 ${Math.round(H * .04)}px ${F.mono}`; x.fillText('MYV-' + String(hash(g.id) % 100000).padStart(5, '0') + '-' + (i + 1), tx, ty + H * .46);
+  return c;
+}
+/* a cartridge label: the art edge to edge, a dark band on top and the title along the foot */
+function drawCartLabel(g, coverCanvas) {
+  const W = 512, H = 266, c = mkCanvas(W, H), x = c.getContext('2d');
+  labelArt(x, g, coverCanvas, 0, 0, W, H, 4, .25);
+  const tb = H * .17; x.fillStyle = '#141418'; x.fillRect(0, 0, W, tb);
+  ['#d83a3a', '#e3a02f', '#3aa655', '#3a7bd5'].forEach((cl, i) => { x.fillStyle = cl; x.fillRect(0, tb + i * 3, W, 3); });
+  x.fillStyle = '#ffffff'; x.textBaseline = 'middle'; x.textAlign = 'left'; x.font = `800 ${Math.round(tb * .6)}px ${F.saira}`; setLS(x, 2); x.fillText('MYVLIBRARY', W * .04, tb * .54);
+  x.textAlign = 'right'; x.font = `700 ${Math.round(tb * .42)}px ${F.mono}`; x.fillText('16 BIT', W * .96, tb * .54); setLS(x, 0);
+  x.fillStyle = lg(x, 0, H * .55, 0, H, [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,.78)']]); x.fillRect(0, H * .55, W, H * .45);
+  let ts = H * .2; x.font = titleFont(g, ts); while (x.measureText(titleText(g)).width > W * .9 && ts > 10) { ts *= .94; x.font = titleFont(g, ts); }
+  x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.8)'; x.shadowBlur = 8; x.fillStyle = g.pal[4]; x.fillText(titleText(g), W / 2, H * .82); x.shadowBlur = 0;
+  return c;
+}
+function drawMediaLabel(g, coverCanvas) { const m = mediaOf(g); return m === 'floppy' ? drawFloppyLabel(g, coverCanvas, 0, DIMS.floppy.disks) : m === 'cart' ? drawCartLabel(g, coverCanvas) : drawDisc(g, coverCanvas); }
 function drawManualCover(g, coverCanvas) {
   const W = 300, H = Math.round(300 * DIMS[g.fmt].man[1] / DIMS[g.fmt].man[0]), c = mkCanvas(W, H), x = c.getContext('2d');
   x.fillStyle = '#f3eee3'; x.fillRect(0, 0, W, H);
@@ -464,12 +527,34 @@ function makeTrayCanvas(fmt) {
     x.fillStyle = '#5a4528'; x.font = `800 26px ${F.saira}`; x.textAlign = 'center'; x.fillText(T('GRACIAS POR JUGAR'), W / 2, H * .07);
     x.font = `600 15px ${F.fig}`; x.fillText(T('Guarda el disco aquí cuando no lo uses.'), W / 2, H * .935);
     x.fillStyle = 'rgba(60,40,20,.25)'; x.beginPath(); x.arc(cx, cy, R * 1.04, 0, 7); x.fill();
+  } else if (fmt === 'floppy' || fmt === 'cart') {
+    /* card insert: kraft, a printed card on top and the dent the media leaves */
+    const r = rng(fmt === 'cart' ? 61 : 62), k = W / d.w, px = X => (X + d.w / 2) * k, py = Y => (d.h / 2 - Y) * k;
+    x.fillStyle = fmt === 'cart' ? '#cfc3a6' : '#d6c7a4'; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < 3000; i++) { x.fillStyle = `rgba(${r() > .5 ? '255,250,235' : '90,70,40'},${r() * .08})`; x.fillRect(r() * W, r() * H, 1 + r() * 2, 1); }
+    x.strokeStyle = 'rgba(90,70,40,.16)'; for (let i = 0; i < 30; i++) { x.beginPath(); x.moveTo(0, i * H / 30); x.lineTo(W, i * H / 30 + 5); x.stroke(); }
+    x.fillStyle = '#5a4528'; x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+    if (fmt === 'floppy') {
+      const m = MSIZE.floppy, top = py(m.h / 2 - d.h * .1) - 18;
+      rr(x, W * .07, H * .035, W * .86, top - H * .05, 10); x.fillStyle = '#f2ead6'; x.fill(); x.strokeStyle = 'rgba(90,70,40,.35)'; x.lineWidth = 2; x.stroke();
+      x.fillStyle = '#3d2f1b'; x.font = `800 30px ${F.saira}`; x.fillText(T('INSTALACIÓN'), W / 2, H * .035 + 40);
+      x.textAlign = 'left'; x.font = `600 17px ${F.fig}`;
+      [T('1. Enciende el equipo con la unidad A: vacía.'), T('2. Mete el disco 1 y escribe A:\\INSTALAR'), T('3. Cambia de disco cuando te lo pida.'), T('4. Guarda los discos lejos de imanes.')].forEach((l, i) => x.fillText(l, W * .11, H * .035 + 74 + i * 26));
+      x.fillStyle = 'rgba(60,40,20,.28)'; x.filter = 'blur(6px)'; x.fillRect(px(-m.w / 2 + .6) - 4, py(m.h / 2 - d.h * .1) - 4, m.w * k + 40, m.h * k + 30); x.filter = 'none';
+    } else {
+      const m = MSIZE.cart, X0 = px(-m.w / 2) - 8, Y0 = py(m.h / 2 - d.h * .13) - 8, w = m.w * k + 16, h = m.h * k + 16;
+      x.fillStyle = 'rgba(40,28,14,.42)'; rr(x, X0, Y0, w, h, 16); x.fill();
+      x.strokeStyle = 'rgba(255,250,235,.35)'; x.lineWidth = 2; rr(x, X0 - 4, Y0 - 4, w + 8, h + 8, 18); x.stroke();
+      x.fillStyle = '#5a4528'; x.font = `800 26px ${F.saira}`; x.fillText(T('GRACIAS POR JUGAR'), W / 2, H * .08);
+      x.font = `600 15px ${F.fig}`; x.fillText(T('Guarda el cartucho aquí cuando no lo uses.'), W / 2, H * .13);
+    }
+    x.textAlign = 'center'; x.fillStyle = '#5a4528'; x.font = `700 13px ${F.mono}`; x.fillText('MYVLIBRARY', W / 2, H * .965);
   } else {
-    const dark = fmt === 'dvd';
+    const dark = fmt === 'dvd' || fmt === 'bigjewel';
     x.fillStyle = dark ? '#18191d' : '#9aa3ad'; x.fillRect(0, 0, W, H);
     x.strokeStyle = dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.25)'; x.lineWidth = 3; rr(x, 14, 14, W - 28, H - 28, 18); x.stroke();
     x.fillStyle = dark ? '#111215' : '#8a939e'; x.beginPath(); x.arc(cx, cy, R * 1.03, 0, 7); x.fill();
-    if (!dark) for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; x.strokeStyle = 'rgba(255,255,255,.25)'; x.beginPath(); x.moveTo(cx + Math.cos(a) * R * .2, cy + Math.sin(a) * R * .2); x.lineTo(cx + Math.cos(a) * R * .95, cy + Math.sin(a) * R * .95); x.stroke(); }
+    if (fmt !== 'dvd') for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; x.strokeStyle = dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.25)'; x.beginPath(); x.moveTo(cx + Math.cos(a) * R * .2, cy + Math.sin(a) * R * .2); x.lineTo(cx + Math.cos(a) * R * .95, cy + Math.sin(a) * R * .95); x.stroke(); }
     x.fillStyle = dark ? '#2a2c32' : '#b8c0c9'; x.beginPath(); x.arc(cx, cy, R * .24, 0, 7); x.fill();
     x.fillStyle = dark ? 'rgba(255,255,255,.2)' : 'rgba(0,0,0,.25)'; x.font = `700 13px ${F.mono}`; x.textAlign = 'center'; x.fillText('MYVLIBRARY', cx, H - 40);
   }
@@ -477,7 +562,7 @@ function makeTrayCanvas(fmt) {
 }
 function makeLidCanvas(fmt) {
   const d = DIMS[fmt], W = 512, H = Math.round(512 * d.h / d.w), c = mkCanvas(W, H), x = c.getContext('2d');
-  if (fmt === 'big') { x.fillStyle = '#e4d6b8'; x.fillRect(0, 0, W, H); x.fillStyle = 'rgba(90,70,40,.12)'; for (let i = 0; i < 30; i++) x.fillRect(0, i * H / 30, W, 2); }
+  if (d.shell === 'card') { x.fillStyle = fmt === 'big' ? '#e4d6b8' : '#ddd0b0'; x.fillRect(0, 0, W, H); x.fillStyle = 'rgba(90,70,40,.12)'; for (let i = 0; i < 30; i++) x.fillRect(0, i * H / 30, W, 2); }
   else { const dark = fmt === 'dvd'; x.fillStyle = dark ? '#1b1c21' : '#a7afb9'; x.fillRect(0, 0, W, H); x.fillStyle = dark ? '#26282e' : '#c3cad2'; [[.06, .1], [.06, .82]].forEach(([u, v]) => { rr(x, W * u, H * v, W * .05, H * .08, 6); x.fill(); }); x.strokeStyle = dark ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.3)'; x.lineWidth = 3; rr(x, 14, 14, W - 28, H - 28, 18); x.stroke(); }
   return c;
 }

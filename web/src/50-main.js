@@ -145,7 +145,7 @@ function frame(now) {
     const on = mode === 'open';
     active.discLabelMat.emissive.setScalar(on && hoverPart === 'disc' ? .16 : 0);
     active.manMat.emissive.setScalar(on && hoverPart === 'manual' ? .14 : 0);
-    if (on) active.disc.rotation.z += dt * (hoverPart === 'disc' ? 1.2 : 0);
+    if (on && active.dim.media === 'disc') active.disc.rotation.z += dt * (hoverPart === 'disc' ? 1.2 : 0);
   }
   updateParticles(dt); updateMotes(dt, now); updateContacts();
   drawTV(now); updateTvLight(now); drawBoard(); updateBackTrailer(now);

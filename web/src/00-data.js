@@ -17,13 +17,31 @@ const F = {
   marker: '"Permanent Marker","Comic Sans MS",cursive'
 };
 
-/* ---------- formats (cm) ---------- */
+/* ---------- formats (cm) ----------
+   shell: what the case is made of (keep = DVD keep case, clear = jewel case, card = cardboard box)
+   media: what goes into the console (disc, floppy, cart); wide: the spine is wide enough to be printed like a front */
 const DIMS = {
-  dvd:   { w: 13.5, h: 19,   d: 1.4, split: 0,   discX: 0.45, discR: 6,   man: [12.2, 17.4], label: 'PC · DVD-ROM', short: 'DVD',  name: 'Caja DVD' },
-  jewel: { w: 14.2, h: 12.5, d: 1.0, split: 0.2, discX: 0.25, discR: 5.9, man: [11.6, 11.4], label: 'CD-ROM',       short: 'CD',   name: 'Caja de CD' },
-  big:   { w: 19,   h: 22,   d: 5,   split: 2.2, discX: 0,    discR: 6,   man: [15.2, 19],   label: 'PC CD-ROM',    short: 'BIG',  name: 'Caja grande' }
+  dvd:      { w: 13.5, h: 19,   d: 1.4,  split: 0,   discX: 0.45, discR: 6,   man: [12.2, 17.4], label: 'PC · DVD-ROM', short: 'DVD',  name: 'Caja DVD',          shell: 'keep',  media: 'disc' },
+  jewel:    { w: 14.2, h: 12.5, d: 1.0,  split: 0.2, discX: 0.25, discR: 5.9, man: [11.6, 11.4], label: 'CD-ROM',       short: 'CD',   name: 'Caja de CD',        shell: 'clear', media: 'disc' },
+  /* the bulky PAL jewel case of PlayStation and Dreamcast games: taller, almost twice as thick, black tray */
+  bigjewel: { w: 14.3, h: 13.1, d: 1.75, split: 0.3, discX: 0.3,  discR: 5.9, man: [12.4, 11.9], label: 'CD-ROM',       short: 'CD',   name: 'Caja de CD grande', shell: 'clear', media: 'disc' },
+  big:      { w: 19,   h: 22,   d: 5,    split: 2.2, discX: 0,    discR: 6,   man: [15.2, 19],   label: 'PC CD-ROM',    short: 'BIG',  name: 'Caja grande',       shell: 'card',  media: 'disc', wide: true },
+  /* late-90s PC games on 3½" floppies: a cardboard box with a few disks inside */
+  floppy:   { w: 15.5, h: 21,   d: 4,    split: 0,   discX: 0,    discR: 0,   man: [13.6, 18.4], label: 'PC · 3½" HD',  short: '3½"',  name: 'Caja de disquetes', shell: 'card',  media: 'floppy', wide: true, disks: 3 },
+  /* a 16-bit cartridge in its cardboard box, in the style of the European Super Nintendo */
+  cart:     { w: 13.6, h: 18.2, d: 3.4,  split: -0.7, discX: 0,   discR: 0,   man: [12, 16.2],   label: 'CARTUCHO',     short: 'CART', name: 'Caja de cartucho',  shell: 'card',  media: 'cart', wide: true }
 };
-const FMT_ORDER = { dvd: 0, jewel: 1, big: 2 };
+const FMTS = Object.keys(DIMS);
+const FMT_ORDER = { dvd: 0, jewel: 1, bigjewel: 2, big: 3, floppy: 4, cart: 5 };
+/* the media themselves (cm): a 3½" disk and a cartridge, both drawn upright in their own XY plane */
+const MSIZE = { floppy: { w: 9, h: 9.4, t: .33 }, cart: { w: 12.7, h: 8.6, t: 2 } };
+function mediaOf(g) { return DIMS[g.fmt].media; }
+/* texts that name the thing you put in the console: written for the disc, said right for the others */
+function mediaT(g, s, ...a) {
+  const m = mediaOf(g);
+  if (m !== 'disc') { const w = m === 'floppy' ? ['disquete', 'Disquete', 'DISQUETE'] : ['cartucho', 'Cartucho', 'CARTUCHO']; s = s.replace(/disco/g, w[0]).replace(/Disco/g, w[1]).replace(/DISCO/g, w[2]); }
+  return T(s, ...a);
+}
 
 /* ---------- library ---------- */
 const GAMES = [
@@ -107,17 +125,17 @@ const GAMES = [
    pal:['#3fa9f5','#c9f0ff','#d9853b','#ffd84a','#ffffff'],
    sum:'Salta por la despensa, esquiva al ratón Comino y recupera la merienda robada.',
    desc:'Un plataformas para toda la familia con niveles en la nevera, el horno y el tarro de las galletas. Controles sencillos, cooperativo a dos y jefes que se pueden vencer de varias maneras.' },
- { id:'pixel', t:'Pixelandia', tag:'Ocho bits de aventura', genre:'Plataformas clásico', ctl:'plat', dev:'Bit Bazar', pub:'Bit Bazar', year:1996, fmt:'jewel', players:'1 jugador', online:false, pad:false, age:3,
+ { id:'pixel', t:'Pixelandia', tag:'Ocho bits de aventura', genre:'Plataformas clásico', ctl:'plat', dev:'Bit Bazar', pub:'Bit Bazar', year:1996, fmt:'cart', players:'1 jugador', online:false, pad:false, age:3,
    hours:25.6, sessions:50, last:1500, added:3500, status:'Completado', ach:[10,12], art:'blocks', artOpt:{night:true, hero:'knight'}, font:'press', tpos:'top', rating:4,
    pal:['#1d2b53','#7e2553','#ab5236','#ffa300','#fff1e8'],
    sum:'Ocho mundos, trescientas monedas escondidas y un dragón que no es tan malo como parece.',
-   desc:'Un clásico de la época del CD-ROM: niveles cortos, secretos en cada esquina y una dificultad que sube sin piedad en el último mundo. Incluye el editor de niveles original y los mapas que creó la comunidad de entonces.' },
- { id:'ritmo', t:'Ritmo Cósmico', tag:'Baila entre galaxias', genre:'Música y ritmo', ctl:'rhythm', dev:'Latido', pub:'Latido', year:2002, fmt:'jewel', players:'1–2 jugadores', online:false, pad:true, age:3,
+   desc:'Un clásico de los dieciséis bits: niveles cortos, secretos en cada esquina y una dificultad que sube sin piedad en el último mundo. El cartucho lleva pila, así que tus monedas y tus récords siguen ahí treinta años después.' },
+ { id:'ritmo', t:'Ritmo Cósmico', tag:'Baila entre galaxias', genre:'Música y ritmo', ctl:'rhythm', dev:'Latido', pub:'Latido', year:2002, fmt:'bigjewel', players:'1–2 jugadores', online:false, pad:true, age:3,
    hours:6.8, sessions:12, last:800, added:2900, status:'Pausado', ach:[6,30], art:'rings', artOpt:{stars:true}, font:'bungee', tpos:'bottom', rating:3,
    pal:['#120a26','#3b1a6b','#ffcc33','#ff6ad5','#fdf6ff'],
    sum:'Pulsa al compás para que tu nave atraviese anillos de luz. Treinta canciones originales.',
    desc:'La secuela espiritual de Pulso cambia el tablero por el espacio. Cada canción es una ruta entre planetas y cada fallo te saca de órbita. Modo historia, desafíos diarios y duelos a dos.' },
- { id:'kart', t:'Kart de Barrio', tag:'El gran premio de las fiestas', genre:'Carreras de karts', ctl:'race', dev:'Velocípedo Games', pub:'Velocípedo', year:2000, fmt:'jewel', players:'1–4 jugadores', online:false, pad:true, age:3,
+ { id:'kart', t:'Kart de Barrio', tag:'El gran premio de las fiestas', genre:'Carreras de karts', ctl:'race', dev:'Velocípedo Games', pub:'Velocípedo', year:2000, fmt:'bigjewel', players:'1–4 jugadores', online:false, pad:true, age:3,
    hours:15, sessions:30, last:1100, added:3100, status:'Completado', ach:[16,20], art:'sun', font:'bungee', tpos:'top', rating:4,
    pal:['#2b6cff','#9fd3ff','#ff5a36','#ffe066','#ffffff'],
    sum:'Karts de cartón, cuestas imposibles y atajos por el patio de la vecina.',
@@ -132,7 +150,7 @@ const GAMES = [
    pal:['#16324a','#5a9bd4','#ff6b3d','#ffd23f','#ffffff'],
    sum:'Conduce tranvías por cinco ciudades europeas reproducidas con todo detalle.',
    desc:'Horarios, señales y pasajeros con prisa. Aprende a frenar a tiempo en cuesta, a respetar los semáforos y a no cerrar las puertas en la cara a nadie. Incluye un manual de conducción de sesenta páginas.' },
- { id:'torre', t:'Torre del Mago', tag:'Cien plantas, un hechizo', genre:'Rol por turnos', ctl:'strat', dev:'Cooperativa Pico', pub:'Pico Soft', year:1995, fmt:'big', players:'1 jugador', online:false, pad:false, age:12,
+ { id:'torre', t:'Torre del Mago', tag:'Cien plantas, un hechizo', genre:'Rol por turnos', ctl:'strat', dev:'Cooperativa Pico', pub:'Pico Soft', year:1995, fmt:'floppy', players:'1 jugador', online:false, pad:false, age:12,
    hours:0, sessions:0, last:null, added:1300, status:'Sin jugar', ach:[0,30], art:'tower', font:'fraunces', tpos:'top', rating:0, burst:'¡100 plantas!',
    pal:['#120b24','#3a2a6e','#c49bff','#ffe9a8','#f4efff'],
    sum:'Sube planta a planta por la torre de un mago desaparecido y descubre por qué la construyó.',
@@ -223,9 +241,11 @@ let saved = {};
 try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { saved = {}; }
 function persist() { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (e) { } }
 function saveGame(g) {
-  if (PLAYNITE) { saved[g.id] = { wrapped: g.wrapped, tear: g.tear, dust: +g.dust.toFixed(3), dustAt: Date.now() }; persist(); return; }
-  saved[g.id] = { hours: g.hours, sessions: g.sessions, last: g.last, status: g.status, wrapped: g.wrapped, tear: g.tear, dust: g.dust, notes: g.notes, rating: g.rating, ach: g.ach, cats: g.cats }; persist();
+  /* fmt is only kept when you chose it; otherwise each game keeps the format its platform suggests */
+  if (PLAYNITE) { saved[g.id] = { wrapped: g.wrapped, tear: g.tear, dust: +(g.dust || 0).toFixed(3), dustAt: Date.now(), fmt: g.fmtPick || undefined }; persist(); return; }
+  saved[g.id] = { hours: g.hours, sessions: g.sessions, last: g.last, status: g.status, wrapped: g.wrapped, tear: g.tear, dust: g.dust, notes: g.notes, rating: g.rating, ach: g.ach, cats: g.cats, fmt: g.fmtPick || undefined }; persist();
 }
+function restoreFmt(g, s) { if (s && s.fmt && DIMS[s.fmt]) { g.fmt = s.fmt; g.fmtPick = s.fmt; } }
 
 /* Playnite's default completion statuses, in Spanish (replaced by the real ones inside Playnite) */
 let STATUSES = ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'];
@@ -244,6 +264,7 @@ function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs
 function dustFor(idleDays) { return clamp((idleDays - 120) / 700, 0, 1); }
 function restoreUi(g) {
   const s = saved[g.id]; if (!s) return;
+  restoreFmt(g, s);
   if ('wrapped' in s && !s.wrapped) g.wrapped = false;
   if (g.wrapped && 'tear' in s) g.tear = s.tear || 0;
   if ('dust' in s && s.dustAt) g.dust = clamp(s.dust + Math.max(0, (Date.now() - s.dustAt) / 864e5) / 700, 0, 1);
@@ -268,7 +289,10 @@ function fillerGames(n) {
     do { const k = r(); t = k < .3 ? `${pick(nouns)} ${pick(adjs)}` : k < .55 ? `El ${pick(nouns)} de ${pick(places)}` : k < .8 ? `${pick(nouns)}: ${pick(subs)}` : `${pick(nouns)} ${2 + Math.floor(r() * 3)}`; } while (used.has(t) && ++tries < 20);
     used.add(t);
     const [genre, ctl] = pick(genres), year = 1994 + Math.floor(r() * 32), h = r() * 360;
-    const fmt = year < 2001 ? (r() < .55 ? 'jewel' : r() < .5 ? 'big' : 'dvd') : r() < .12 ? 'jewel' : 'dvd';
+    let fmt = year < 2001 ? (r() < .55 ? 'jewel' : r() < .5 ? 'big' : 'dvd') : r() < .12 ? 'jewel' : 'dvd';
+    /* a few on floppies, cartridges and fat jewel cases; from a separate hash so the rest of the demo stays as it was */
+    const fk = hash('fmt' + i) % 100;
+    if (year < 1999 && fk < 35) fmt = 'floppy'; else if (fk >= 92) fmt = 'cart'; else if (fmt === 'jewel' && fk >= 60) fmt = 'bigjewel';
     const status = pick(kinds), played = status !== 'No jugado' && status !== 'Planeado';
     const hours = played ? +(1 + r() * r() * 90).toFixed(1) : 0, sessions = played ? Math.max(1, Math.round(hours * (.6 + r()))) : 0;
     const last = played ? Math.floor(r() * r() * 1400) : null, added = (last || 0) + Math.floor(r() * 900) + 30;
@@ -290,7 +314,7 @@ function initDemoGames() {
     g.dust = g.wrapped ? 0 : dustFor(idle);
     g.notes = ''; g.artOpt = g.artOpt || {};
     const s = saved[g.id];
-    if (s) for (const k of ['hours', 'sessions', 'last', 'status', 'wrapped', 'tear', 'dust', 'notes', 'rating', 'ach', 'cats']) if (k in s) g[k] = s[k];
+    if (s) { for (const k of ['hours', 'sessions', 'last', 'status', 'wrapped', 'tear', 'dust', 'notes', 'rating', 'ach', 'cats']) if (k in s) g[k] = s[k]; restoreFmt(g, s); }
     if (g.wrapped) { g.dust = 0; g.tear = g.tear || 0; }
     g.dust0 = g.dust;
     g.cats.forEach(c => { if (!prefs.cats.includes(c)) prefs.cats.push(c); });

@@ -11,7 +11,9 @@ Cada juego es una caja en una balda de pared. La sacas, le quitas el precinto, l
 ## Qué hace
 
 - **Tu biblioteca real.** Carátulas, fondos, descripciones, tiempo jugado, estados y categorías salen de Playnite.
-- **Estantes.** Arriba a la derecha eliges qué hay en la balda: todos los juegos o un estado (Jugando, Superados…). También puedes agruparlos por categoría o plataforma. Si no caben, la balda tiene páginas («Siguiente»).
+- **Estantes.** Arriba a la derecha eliges qué hay en la balda: todos los juegos o un estado (Jugando, Superados…). También puedes agruparlos por categoría, plataforma o formato. Si no caben, la balda tiene páginas («Siguiente»).
+- **El formato que quieras.** Cada juego puede ir en una caja DVD, una caja de CD, una caja de CD grande (como las de PlayStation o Dreamcast PAL), una caja grande de cartón, una caja de disquetes de 3½" de finales de los 90 o una caja de cartucho de 16 bits. Lo eliges en la ficha del juego (Formato) y puedes mezclarlos en la misma balda. La caja que tienes en la mano se cambia al momento y la balda le hace sitio al devolverla.
+- **Una consola para todo.** La ID-2 tiene ranura para discos, disquetera de 3½" y ranura de cartuchos arriba. El disco entra por la ranura, el disquete por la disquetera (con su luz de lectura) y el cartucho se queda asomando por arriba mientras juegas.
 - **Dos diseños.** Una sola balda larga sobre la mesa con la tele y la consola, o una fila de estanterías (una por estado, categoría o plataforma). Se cambia en Ajustes → Diseño.
 - **Jugar de verdad.** Al meter el disco, Playnite arranca el juego. Mientras juegas, la tele lo enseña. Al cerrar el juego, el disco vuelve solo a su caja. Si Playnite da el juego por cerrado pero sigue abierto algún programa de su carpeta, el disco se queda dentro hasta que lo cierres y ese tiempo se suma a tus horas.
 - **Tráiler.** La tele y la contraportada ponen el tráiler del juego: el de Extra Metadata Loader si lo tienes, o el vídeo que venga en la descripción.
@@ -78,7 +80,7 @@ Tienes tres formas de abrir la estantería:
 ## Qué se guarda y dónde
 
 - **En Playnite:** estado de juego, categorías, puntuación de usuario (cada estrella son 20 puntos) y notas.
-- **En los datos de la extensión:** el precinto y el polvo de cada caja, las preferencias de la estantería (ambiente, luz, orden) y una caché de carátulas reducidas.
+- **En los datos de la extensión:** el precinto, el polvo y el formato que hayas elegido para cada caja, las preferencias de la estantería (ambiente, luz, orden) y una caché de carátulas reducidas. Si nunca cambias el formato de un juego, usa el que le toca por su plataforma.
 
 ## Desarrollo
 

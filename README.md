@@ -11,7 +11,9 @@ Every game is a case on a wall shelf. You take it down, peel off the shrink wrap
 ## What it does
 
 - **Your real library.** Covers, backgrounds, descriptions, playtime, completion statuses and categories come from Playnite.
-- **Shelves.** At the top right you choose what is on the shelf: all your games or one status (Playing, Beaten…). You can also group them by category or platform. If they don't fit, the shelf has pages ("Next").
+- **Shelves.** At the top right you choose what is on the shelf: all your games or one status (Playing, Beaten…). You can also group them by category, platform or format. If they don't fit, the shelf has pages ("Next").
+- **Any format you like.** Each game can come in a DVD case, a CD jewel case, a big CD case (like the PAL PlayStation or Dreamcast ones), a cardboard big box, a late-90s box of 3½" floppies or a 16-bit cartridge box. Pick it in the game's card (Format) and mix them on the same shelf. The case in your hands changes on the spot, and the shelf makes room when you put it back.
+- **One console for everything.** The ID-2 has a disc slot, a 3½" floppy drive and a cartridge slot on top. Discs go in the slot, floppies in the drive (with its reading light), and cartridges stay sticking out of the top while you play.
 - **Two designs.** One long wall shelf above the table with the TV and the console, or a row of bookcases (one per status, category or platform). Change it in Settings → Design.
 - **Actually playing.** When you put the disc in, Playnite starts the game. While you play, the TV shows it. When you close the game, the disc goes back to its case on its own. If Playnite thinks the game has closed but a program from its folder is still open, the disc stays in until you close it, and that time is added to your playtime.
 - **Trailer.** The TV and the back cover play the game's trailer: the one from Extra Metadata Loader if you have it, or a video found in the description.
@@ -78,7 +80,7 @@ There are three ways to open the shelf:
 ## What is saved, and where
 
 - **In Playnite:** completion status, categories, user score (each star is 20 points) and notes.
-- **In the extension's data:** the shrink wrap and dust of each case, the shelf preferences (room, light, sort order) and a cache of downsized covers.
+- **In the extension's data:** the shrink wrap, dust and chosen format of each case, the shelf preferences (room, light, sort order) and a cache of downsized covers. If you never change a game's format, it uses the one its platform suggests.
 
 ## Development
 

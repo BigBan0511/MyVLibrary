@@ -27,7 +27,7 @@ function groupLabel(k) {
   if (k === '__none') return T({ status: 'Sin estado', cat: 'Sin categoría', plat: 'Sin plataforma' }[prefs.group] || 'Otros');
   if (prefs.group === 'status') return TD(STATUS_SHELF[k] || k);
   if (prefs.group === 'cat') return TD(k);
-  if (prefs.group === 'fmt') return T({ dvd: 'Cajas DVD', jewel: 'Cajas de CD', big: 'Cajas grandes' }[k]);
+  if (prefs.group === 'fmt') return T({ dvd: 'Cajas DVD', jewel: 'Cajas de CD', bigjewel: 'Cajas de CD grandes', big: 'Cajas grandes', floppy: 'Disquetes', cart: 'Cartuchos' }[k] || k);
   return k;
 }
 function groupRank(k, n) {

@@ -173,23 +173,37 @@ const boardGroup = new THREE.Group(); scene.add(boardGroup);
   addBox(9, 2, 3.4, M(THREE.MeshStandardMaterial, { color: '#2a2b30', roughness: .8 }, .5), 12, f + 1.3, 2.1, boardGroup);
 }
 
-/* ---------- the console ("ID-2", our own design): a black slab with a slot-loading drive ---------- */
+/* ---------- the console ("ID-2", our own design): a black slab that takes everything.
+   Front: a slot-loading disc drive and a 3½" floppy drive. Top: a cartridge slot with spring flaps. ---------- */
 const CON = { x: 40, w: 44, h: 8.4, d: 30, zFront: 25 };
 CON.y = TABLE.top + .6; CON.cy = CON.y + CON.h / 2;
 const conMat = M(THREE.MeshPhysicalMaterial, { color: '#141518', roughness: .5, metalness: .05, clearcoat: .35, clearcoatRoughness: .4 }, .9);
+/* the front panel is drawn at 20 px per cm, from the console's left edge and top */
+const CF = { k: 20, disc: [60, 44, 280, 15], bay: [392, 26, 236, 58], floppy: [414, 47, 192, 10] };
 const conFrontC = mkCanvas(880, 168);
 {
-  const x = conFrontC.getContext('2d'), k = 20;
+  const x = conFrontC.getContext('2d');
   x.fillStyle = lg(x, 0, 0, 0, 168, [[0, '#1a1b1f'], [.5, '#141518'], [1, '#101114']]); x.fillRect(0, 0, 880, 168);
   x.fillStyle = 'rgba(255,255,255,.05)'; x.fillRect(0, 104, 880, 2); x.fillStyle = 'rgba(0,0,0,.4)'; x.fillRect(0, 106, 880, 2);
-  /* the slot */
-  x.fillStyle = '#030304'; rr(x, 60, 44, 440, 15, 7.5); x.fill();
-  x.fillStyle = 'rgba(255,255,255,.07)'; x.fillRect(66, 61, 428, 2); x.fillStyle = 'rgba(0,0,0,.5)'; x.fillRect(64, 41, 432, 3);
-  x.fillStyle = '#6d7078'; x.beginPath(); x.moveTo(528, 58); x.lineTo(538, 46); x.lineTo(548, 58); x.closePath(); x.fill(); x.fillRect(528, 61, 20, 3);
+  /* the disc slot */
+  const [dx, dy, dw, dh] = CF.disc;
+  x.fillStyle = '#030304'; rr(x, dx, dy, dw, dh, 7.5); x.fill();
+  x.fillStyle = 'rgba(255,255,255,.07)'; x.fillRect(dx + 6, dy + dh + 2, dw - 12, 2); x.fillStyle = 'rgba(0,0,0,.5)'; x.fillRect(dx + 4, dy - 3, dw - 8, 3);
+  x.fillStyle = '#6d7078'; x.beginPath(); x.moveTo(dx + dw + 20, 58); x.lineTo(dx + dw + 30, 46); x.lineTo(dx + dw + 40, 58); x.closePath(); x.fill(); x.fillRect(dx + dw + 20, 61, 20, 3);
+  x.font = `700 11px ${F.mono}`; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText('CD · DVD', dx, dy + dh + 16);
+  /* the floppy drive: a recessed bay with its own slot, flap, eject button and activity light */
+  const [bx, by, bw, bh] = CF.bay, [fx, fy, fw, fh] = CF.floppy;
+  x.fillStyle = '#0d0e10'; rr(x, bx, by, bw, bh, 6); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,.07)'; x.lineWidth = 2; rr(x, bx + 1, by + 1, bw - 2, bh - 2, 6); x.stroke();
+  x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(bx + 2, by + 2, bw - 4, 3);
+  x.fillStyle = '#020203'; rr(x, fx, fy, fw, fh, 3); x.fill();
+  x.fillStyle = '#25272c'; x.fillRect(fx + 3, fy + 2, fw - 6, fh - 5); x.fillStyle = 'rgba(255,255,255,.08)'; x.fillRect(fx + 3, fy + 2, fw - 6, 1.5);
+  x.fillStyle = '#1e2024'; rr(x, fx + fw - 30, by + bh - 17, 30, 10, 4); x.fill(); x.fillStyle = 'rgba(255,255,255,.1)'; x.fillRect(fx + fw - 27, by + bh - 16, 24, 1.5);
+  x.fillStyle = '#6d7078'; x.font = `700 11px ${F.mono}`; x.fillText('3½" HD', fx + 22, by + bh - 12);
   /* power and reset */
-  x.fillStyle = '#0a0a0c'; x.beginPath(); x.arc(610, 52, 13, 0, 7); x.fill(); x.strokeStyle = 'rgba(255,255,255,.12)'; x.lineWidth = 2; x.beginPath(); x.arc(610, 52, 13, 0, 7); x.stroke();
-  x.strokeStyle = '#7d8088'; x.lineWidth = 2.4; x.beginPath(); x.arc(610, 53, 6, -1.1, 4.25); x.stroke(); x.beginPath(); x.moveTo(610, 44); x.lineTo(610, 52); x.stroke();
-  x.fillStyle = '#0a0a0c'; rr(x, 640, 46, 26, 12, 6); x.fill();
+  x.fillStyle = '#0a0a0c'; x.beginPath(); x.arc(668, 52, 13, 0, 7); x.fill(); x.strokeStyle = 'rgba(255,255,255,.12)'; x.lineWidth = 2; x.beginPath(); x.arc(668, 52, 13, 0, 7); x.stroke();
+  x.strokeStyle = '#7d8088'; x.lineWidth = 2.4; x.beginPath(); x.arc(668, 53, 6, -1.1, 4.25); x.stroke(); x.beginPath(); x.moveTo(668, 44); x.lineTo(668, 52); x.stroke();
+  x.fillStyle = '#0a0a0c'; rr(x, 698, 46, 26, 12, 6); x.fill();
   /* two controller ports */
   [[700, 120], [790, 120]].forEach(([px, py]) => { x.fillStyle = '#060607'; rr(x, px, py, 66, 28, 5); x.fill(); x.fillStyle = 'rgba(255,255,255,.08)'; x.fillRect(px + 8, py + 10, 50, 3); });
   x.fillStyle = '#5c5f66'; x.font = `800 22px ${F.saira}`; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText('MYV', 60, 132); x.font = `700 13px ${F.mono}`; x.fillText('ID-2', 112, 133);
@@ -199,10 +213,32 @@ const conBody = new THREE.Mesh(slabGeometry(CON.w, CON.h, CON.d, .6, .4), [conFr
 const ventC = mkCanvas(440, 300); { const x = ventC.getContext('2d'); for (let i = 0; i < 18; i++) { x.fillStyle = 'rgba(0,0,0,.6)'; rr(x, 250, 24 + i * 14, 160, 5, 2.5); x.fill(); x.fillStyle = 'rgba(255,255,255,.04)'; x.fillRect(252, 30 + i * 14, 156, 1); } }
 const vent = new THREE.Mesh(new THREE.PlaneGeometry(CON.w, CON.d), new THREE.MeshStandardMaterial({ map: tex(ventC), transparent: true, depthWrite: false, roughness: .6 })); vent.rotation.x = -Math.PI / 2; vent.position.set(CON.x, CON.y + CON.h + .02, CON.zFront - CON.d / 2); scene.add(vent);
 [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => addBox(3, .6, 3, M(THREE.MeshStandardMaterial, { color: '#0c0c0e' }, .5), CON.x + sx * (CON.w / 2 - 4), TABLE.top + .3, CON.zFront - CON.d / 2 + sz * (CON.d / 2 - 4)));
+/* panel coordinates (px from the top-left of the front) to the room */
+const conPx = (px, py) => [CON.x - CON.w / 2 + px / CF.k, CON.y + CON.h - py / CF.k];
 const ledMat = new THREE.MeshBasicMaterial({ color: '#ff9b3a', toneMapped: false });
-addBox(1.1, .4, .2, ledMat, CON.x + 4.6, CON.y + CON.h - 2.6, CON.zFront + .12);
-/* where the disc goes in: the middle of the slit */
-const SLOT = { x: CON.x - CON.w / 2 + 14, y: CON.y + CON.h - 2.6, z: CON.zFront + .05 };
+{ const [lx, ly] = conPx(760, 52); addBox(1.1, .4, .2, ledMat, lx, ly, CON.zFront + .12); }
+const floppyLedMat = new THREE.MeshBasicMaterial({ color: '#1d3a22', toneMapped: false });
+{ const [lx, ly] = conPx(CF.floppy[0] + 8, CF.bay[1] + CF.bay[3] - 12); addBox(.6, .25, .15, floppyLedMat, lx, ly, CON.zFront + .1); }
+/* where each medium goes in: the middle of the disc slit, the middle of the floppy slit, the cartridge slot on top */
+const SLOT = (() => { const [dx, dy, dw, dh] = CF.disc, [x, y] = conPx(dx + dw / 2, dy + dh / 2); return { x, y, z: CON.zFront + .05 }; })();
+const FSLOT = (() => { const [fx, fy, fw, fh] = CF.floppy, [x, y] = conPx(fx + fw / 2, fy + fh / 2); return { x, y, z: CON.zFront + .05 }; })();
+const CSLOT = { x: CON.x - 9, z: CON.zFront - 10, w: 17, d: 5.4, h: 1.1 };
+CSLOT.top = CON.y + CON.h + CSLOT.h;
+const cartFlaps = [];
+{
+  /* a raised collar with a dark mouth and two spring flaps that fold down when a cartridge goes in */
+  fbox(CSLOT.w, CSLOT.h + .2, CSLOT.d, conMat, CSLOT.x, CON.y + CON.h + (CSLOT.h - .2) / 2, CSLOT.z);
+  const mouth = new THREE.Mesh(new THREE.PlaneGeometry(MSIZE.cart.w + .9, MSIZE.cart.t + .7), new THREE.MeshBasicMaterial({ color: '#030304' }));
+  mouth.rotation.x = -Math.PI / 2; mouth.position.set(CSLOT.x, CSLOT.top + .015, CSLOT.z); scene.add(mouth);
+  const flapGeo = new THREE.BoxGeometry(MSIZE.cart.w + .6, .12, (MSIZE.cart.t + .6) / 2 - .06), flapMat = M(THREE.MeshStandardMaterial, { color: '#0b0c0e', roughness: .8 }, .5);
+  [-1, 1].forEach(s => {
+    const hinge = new THREE.Group(); hinge.position.set(CSLOT.x, CSLOT.top + .02, CSLOT.z + s * (MSIZE.cart.t + .6) / 2); scene.add(hinge);
+    const f = new THREE.Mesh(flapGeo, flapMat); f.position.z = -s * (MSIZE.cart.t + .6) / 4; f.receiveShadow = true; hinge.add(f);
+    hinge.userData.s = s; cartFlaps.push(hinge);
+  });
+}
+/* 0 = flaps shut, 1 = folded down into the slot */
+function setCartFlaps(v) { cartFlaps.forEach(h => { h.rotation.x = -h.userData.s * v * 1.45; }); }
 const tray = new THREE.Object3D(); tray.visible = false; scene.add(tray);
 const trayState = { out: 0 };
 function setTray(v) { trayState.out = v; }
@@ -233,7 +269,8 @@ function makeController() {
   [-1, 1].forEach(sd => { const sh = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 1.2), btn); sh.position.set(sd * 5.6, 2.1, -3.6); g.add(sh); });
   return g;
 }
-const pad = makeController(); pad.position.set(CON.x - 5, CON.y + CON.h, CON.zFront - 14); pad.rotation.y = -.42; scene.add(pad);
+/* it lies at the back of the console, out of the way of the cartridge slot */
+const pad = makeController(); pad.position.set(CON.x + 10, CON.y + CON.h, CON.zFront - 19); pad.rotation.y = -.3; scene.add(pad);
 
 /* ---------- the ashtray and a couple of cigarettes ---------- */
 const propsGroup = new THREE.Group(); scene.add(propsGroup);

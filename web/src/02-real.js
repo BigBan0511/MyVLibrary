@@ -102,6 +102,8 @@ function makeBezelCanvas() {
 }
 function requirements(g) {
   if (g.real) return [T('TU COPIA'), T('Plataforma: {0}', (g.platName || g.plat || '—').slice(0, 34)), T('Origen: {0}', (g.src || '—').slice(0, 36)), T(g.installed ? 'Instalado en este equipo' : 'Sin instalar')];
+  if (g.fmt === 'floppy') return [T('REQUISITOS MÍNIMOS'), `MS-DOS 6.22 · Windows ${g.year < 1996 ? '3.1' : '95'}`, T('{0} · {1} MB de RAM', g.year < 1996 ? '486 DX2 66 MHz' : 'Pentium 75 MHz', g.year < 1996 ? 4 : 8), T('Unidad de disquete de 3½" HD')];
+  if (g.fmt === 'cart') return [T('EN LA CAJA'), T('Cartucho de 16 bits'), T('Pila para guardar la partida'), T('Manual de instrucciones')];
   if (g.year < 2005) return [T('REQUISITOS MÍNIMOS'), `Windows ${g.year < 1998 ? '95' : '98'} · Pentium ${g.year < 1998 ? '133' : '266'} MHz`, T('{0} MB de RAM · CD-ROM {1}', g.year < 1998 ? '16' : '64', g.year < 1998 ? '4x' : '24x'), T('Tarjeta de sonido compatible')];
   return [T('REQUISITOS MÍNIMOS'), T('Windows 10 de 64 bits · 4 núcleos'), T('{0} GB de RAM · {1} GB libres', g.year > 2021 ? 16 : 8, g.year > 2021 ? 40 : 20), T('GPU con 4 GB · DirectX 12')];
 }

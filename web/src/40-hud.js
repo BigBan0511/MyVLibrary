@@ -53,8 +53,8 @@ function renderPrompts() {
     } else h += btn(T('Intro'), T('Abrir la caja'), 'open', true);
     h += btn('F', active.flipT ? T('Ver portada') : T('Ver contraportada'), 'flip') + btn('Esc', T('Devolver'), 'back');
   }
-  if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), active && active.g.real && !active.g.installed ? T('Meter el disco (instalar)') : T('Meter el disco'), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
-  if (mode === 'playing') h = btn('Esc', PLAYNITE ? T('Sacar el disco') : T('Cerrar el juego'), 'quit', true);
+  if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), mediaT(active.g, active.g.real && !active.g.installed ? 'Meter el disco (instalar)' : 'Meter el disco'), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
+  if (mode === 'playing') h = btn('Esc', PLAYNITE ? mediaT(active.g, 'Sacar el disco') : T('Cerrar el juego'), 'quit', true);
   el.innerHTML = h;
 }
 $('#prompts').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) { sfx.init(); doAct(b.dataset.act); } });
@@ -116,7 +116,7 @@ function renderInfo(force) {
   placeCard();
   if (prefs.card === 'hide') { el.hidden = true; lastInfoKey = ''; tab.hidden = false; tab.innerHTML = `<span>${T('Ficha')}</span><b>${esc(active.g.t)}</b><i aria-hidden="true">▾</i>`; return; }
   tab.hidden = true;
-  const g = active.g, key = [g.id, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
+  const g = active.g, key = [g.id, g.fmt, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
   const idle = g.last === null || g.last === undefined ? g.added : g.last;
   const dustTxt = T(g.wrapped ? 'Ninguno, está precintado' : g.dust > .6 ? 'Mucho' : g.dust > .25 ? 'Algo' : g.dust > .04 ? 'Poco' : 'Limpio');
@@ -126,6 +126,7 @@ function renderInfo(force) {
   el.innerHTML = `<div class="info-bar"><button type="button" class="info-more" data-more="1" aria-expanded="${infoOpen}">${infoOpen ? T('Menos') : T('Estado y categorías')}</button><button type="button" class="info-hide" data-hide="1" aria-label="${T('Ocultar la ficha')}" title="${T('Ocultar la ficha')} (I) · ${T('Arrastra para moverla')}">${T('Ocultar')} <i aria-hidden="true">▴</i></button></div><div class="eyebrow">${esc([g.genre, g.year, g.real ? g.plat : T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</div><h2>${esc(g.t)}</h2>
     <dl><dt>${T('Jugado')}</dt><dd>${fmtH(g.hours)}${g.sessions ? ' · ' + T(g.sessions === 1 ? '{0} vez' : '{0} veces', g.sessions) : ''}</dd><dt>${T('Última vez')}</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>${T('Logros')}</dt><dd>${T('{0} de {1}', g.ach[0], g.ach[1])}</dd>` : ''}<dt>${T('Polvo')}</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : ''}</dd></dl>
     <div class="frow"><label for="stSel">${T('Estado')}</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : `<option value="" selected>${T('Sin estado')}</option>`}${statuses.map(s => `<option value="${esc(s)}"${s === g.status ? ' selected' : ''}>${esc(TD(s))}</option>`).join('')}<option value="__new">+ ${T('Nuevo estado…')}</option></select></div>
+    <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="fmt-ico" aria-hidden="true">${FMT_ICON[g.fmt] || ''}</span><select id="fmtSel">${FMTS.map(f => `<option value="${f}"${f === g.fmt ? ' selected' : ''}>${esc(T(DIMS[f].name))}</option>`).join('')}</select></div>
     ${newStatus ? `<form class="cat-new st-new"><input id="stNew" type="text" placeholder="${T('Nombre del estado nuevo')}" maxlength="40" autocomplete="off"><button type="submit">${T('Crear')}</button></form>` : ''}
     <div class="cats"><span class="lbl">${T('Categorías')}</span><div class="chips">${g.cats.length ? g.cats.map(c => `<span class="chip">${esc(TD(c))}</span>`).join('') : `<em>${T('Ninguna')}</em>`}<button type="button" class="chip add" data-edit="1">${infoEdit ? T('Listo') : '+ ' + T('Categorías')}</button></div></div>
     ${infoEdit ? `<div class="cat-edit">${prefs.cats.map(c => `<label><input type="checkbox" data-catbox="${esc(c)}"${g.cats.includes(c) ? ' checked' : ''}><span>${esc(TD(c))}</span></label>`).join('')}
@@ -138,6 +139,7 @@ function gameChanged(c, fields, regroup) {
 }
 $('#info').addEventListener('change', e => {
   if (!active) return; const c = active, g = c.g;
+  if (e.target.id === 'fmtSel') { setFormat(e.target.value); return; }
   if (e.target.id === 'stSel' && e.target.value === '__new') { newStatus = true; renderInfo(true); const i = $('#stNew'); if (i) i.focus(); return; }
   if (e.target.id === 'stSel') { const old = g.status; g.status = e.target.value; gameChanged(c, ['status'], prefs.group === 'status'); if (prefs.group === 'status' && old !== g.status && groups[curGroup].key !== '__all') toast(T('Al devolverlo irá al estante «{0}»', STATUS_SHELF[g.status] || g.status)); }
   const box = e.target.closest('[data-catbox]');
@@ -162,6 +164,34 @@ $('#info').addEventListener('submit', e => {
   const g = active.g; if (!g.cats.includes(name)) g.cats.push(name);
   gameChanged(active, ['cats'], prefs.group === 'cat'); toast(T('Categoría «{0}» añadida', name));
 });
+/* ---------- format: the case in your hands shrinks away and the new one takes its place ---------- */
+const FMT_ICON = { dvd: '▮', jewel: '◫', bigjewel: '◧', big: '▣', floppy: '▤', cart: '▭' };
+function setFormat(fmt) {
+  if (!active || !DIMS[fmt] || busy || !(mode === 'inspect' || mode === 'open')) { renderInfo(true); return; }
+  if (active.g.fmt === fmt) return;
+  return guarded(async () => {
+    const c = active, g = c.g, wasOpen = mode === 'open';
+    setMode('busy'); stopTrailer();
+    if (wasOpen) await closeCase(true);
+    if (c.wrap) g.tear = c.tear;
+    sfx.whoosh(); c.vanish = true; c.fast = true; await wait(170);
+    g.fmt = fmt; g.fmtPick = fmt; saveGame(g);
+    const n = new Case(g); n.key = c.key; caseById.set(c.key, n);
+    n.root.position.copy(c.root.position); n.root.quaternion.copy(c.root.quaternion); n.root.scale.setScalar(.02);
+    n.mode = c.mode; n.flipT = n.flipA = c.flipT; n.leaving = true; n.row = c.row; n.unitIdx = c.unitIdx; n.fresh = false; n.match = c.match;
+    /* its place on the shelf: same spot for now; the shelf makes room when you put it back */
+    placeCase(n, c.home.x, c.faceOut, c.home.board, isCases() ? SH.front : SHELF.front);
+    const i = navOrder.indexOf(c); if (i >= 0) navOrder[i] = n;
+    if (focus === c) focus = n; if (hovered === c) hovered = n;
+    c.dispose(); cases = [...caseById.values()]; buildShelfPicks();
+    active = n; n.ensureDetail(); n.setShadow(true); n.placeExtras();
+    pendingRelayout = true;
+    sfx.handle(fmt); await wait(420);
+    if (wasOpen) { await swingOpen(n); setMode('open'); } else setMode('inspect');
+    startTrailer(n); renderInfo(true);
+    toast(T('Ahora es: {0}', T(DIMS[fmt].name)), 2200);
+  });
+}
 /* the card can be dragged by its top bar anywhere on screen; the place is remembered (double click: back home) */
 function placeCard() {
   const el = $('#info'), tab = $('#infoTab'), p = prefs.cardPos;
@@ -184,7 +214,7 @@ $('#infoTab').addEventListener('click', () => setCard('show'));
 
 /* ---------- search ---------- */
 const qEl = $('#q'), countEl = $('#count');
-function searchText(g) { return norm([g.t, g.genre, g.dev, g.pub, g.plat, g.status, ...(g.cats || [])].filter(Boolean).join(' ')); }
+function searchText(g) { return norm([g.t, g.genre, g.dev, g.pub, g.plat, g.status, T(DIMS[g.fmt].name), ...(g.cats || [])].filter(Boolean).join(' ')); }
 function applySearch(stay) {
   const q = norm(qEl.value.trim()), gr = groups[curGroup]; if (!gr) return;
   const hits = q ? gr.games.filter(g => searchText(g).includes(q)) : [];
@@ -321,26 +351,65 @@ function putBack() {
 }
 const _p0 = new V3(), _p1 = new V3(), _p2 = new V3(), _q0 = new Q4(), _q2 = new Q4(), _qz = new Q4(), _qt = new Q4(), ZAX = new V3(0, 0, 1);
 const QFLAT = new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0));
-/* the disc leaves the case upwards, in front of it, so it never passes through the plastic */
-function discAbove(c, out) { const { h, discR } = c.dim; return out.set(c.discHome.x, h / 2 + discR + 1.4, c.discHome.z + 3.2); }
+/* the medium leaves the case upwards, in front of it, so it never passes through the plastic */
+function discAbove(c, out) { return out.set(c.discHome.x, c.dim.h / 2 + mediaHalfH(c) + 1.4, c.discHome.z + 3.2); }
+const QUP = new Q4();
+/* each medium's way into the console: where it is offered (entry), where it rests inside, where it pops out to, how it is turned */
+function portOf(c) {
+  const m = c.dim.media;
+  if (m === 'floppy') { const H = MSIZE.floppy.h; return { m, q: QFLAT, entry: new V3(FSLOT.x, FSLOT.y, FSLOT.z + H / 2 + .5), inside: new V3(FSLOT.x, FSLOT.y, FSLOT.z - H / 2 - .4), out: new V3(FSLOT.x, FSLOT.y, FSLOT.z + H / 2 - 6.4) }; }
+  if (m === 'cart') { const H = MSIZE.cart.h; return { m, q: QUP, entry: new V3(CSLOT.x, CSLOT.top + H / 2 + 7, CSLOT.z), inside: new V3(CSLOT.x, CSLOT.top + H / 2 - 3.6, CSLOT.z), out: new V3(CSLOT.x, CSLOT.top + H / 2 + 2.5, CSLOT.z) }; }
+  const R = c.dim.discR;
+  return { m, q: QFLAT, entry: new V3(SLOT.x, SLOT.y, SLOT.z + R + .6), inside: new V3(SLOT.x, SLOT.y, SLOT.z - R - 1.2), out: new V3(SLOT.x, SLOT.y, SLOT.z + R - 3.6) };
+}
+/* the flaps of the cartridge slot fold down as the cartridge's foot passes the mouth */
+function flapsFor(d) { setCartFlaps(clamp((CSLOT.top + .4 - (d.position.y - MSIZE.cart.h / 2)) / 1.4, 0, 1)); }
+async function pushIn(d, P) {
+  if (P.m === 'floppy') {
+    sfx.floppyIn();
+    await tweenReal(.24, t => { d.position.z = lerp(P.entry.z, P.inside.z, t); }, t => t * t);
+    d.visible = false; blinkFloppy(2.4); await waitReal(.25); return;
+  }
+  if (P.m === 'cart') {
+    sfx.cartIn();
+    await tweenReal(.32, t => { d.position.y = lerp(P.entry.y, P.inside.y, t); flapsFor(d); }, t => t * t);
+    d.position.copy(P.inside); setCartFlaps(1); await waitReal(.38); return;
+  }
+  sfx.slotIn();
+  const z0 = d.position.z, z1 = z0 - 3.4, z2 = P.inside.z;
+  await tweenReal(.28, t => { d.position.z = lerp(z0, z1, t); }, easeOut);
+  await tweenReal(.52, t => { d.position.z = lerp(z1, z2, t); }, easeIO);
+  d.visible = false; await waitReal(.05);
+}
+async function popOut(d, P) {
+  if (P.m === 'floppy') {
+    await waitReal(.25); sfx.floppyOut(); await waitReal(.07);
+    d.position.copy(P.inside); d.visible = true;
+    await tweenReal(.16, t => { d.position.z = lerp(P.inside.z, P.out.z, t); }, easeOut); return;
+  }
+  if (P.m === 'cart') {
+    await waitReal(.2); sfx.cartOut(); await waitReal(.2);
+    await tweenReal(.42, t => { d.position.y = lerp(P.inside.y, P.out.y, t); flapsFor(d); }, easeIO); return;
+  }
+  await waitReal(.15); sfx.slotOut(); await waitReal(1.02);
+  d.visible = true; const zIn = d.position.z;
+  await tweenReal(.5, t => { d.position.z = lerp(zIn, P.out.z, t); }, easeIO);
+}
 function insertDisc() {
   if (!active || mode !== 'open') return;
   return guarded(async () => {
-    const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR;
+    const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), P = portOf(c);
     setMode('busy'); hoverPart = null; c.discLabelMat.emissive.set('#000000'); stopTrailer();
-    await waitReal(sfx.discOut() - .005);
+    await waitReal(sfx.mediaOut(c.g.fmt) - .005);
     await tween(.28, t => { d.position.z = home.z + 1.4 * t; d.rotation.x = -.06 * t; });
     await tween(.6, t => { d.position.y = lerp(home.y, above.y, t); d.position.z = lerp(home.z + 1.4, above.z, t); });
     c.mode = 'parked'; setView('console'); await wait(750);
     scene.attach(d); _p0.copy(d.position); _q0.copy(d.quaternion); const s0 = d.scale.x;
-    _p2.set(SLOT.x, SLOT.y, SLOT.z + R + .6); _p1.copy(_p0).lerp(_p2, .45); _p1.y = Math.max(_p0.y, _p2.y) + 18;
-    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, 1, t)); _qt.copy(_q0).slerp(QFLAT, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
-    d.scale.setScalar(1); d.quaternion.copy(QFLAT); d.position.copy(_p2);
-    sfx.slotIn();
-    const z0 = d.position.z, z1 = z0 - 3.4, z2 = SLOT.z - R - 1.2;
-    await tweenReal(.28, t => { d.position.z = lerp(z0, z1, t); }, easeOut);
-    await tweenReal(.52, t => { d.position.z = lerp(z1, z2, t); }, easeIO);
-    d.visible = false; await waitReal(.05); setLed(true); await waitReal(.17);
+    _p2.copy(P.entry); _p1.copy(_p0).lerp(_p2, .45); _p1.y = Math.max(_p0.y, _p2.y) + 18;
+    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, 1, t)); _qt.copy(_q0).slerp(P.q, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
+    d.scale.setScalar(1); d.quaternion.copy(P.q); d.position.copy(_p2);
+    await pushIn(d, P);
+    setLed(true); await waitReal(.17);
     sfx.tvOn(); tvSet('boot', c);
     if (PLAYNITE) {
       /* the real thing: Playnite launches the game; the TV waits until it is actually running */
@@ -365,13 +434,14 @@ async function restorePlaying(id, seconds) {
   const c = navOrder.find(q => q.g === g) || getCase(g); if (!c) return;
   if (g.real) await LIB.prepare(g, 1200);
   active = c; c.ensureDetail(); c.setShadow(true); c.openA = 1; c.mode = 'parked'; c.leaving = true; c.placeExtras();
-  const d = c.disc, R = c.dim.discR; scene.attach(d); d.position.set(SLOT.x, SLOT.y, SLOT.z - R - 1.2); d.quaternion.copy(QFLAT); d.scale.setScalar(1); d.visible = false;
+  const d = c.disc, P = portOf(c); scene.attach(d); d.position.copy(P.inside); d.quaternion.copy(P.q); d.scale.setScalar(1); d.visible = P.m === 'cart'; if (P.m === 'cart') setCartFlaps(1);
   setLed(true); tvSet('play', c); playStart = performance.now() - (seconds || 0) * 1000;
   PN_STATE.running = id; PN_STATE.waiting = false; $('#playTitle').textContent = g.t; renderPlayBanner();
   setView('console'); setMode('playing');
 }
 function renderPlayBanner() {
-  $('#playNote').textContent = T(PLAYNITE ? (PN_STATE.waiting ? 'Playnite está abriendo el juego. Si no arranca, saca el disco con Esc.' : PN_STATE.selfTrack ? 'Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y el disco sale cuando lo cierres.' : 'Playnite cuenta el tiempo. Al cerrar el juego, el disco vuelve solo a su caja.') : 'En esta demo cada segundo cuenta como un minuto de partida.');
+  const g = active ? active.g : { fmt: 'dvd' };
+  $('#playNote').textContent = mediaT(g, PLAYNITE ? (PN_STATE.waiting ? 'Playnite está abriendo el juego. Si no arranca, saca el disco con Esc.' : PN_STATE.selfTrack ? 'Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y el disco sale cuando lo cierres.' : 'Playnite cuenta el tiempo. Al cerrar el juego, el disco vuelve solo a su caja.') : 'En esta demo cada segundo cuenta como un minuto de partida.');
   $('#playEyebrow').textContent = T(PLAYNITE && PN_STATE.waiting ? 'Arrancando' : 'En marcha');
 }
 /* ejects the disc and puts it back in its case. Inside Playnite it runs when the game closes (o.auto),
@@ -379,30 +449,29 @@ function renderPlayBanner() {
 function closeGame(o = {}) {
   if (!active || mode !== 'playing') return;
   return guarded(async () => {
-    const c = active, d = c.disc, g = c.g, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR;
+    const c = active, d = c.disc, g = c.g, home = c.discHome, above = discAbove(c, new V3()), P = portOf(c);
     const mins = Math.max(1, Math.floor((performance.now() - playStart) / 1000));
     /* pulled out by hand while only the shelf was keeping track: stop counting from here */
     const released = PLAYNITE && o.keepRunning && PN_STATE.selfTrack;
-    if (released) { LIB.send('release', { id: g.id }); o = Object.assign({}, o, { keepRunning: false, msg: T('Disco fuera. El tiempo hasta ahora se suma a {0} en Playnite.', g.t) }); }
+    if (released) { LIB.send('release', { id: g.id }); o = Object.assign({}, o, { keepRunning: false, msg: mediaT(g, 'Disco fuera. El tiempo hasta ahora se suma a {0} en Playnite.', g.t) }); }
     PN_STATE.waiting = false; PN_STATE.selfTrack = false; if (!o.keepRunning) PN_STATE.running = null;
     setMode('busy'); tvSet('standby'); setLed(false); sfx.tvOff();
-    await waitReal(.15); sfx.slotOut(); await waitReal(1.02);
-    d.visible = true; const zIn = d.position.z, zOut = SLOT.z + R - 3.6;
-    await tweenReal(.5, t => { d.position.z = lerp(zIn, zOut, t); }, easeIO);
+    await popOut(d, P);
     await wait(320);
     _p0.copy(d.position); _q0.copy(d.quaternion);
     const tmp = new THREE.Object3D(); c.inner.add(tmp); tmp.position.copy(above); tmp.updateMatrixWorld(true);
     tmp.getWorldPosition(_p2); tmp.getWorldQuaternion(_q2); c.inner.remove(tmp);
     _p1.copy(_p0).lerp(_p2, .55); _p1.y = Math.max(_p0.y, _p2.y) + 22; const sT = c.root.scale.x;
-    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(1, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
+    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(1, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); if (P.m === 'cart') flapsFor(d); });
+    if (P.m === 'cart') setCartFlaps(0);
     c.inner.attach(d); d.position.copy(above); d.quaternion.identity(); d.scale.set(1, 1, 1);
-    sfx.discIn({ hitAt: (.55 + .22) * SPEED });
+    sfx.mediaIn(g.fmt, { hitAt: (.55 + .22) * SPEED });
     await tween(.55, t => { d.position.y = lerp(above.y, home.y, t); d.position.z = lerp(above.z, home.z + 1.4, t); });
     await tween(.22, t => { d.position.z = home.z + 1.4 * (1 - t); }); d.position.copy(home);
     let msg, moved = false;
     if (PLAYNITE) {
       const s = o.seconds || 0;
-      msg = o.msg || (o.keepRunning ? T('El juego sigue abierto: Playnite seguirá contando el tiempo.') : s >= 60 ? T('+{0} min en {1}. Playnite ya lo ha apuntado.', Math.round(s / 60), g.t) : s > 0 ? T('Partida corta en {0}.', g.t) : T('Disco fuera.'));
+      msg = o.msg || (o.keepRunning ? T('El juego sigue abierto: Playnite seguirá contando el tiempo.') : s >= 60 ? T('+{0} min en {1}. Playnite ya lo ha apuntado.', Math.round(s / 60), g.t) : s > 0 ? T('Partida corta en {0}.', g.t) : mediaT(g, 'Disco fuera.'));
       if (s > 0 || o.auto) { g.dust = 0; c.setDust(0); saveGame(g); }
     } else {
       g.hours += mins / 60; g.sessions += 1; g.last = 0;
