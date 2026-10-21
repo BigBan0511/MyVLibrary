@@ -270,6 +270,20 @@ function applyStage(sys) {
   STAGE.screenAt = at; tvLight.position.set(at.x, at.y, at.z + 14);
   setCartFlaps(0); setFlaps(cartFlaps, 0); setFlaps(pcFlaps, 0); setLids(DEV.cur, 0); DEV.led(false);
 }
+/* where the case waits while you play, lying cover up: on the desk right of the monitor, on the rug
+   left of the console (its lid opens away from it) or on the table right of the console. When it opens
+   the bottom half stays put and the lid swings over to the left, like a real case on a table. */
+const _rqY = new Q4(), _rqF = new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0)), _rv = new V3(), YAX = new V3(0, 1, 0);
+function restPose(c, P, Q) {
+  const D = c.dim, o = easeIO(c.openA); let x, y, z, yaw;
+  if (STAGE.name === 'pc') { x = MON.x + MON.w / 2 + 2 + 1.5 * D.w; z = 10; y = TABLE.top + .1; yaw = -.1; }
+  else if (STAGE.name === 'tv') {
+    const m = DEV.cur && DEV.cur.name === 'ugc' ? UGCS.ready('sys:' + STAGE.sys) : null, s = m ? m.userData.size : null;
+    x = FLOOR_CON.x - (s ? s.x : CON.w) / 2 - 5 - D.w / 2; z = FLOOR_CON.front - (s ? s.z : CON.d) / 2; y = RUG.y * 2; yaw = .14;
+  } else { x = CON.x + CON.w / 2 + 3 + 1.5 * D.w; z = 10; y = TABLE.top; yaw = -.08; }
+  Q.copy(_rqY.setFromAxisAngle(YAX, yaw)).multiply(_rqF);
+  P.set(x, y + D.d / 2, z).add(_rv.set(-D.w / 2 * o, 0, 0).applyQuaternion(Q));
+}
 /* camera boxes for each room */
 function stageBox(view) {
   const narrow = camera.aspect < .95;
@@ -279,7 +293,8 @@ function stageBox(view) {
     /* sitting cross-legged on the rug: the TV at eye height, the cabinet and the console on the rug below */
     return { box: { cx: CAB.x, cy: 50, cz: 25, w: narrow ? 160 : 200, h: narrow ? 230 : 170 }, dir: new V3(0, .1, 1) };
   }
-  if (STAGE.name === 'pc' && view === 'console') return { box: narrow ? { cx: -58, cy: TABLE.top + 26, w: 86, h: 110 } : { cx: -50, cy: TABLE.top + 24, w: 120, h: 72 }, dir: new V3(.04, .2, 1) };
+  /* the tower, the monitor and, right of it, the case you took the disc from */
+  if (STAGE.name === 'pc' && view === 'console') return { box: narrow ? { cx: -40, cy: TABLE.top + 30, w: 104, h: 150 } : { cx: -33, cy: TABLE.top + 24, w: 128, h: 74 }, dir: new V3(.04, .2, 1) };
   return null;
 }
 

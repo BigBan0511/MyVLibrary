@@ -437,6 +437,8 @@ class Case {
       if (pa > 0) { P.z += (this.dim.w + 5 + (this.faceOut ? 6 : 0)) * pa; P.y += 1.5 * pa; }
       return _tp;
     }
+    /* while you play it waits closed beside the machine, lying cover up */
+    if (this.mode === 'rest') { restPose(this, P, Qt); return _tp; }
     const D = this.dim, o = easeIO(this.openA);
     let dist, offX = 0, offY = 0, extra = 0, tx = 0, ty = 0;
     if (this.mode === 'inspect') {
@@ -462,7 +464,7 @@ class Case {
     const tearT = this.wrap ? this.phiAt(this.tear) : this.tearDone;
     this.tearA += (tearT - this.tearA) * (1 - Math.exp(-6 * s));
     if (!this.wrap && this.tearDone && Math.abs(this.tearA - this.tearDone) < .01) { this.tearA = 0; this.tearDone = 0; }
-    const tp = this.targetPose(), k = this.fast ? 26 : (this.mode === 'inspect' || this.mode === 'parked') ? 7 : 9, a = 1 - Math.exp(-k * s);
+    const tp = this.targetPose(), k = this.fast ? 26 : this.mode === 'rest' ? (this.root.position.distanceToSquared(tp.pos) < 4 ? 40 : 6) : (this.mode === 'inspect' || this.mode === 'parked') ? 7 : 9, a = 1 - Math.exp(-k * s);
     this.root.position.lerp(tp.pos, a); this.root.quaternion.slerp(tp.quat, a);
     const sc = this.root.scale.x + ((this.mode === 'parked' ? PARK_SCALE : 1) * (this.vanish ? .02 : 1) - this.root.scale.x) * a; this.root.scale.setScalar(sc);
     const o = this.openA; this.pivot.rotation.y = -Math.PI * o; this.inner.position.x = this.dim.w / 2 * o;

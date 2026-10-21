@@ -391,13 +391,22 @@ function putBack() {
   return guarded(async () => {
     const c = active; setMode('busy');
     if (c.wrap) { c.g.tear = c.tear; saveGame(c.g); }
-    c.flipT = 0; c.mode = 'pulled'; await wait(560);
-    const h = clamp(sfx.slideIn(c.g.fmt), .2, .7);
-    c.mode = 'home'; c.pullHold = 1; c.leaving = true; c.fast = true;
-    await tweenReal(h, t => { c.pullHold = 1 - t; }, t => t * t);
-    c.pullHold = 0; await wait(90); c.fast = false; c.leaving = false; c.setShadow(false); c.placeExtras();
-    stopTrailer(); c.releaseDetail(); active = null; setMode('shelf');
+    await slideHome(c); setMode('shelf');
   }).then(() => { if (pendingRelayout) { pendingRelayout = false; relayout({ follow: back }); } });
+}
+/* the case goes in front of its place and slides in */
+async function slideHome(c) {
+  c.flipT = 0; c.mode = 'pulled'; await wait(560);
+  const h = clamp(sfx.slideIn(c.g.fmt), .2, .7);
+  c.mode = 'home'; c.pullHold = 1; c.leaving = true; c.fast = true;
+  await tweenReal(h, t => { c.pullHold = 1 - t; }, t => t * t);
+  c.pullHold = 0; await wait(90); c.fast = false; c.leaving = false; c.setShadow(false); c.placeExtras();
+  stopTrailer(); c.releaseDetail(); active = null;
+}
+/* once the medium is in the machine the case closes and is laid down beside it */
+async function layDown(c) {
+  c.mode = 'rest'; await waitReal(.15);
+  const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0;
 }
 const _p0 = new V3(), _p1 = new V3(), _p2 = new V3(), _q0 = new Q4(), _q2 = new Q4(), _qz = new Q4(), _qt = new Q4(), ZAX = new V3(0, 0, 1);
 const QFLAT = new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0));
@@ -474,6 +483,7 @@ function insertDisc() {
     await tween(.6, t => { d.position.y = lerp(home.y, above.y, t); d.position.z = lerp(home.z + 1.4, above.z, t); });
     c.mode = 'parked'; setView('console'); prepareIn(P); await wait(750);
     scene.attach(d); _p0.copy(d.position); _q0.copy(d.quaternion); const s0 = d.scale.x;
+    layDown(c);
     _p2.copy(P.entry); _p1.copy(_p0).lerp(_p2, .45); _p1.y = Math.max(_p0.y, _p2.y) + 18;
     await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, 1, t)); _qt.copy(_q0).slerp(P.q, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
     d.scale.setScalar(1); d.quaternion.copy(P.q); d.position.copy(_p2);
@@ -504,7 +514,8 @@ async function restorePlaying(id, seconds) {
   if (moved || (gi >= 0 && (gi !== curGroup || p !== curPage))) { if (gi >= 0) { curGroup = gi; curPage = Math.max(0, p); } layoutPage(); renderPills(); renderBrand(); }
   const c = navOrder.find(q => q.g === g) || getCase(g); if (!c) return;
   if (g.real) await LIB.prepare(g, 1200);
-  active = c; c.ensureDetail(); c.setShadow(true); c.openA = 1; c.mode = 'parked'; c.leaving = true; c.placeExtras();
+  active = c; c.ensureDetail(); c.setShadow(true); c.openA = 0; c.mode = 'rest'; c.leaving = true; c.placeExtras();
+  { const tp = c.targetPose(); c.root.position.copy(tp.pos); c.root.quaternion.copy(tp.quat); c.root.scale.setScalar(1); }
   const d = c.disc, P = portOf(c); scene.attach(d); d.position.copy(P.inside); d.quaternion.copy(P.q); d.scale.setScalar(1); d.visible = P.kind === 'cart' || P.kind === 'socket'; if (P.kind === 'cart') setCartFlaps(1);
   if (P.kind === 'tray') { d.position.z -= pcTray.userData.out; pcTray.attach(d); }
   setLed(true); tvSet('play', c); playStart = performance.now() - (seconds || 0) * 1000;
@@ -520,16 +531,21 @@ function renderPlayBanner() {
    or when you pull the disc yourself while the game keeps running */
 function closeGame(o = {}) {
   if (!active || mode !== 'playing') return;
+  const back = active;
   return guarded(async () => {
-    const c = active, d = c.disc, g = c.g, home = c.discHome, above = discAbove(c, new V3()), P = portOf(c);
+    const c = active, d = c.disc, g = c.g, home = c.discHome, P = portOf(c), rest = c.mode === 'rest';
+    /* into a case lying open on the table the medium drops from straight above */
+    const above = rest ? new V3(home.x, home.y, home.z + 7) : discAbove(c, new V3());
     const mins = Math.max(1, Math.floor((performance.now() - playStart) / 1000));
     /* pulled out by hand while only the shelf was keeping track: stop counting from here */
     const released = PLAYNITE && o.keepRunning && PN_STATE.selfTrack;
     if (released) { LIB.send('release', { id: g.id }); o = Object.assign({}, o, { keepRunning: false, msg: mediaT(g, 'Disco fuera. El tiempo hasta ahora se suma a {0} en Playnite.', g.t) }); }
     PN_STATE.waiting = false; PN_STATE.selfTrack = false; if (!o.keepRunning) PN_STATE.running = null;
     setMode('busy'); tvSet('standby'); setLed(false); sfx.tvOff();
+    /* the case beside the machine opens while the medium comes out */
+    const opened = rest ? (async () => { await waitReal(.3); await swingOpen(c); })() : null;
     await popOut(d, P);
-    afterOut(P); await wait(320);
+    afterOut(P); await wait(320); if (opened) await opened;
     _p0.copy(d.position); _q0.copy(d.quaternion);
     const tmp = new THREE.Object3D(); c.inner.add(tmp); tmp.position.copy(above); tmp.updateMatrixWorld(true);
     tmp.getWorldPosition(_p2); tmp.getWorldQuaternion(_q2); c.inner.remove(tmp);
@@ -551,11 +567,14 @@ function closeGame(o = {}) {
       c.setDust(0); g.dust0 = 0; saveGame(g);
       msg = moved ? T('+{0} min. Ahora está en «{1}».', mins, g.status) : T('+{0} min en {1}. Tus horas ya están en la caja.', mins, g.t);
     }
-    c.dirty = true; c.ensureDetail(); c.refreshSpine(); if (moved) pendingRelayout = true; focus = c;
-    c.mode = 'inspect'; setView('shelf'); await wait(700);
+    c.dirty = true; c.refreshSpine(); if (moved) pendingRelayout = true;
     toast(msg);
-    setMode('open'); startTrailer(c);
-  });
+    /* it closes and goes back to its place */
+    await waitReal(.25);
+    const h = clamp(sfx.caseClose(g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0;
+    setView('shelf'); await waitReal(.2);
+    await slideHome(c); focus = c; setMode('shelf');
+  }).then(() => { if (pendingRelayout) { pendingRelayout = false; relayout({ follow: back }); } });
 }
 
 /* ---------- re-arranging the shelf after a change ---------- */

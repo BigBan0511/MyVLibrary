@@ -24,7 +24,8 @@ function viewPose(name, outPos, outLook) {
     const x = clamp(cam.browseX, SHELF.x0 + 30, SHELF.x1 - 30);
     box = { cx: x, cy: SHELF.board + 11, w: narrow ? 46 : 82, h: 40 }; dir = new V3(0, .06, 1);
   } else if (name === 'console') {
-    box = narrow ? { cx: CON.x - 14, cy: TABLE.top + 22, w: 86, h: 110 } : { cx: (TV.x + CON.x) / 2 + 8, cy: TABLE.top + 26, w: 150, h: 70 }; dir = new V3(-.06, .2, 1);
+    /* the TV, the console and the case resting beside it */
+    box = narrow ? { cx: CON.x + 8, cy: TABLE.top + 22, w: 104, h: 120 } : { cx: (TV.x + CON.x) / 2 + 14, cy: TABLE.top + 26, w: 168, h: 74 }; dir = new V3(-.06, .2, 1);
   } else {
     /* the reference shot: shelf at the top, table and its things below, a little from above */
     box = narrow ? { cx: SHELF.cx, cy: 108, w: 200, h: 130 } : { cx: SHELF.cx, cy: 108, w: 232, h: 122 }; dir = new V3(0, .14, 1);

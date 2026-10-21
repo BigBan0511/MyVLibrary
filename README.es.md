@@ -21,7 +21,7 @@ Cada sistema tiene su sitio. Los juegos de PC están en una balda sobre una mesa
 - **Aparatos para cada medio.** El PC tiene bandeja de CD que sale y entra, disquetera con su luz y una ranura de cartuchos arriba. La consola genérica ID-2 tiene ranura de discos, disquetera y ranura de cartuchos. El disco, el disquete o el cartucho entran por donde les toca.
 - **Tus consolas de EmuVR.** En Ajustes → Consolas y pantallas de EmuVR puedes elegir un archivo `.ugc` de EmuVR para cada sistema, y otro para la tele de tubo, la tele plana o el monitor. Al entrar en la sala de ese sistema, el modelo sustituye a la consola genérica; si trae tapa (como la PlayStation), se abre para meter el disco. Si queda al revés, el botón ↻ lo gira. Los modelos se leen en tu equipo y se guardan en los datos de la extensión: la extensión no incluye ninguno y no se suben a ningún sitio. Los `.ugc` comprimidos con LZMA todavía no se pueden leer.
 - **Tres diseños.** Salas por sistema (el de las imágenes), una sola balda larga sobre la mesa con la tele y la consola, o una fila de estanterías (una por estado, categoría o plataforma). Se cambia en Ajustes → Diseño.
-- **Jugar de verdad.** Al meter el disco, Playnite arranca el juego. Mientras juegas, la tele lo enseña. Al cerrar el juego, el disco vuelve solo a su caja. Si Playnite da el juego por cerrado pero sigue abierto algún programa de su carpeta, el disco se queda dentro hasta que lo cierres y ese tiempo se suma a tus horas.
+- **Jugar de verdad.** Al meter el disco, Playnite arranca el juego. Mientras juegas, la tele lo enseña y la caja espera cerrada junto al aparato: en la mesa, a la derecha del monitor, o en la alfombra, al lado de la consola. Al cerrar el juego, la caja se abre, el disco vuelve solo a ella y la caja vuelve a su sitio en la estantería. Si Playnite da el juego por cerrado pero sigue abierto algún programa de su carpeta, el disco se queda dentro hasta que lo cierres y ese tiempo se suma a tus horas.
 - **Tráiler.** La tele y la contraportada ponen el tráiler del juego: el de Extra Metadata Loader si lo tienes, o el vídeo que venga en la descripción.
 - **Tu idioma.** La estantería sigue el idioma de Playnite (por ahora español e inglés).
 - **Juegos sin estrenar.** Si nunca lo has abierto, llega precintado. Puedes tirar de la lengüeta roja para quitar el precinto.
@@ -111,7 +111,7 @@ node build.mjs                 # web/dist/, lo que lleva la extensión
 ```
 
 - Abre `web/dist/index.html` con un servidor estático (por ejemplo `npx serve web`) y verás la biblioteca de ejemplo.
-- Con `?mock` al final de la dirección, la página finge estar dentro de Playnite. Así se prueba el camino real: carátulas, colores sacados de la carátula, arranque y cierre del juego, y cambios devueltos.
+- Con `?mock` al final de la dirección, la página finge estar dentro de Playnite. Así se prueba el camino real: carátulas, colores sacados de la carátula, arranque y cierre del juego, y cambios devueltos. Con `?mock&running=<id>` la estantería se abre con ese juego ya en marcha.
 
 **La extensión**
 

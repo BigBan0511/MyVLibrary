@@ -259,6 +259,8 @@ const MOCKHOST = {
   lib: null,
   post(m) { setTimeout(() => LIB.onMessage(JSON.parse(JSON.stringify(m))), 40); },
   iso(days) { return days === null || days === undefined ? null : new Date(Date.now() - days * 864e5).toISOString(); },
+  /* ?mock&running=id: the shelf opens while that game is already running */
+  runningAtStart() { const id = new URLSearchParams(location.search).get('running'); return id ? [{ id, seconds: 300 }] : []; },
   build() {
     const base = GAMES.concat(fillerGames(70));
     const plats = ['PC (Windows)', 'PC (Windows)', 'PC (Windows)', 'Sony PlayStation 2', 'Nintendo Switch', 'Sony PlayStation', 'Sega Dreamcast', 'Nintendo GameCube'];
@@ -266,7 +268,7 @@ const MOCKHOST = {
     return base.map((g, i) => ({ id: g.id, name: g.t, sort: g.t, status: ST0[g.id] || g.status, cats: (CAT0[g.id] || []).slice(), plats: [plats[i % plats.length]], genres: [g.genre], devs: [g.dev], pubs: [g.pub], features: g.online ? ['Multijugador en línea', 'Mando'] : ['Un jugador'], series: [], age: [`PEGI ${g.age}`], src: i % 3 ? 'Steam' : 'GOG', year: g.year, release: String(g.year), playtime: Math.round(g.hours * 3600), playCount: g.sessions, lastActivity: this.iso(g.last), added: this.iso(g.added), installed: i % 5 !== 0, score: g.rating ? g.rating * 20 : null, critic: 70 + (i % 25), community: null, hasCover: true, hasBg: true, hasLogo: i % 4 === 1, ver: '1', sum: g.sum }));
   },
   receive(m) {
-    if (m.type === 'ready') { this.lib = this.build(); this.post({ type: 'library', mode: 'desktop', statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib }); }
+    if (m.type === 'ready') { this.lib = this.build(); this.post({ type: 'library', mode: 'desktop', statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib, running: this.runningAtStart() }); }
     if (m.type === 'detail') { const s = this.src.get(m.id); this.post({ type: 'detail', id: m.id, desc: s ? `<p>${esc(s.desc)}</p><p>${esc(s.sum)}</p><script>alert(1)<\/script>` : '', links: [{ name: 'Web oficial', url: 'https://example.com' }, { name: 'Wiki', url: 'https://example.org/wiki' }] }); }
     if (m.type === 'start') { const r = this.lib.find(q => q.id === m.id); if (r && !r.installed) { this.post({ type: 'notInstalled', id: m.id }); return; } setTimeout(() => this.post({ type: 'started', id: m.id }), 1800);
       /* ?mock&leftover: Playnite gives up after a few seconds while the game keeps running */
