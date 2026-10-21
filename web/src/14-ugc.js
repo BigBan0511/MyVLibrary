@@ -414,10 +414,11 @@ const UGC = (() => {
   function makeMaterial(m, made) {
     if (!m) return new THREE.MeshStandardMaterial({ color: '#888888', roughness: .6 });
     if (made.has(m)) return made.get(m);
-    const c = m.col._Color || { r: 1, g: 1, b: 1, a: 1 }, fl = m.fl, T = m.tex;
+    const c = m.col._Color || { r: 1, g: 1, b: 1, a: 1 }, fl = m.fl, T = m.tex, quick = isQuick(m);
     const mat = new THREE.MeshStandardMaterial({ name: m.name, color: new THREE.Color(c.r, c.g, c.b), roughness: 1 - (fl._Glossiness ?? .5), metalness: fl._Metallic || 0 });
     mat.userData.envBase = 1; mat.envMapIntensity = ENV_K; allMats.push(mat);
     if (T._MainTex) mat.map = dataTex(T._MainTex, true);
+    if (quick) { quickShader(mat); made.set(m, mat); return mat; }
     if (T._BumpMap) {
       /* Unity packs normal maps as DXT5nm (X in alpha, Y in green): rebuild an ordinary one */
       const s = pixels(T._BumpMap).rgba; let rs = 0; for (let i = 0; i < s.length; i += 400) rs += s[i]; const packed = rs / (s.length / 400) > 240;
@@ -436,9 +437,34 @@ const UGC = (() => {
     if ((fl._Mode || 0) >= 2) { mat.transparent = true; mat.opacity = c.a; mat.depthWrite = false; }
     made.set(m, mat); return mat;
   }
-  function geometry(md) {
+  /* EmuVR's own consoles use its "EmuVR/Quick" shader (known here by its _Rough setting), which works as follows:
+     - the colour is the mesh's vertex colour;
+     - faces whose UV has x > 0 are decals laid over the body: the texture is an atlas sampled at fract(|uv|),
+       cut out below alpha 0.5, and tinted by the vertex colour (times its red) when x > 1;
+     - the vertex alpha says the finish: under 0.335 metal, above it plastic, and its fraction (×2.985) the
+       roughness. */
+  const isQuick = m => !!m && m.fl._Rough !== undefined;
+  function quickShader(mat) {
+    mat.vertexColors = true; mat.roughness = 1; mat.metalness = 0;
+    mat.onBeforeCompile = sh => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float quickA;\nvarying float vQuickA;').replace('#include <color_vertex>', '#include <color_vertex>\n\tvQuickA = quickA;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vQuickA;')
+        .replace('#include <map_fragment>', mat.map ? 'vec3 quickCol = vColor;\n\tif ( vUv.x > 0.0 ) {\n\t\tvec4 decal = mapTexelToLinear( texture2D( map, fract( abs( vUv ) ) ) );\n\t\tif ( decal.a < 0.5 ) discard;\n\t\tquickCol = vUv.x > 1.0 ? vColor * decal.r : decal.rgb;\n\t}' : 'vec3 quickCol = vColor;')
+        .replace('#include <color_fragment>', 'diffuseColor.rgb *= quickCol;')
+        .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp( fract( vQuickA * 2.985 ), 0.05, 1.0 );')
+        .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vQuickA < 0.335 ? 1.0 : 0.0;');
+    };
+    mat.customProgramCacheKey = () => 'emuvr-quick' + !!mat.map;
+  }
+  function geometry(md, colours) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(md.pos.arr, 3));
+    /* vertex colours and their alpha (only the Quick shader reads them; white plastic when a mesh has none) */
+    if (colours) {
+      const n = md.n, out = new Float32Array(n * 3).fill(1), a = new Float32Array(n).fill(.8);
+      if (md.col) for (let i = 0; i < n; i++) { for (let k = 0; k < 3; k++) out[i * 3 + k] = md.col.arr[i * md.col.dim + k]; if (md.col.dim > 3) a[i] = md.col.arr[i * md.col.dim + 3]; }
+      g.setAttribute('color', new THREE.BufferAttribute(out, 3)); g.setAttribute('quickA', new THREE.BufferAttribute(a, 1));
+    }
     if (md.nrm) g.setAttribute('normal', new THREE.BufferAttribute(md.nrm.arr, 3));
     if (md.uv) { const uv = md.uv.dim === 2 ? md.uv.arr : md.uv.arr.filter((_, i) => i % md.uv.dim < 2); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); }
     const all = [].concat(...md.subs), idx = md.n > 65535 ? new Uint32Array(all) : new Uint16Array(all); g.setIndex(new THREE.BufferAttribute(idx, 1));
@@ -456,7 +482,7 @@ const UGC = (() => {
       o.position.set(n.p.x, n.p.y, n.p.z); o.quaternion.set(n.q.x, n.q.y, n.q.z, n.q.w); o.scale.set(n.s.x, n.s.y, n.s.z);
       if (n.mesh && n.mesh.pos) {
         const mats = n.mesh.subs.map((_, i) => makeMaterial(n.mats[i] || n.mats[0], made));
-        const m = new THREE.Mesh(geometry(n.mesh), mats.length === 1 ? mats[0] : mats); m.name = n.meshName || n.name; m.castShadow = m.receiveShadow = true; m.visible = n.visible !== false;
+        const m = new THREE.Mesh(geometry(n.mesh, n.mesh.subs.some((_, i) => isQuick(n.mats[i] || n.mats[0]))), mats.length === 1 ? mats[0] : mats); m.name = n.meshName || n.name; m.castShadow = m.receiveShadow = true; m.visible = n.visible !== false;
         o.add(m); meshes.push(m); if (/lid|tapa/i.test(n.name)) lids.push(o);
         /* TVs and monitors: the game is shown on the child called screen_mesh (or whatever wears the kit's Screen material) */
         if (/screen_mesh/i.test(n.name) || (!anchors.screen && (n.mats || []).some(mt => mt && /^screen$/i.test(mt.name || '')))) anchors.screen = m;

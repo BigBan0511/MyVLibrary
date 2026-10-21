@@ -282,7 +282,11 @@ function ugcDevice(root) {
         opens = mv.length() > .3 ? hit(s.p, mv.clone().normalize().negate(), mv.length()) < mv.length() : !free(s, [s.y, s.y.clone().negate()], 8).length;
       }
     }
-    pose(opens, false); const ready = sock(), move = moveFrom(opens); pose(opens, false);
+    pose(opens, false); const ready = sock(), move = moveFrom(opens);
+    /* the disc's axis is taken where it ends up (the spindle's, once in) and kept in the socket's own terms:
+       a socket that tilts while the medium goes in (EmuVR's GameCube) must not leave the disc tilted */
+    const played = sock(), na = discAxis(played), nl = [played.x, played.y, played.z].map(a => a.dot(na));
+    pose(opens, false);
     const deep = ready.p.clone().add(move), per = {};
     for (const m of ['disc', 'cart', 'floppy']) {
       const disc = m === 'disc', H = disc ? DIMS.dvd.discR * 2 : MSIZE[m].h, q = new Q4();
@@ -290,7 +294,7 @@ function ugcDevice(root) {
       if (disc) {
         /* the disc lies across the socket, label up (or to the front when it stands); on a tray it comes
            from above, into a slot it slides along the slot */
-        const n = discAxis(ready); if (n.dot(UP) < -.2 || (Math.abs(n.dot(UP)) <= .2 && n.dot(FRONT) < 0)) n.negate();
+        const n = ready.x.clone().multiplyScalar(nl[0]).addScaledVector(ready.y, nl[1]).addScaledVector(ready.z, nl[2]).normalize(); if (n.dot(UP) < -.2 || (Math.abs(n.dot(UP)) <= .2 && n.dot(FRONT) < 0)) n.negate();
         const tray = Math.abs(n.dot(UP)) > .7 && hit(ready.p, n, 20) >= 20;
         if (move.length() > .3 && !(tray && Math.abs(move.clone().normalize().dot(UP)) < .5)) inward = move.clone().normalize();
         else inward = (free(ready, [n, n.clone().negate()], 6)[0] || n).clone().negate();
