@@ -258,8 +258,8 @@ const CAT0 = { faro: ['Partidas cortas', 'Favoritos'], turbo: ['Con amigos', 'Fa
 
 /* viewer preferences */
 const PREF_KEY = 'myvlibrary:prefs';
-const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'tarde', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'wall', room: 'salon', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
-try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}); } catch (e) { }
+const prefs = { v: 2, group: 'status', shelf: '__all', sort: 'alpha', light: 'cine', stage: 'studio', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'wall', room: 'salon', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
+try { const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}; if (!p.v) { delete p.light; p.v = 2; } Object.assign(prefs, p); } catch (e) { }
 function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) { } }
 
 /* dust builds up while a game sits untouched; wiping it is remembered */

@@ -27,6 +27,13 @@
 html,body{height:100%}
 body{background:var(--night);color:var(--ink);font-family:var(--f-body);overflow:hidden;-webkit-font-smoothing:antialiased}
 #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+/* the cinema light: muted colour, a vignette and moving film grain over the room */
+.cine #gl{filter:saturate(.84) contrast(1.06) brightness(1.02)}
+#grade{position:fixed;inset:0;z-index:1;pointer-events:none;display:none;background:radial-gradient(ellipse 75% 70% at 50% 46%,rgba(0,0,0,0) 52%,rgba(0,0,0,.28) 80%,rgba(0,0,0,.62) 100%)}
+.cine #grade{display:block}
+#grade::after{content:"";position:absolute;inset:-60px;background-image:var(--grain);opacity:.075;mix-blend-mode:overlay;animation:grain .5s steps(5) infinite}
+@keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-23px,14px)}40%{transform:translate(17px,-29px)}60%{transform:translate(-31px,-9px)}80%{transform:translate(26px,21px)}}
+@media (prefers-reduced-motion:reduce){#grade::after{animation:none}}
 .film{position:fixed;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse 75% 70% at 50% 48%,rgba(0,0,0,0) 55%,rgba(0,0,0,.42) 100%)}
 button,select,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
@@ -308,6 +315,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 </style>
 
 <canvas id="gl" tabindex="0" aria-label="Estantería de videojuegos en 3D"></canvas>
+<div id="grade" aria-hidden="true"></div>
 <div class="film" id="film" aria-hidden="true"></div>
 
 <header class="hud-top">
@@ -330,12 +338,13 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="set-row"><span>Estantes</span><div class="seg" data-pref="group"><button type="button" data-v="status">Estado</button><button type="button" data-v="cat">Categoría</button><button type="button" data-v="plat">Plataforma</button><button type="button" data-v="fmt">Formato</button><button type="button" data-v="all">Todo</button></div></div>
   <div class="set-row"><span>Orden</span><div class="seg" data-pref="sort"><button type="button" data-v="alpha">A–Z</button><button type="button" data-v="hours">Horas</button><button type="button" data-v="recent">Recientes</button><button type="button" data-v="added">Añadidos</button><button type="button" data-v="year">Año</button></div></div>
   <div class="set-row"><span>Ambiente</span><div class="rooms" id="roomPick"></div></div>
-  <div class="set-row"><span>Luz</span><div class="seg" data-pref="light"><button type="button" data-v="noche">Noche</button><button type="button" data-v="tarde">Tarde</button><button type="button" data-v="dia">Día</button></div></div>
+  <div class="set-row"><span>Luz</span><div class="seg" data-pref="light"><button type="button" data-v="cine">Cine</button><button type="button" data-v="noche">Noche</button><button type="button" data-v="tarde">Tarde</button><button type="button" data-v="dia">Día</button></div></div>
   <div class="set-row"><span>Precinto</span><div class="seg" data-pref="seal"><button type="button" data-v="ask">Preguntar</button><button type="button" data-v="manual">A mano</button><button type="button" data-v="auto">Quitar solo</button></div></div>
   <div class="set-row demo-only"><span>Al terminar una partida</span><div class="seg" data-pref="autoStatus"><button type="button" data-v="off">No cambiar nada</button><button type="button" data-v="on">Marcar «Jugando»</button></div></div>
   <div class="set-row"><span>Sonido</span><div class="seg" data-pref="sound"><button type="button" data-v="on">Sí</button><button type="button" data-v="off">No</button></div></div>
   <div class="set-row"><span>Volumen de los efectos <b id="volVal" class="vol-val"></b></span><input id="volRange" class="vol" type="range" min="0" max="100" step="5"></div>
   <div class="set-row"><span>Tráiler</span><div class="seg" data-pref="trailer"><button type="button" data-v="on">Con sonido</button><button type="button" data-v="mute">Sin sonido</button><button type="button" data-v="off">No</button></div></div>
+  <div class="set-row"><span>Al sacar un juego</span><div class="seg" data-pref="stage"><button type="button" data-v="studio">Estudio</button><button type="button" data-v="room">En la habitación</button></div></div>
   <div class="set-row"><span>Ficha al sacar un juego</span><div class="seg" data-pref="cardStart"><button type="button" data-v="hide">Plegada</button><button type="button" data-v="show">Abierta</button></div></div>
   <p class="set-note">Los juegos que nunca has abierto llegan precintados: con «A mano» el precinto solo se quita tirando de la lengüeta. Los estados y categorías solo cambian cuando tú los cambias.</p>
   <p class="set-ver">MyVLibrary <!--VERSION--></p>

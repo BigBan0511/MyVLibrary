@@ -3,7 +3,27 @@
    ===================================================================== */
 const tvCtx = tvC.getContext('2d');
 const tvVig = tvCtx.createRadialGradient(256, 192, 170, 256, 192, 360); tvVig.addColorStop(0, 'rgba(0,0,0,0)'); tvVig.addColorStop(1, 'rgba(0,0,0,.42)');
-const tv = { state: 'standby', t0: 0, g: null, art: null, wide: null, last: 0, sky: null };
+const tv = { state: 'standby', t0: 0, g: null, art: null, wide: null, last: 0, sky: null, noiseUntil: 0, snow: null };
+/* changing channel: a burst of snow between pictures */
+const NOISY = { standby: 1, channel: 1, trailer: 1 };
+function makeSnow() {
+  return [0, 1, 2, 3].map(k => { const c = mkCanvas(160, 120), x = c.getContext('2d'), r = rng(900 + k), img = x.createImageData(160, 120);
+    for (let i = 0; i < 160 * 120; i++) { const v = r() * 255 | 0; img.data[i * 4] = v; img.data[i * 4 + 1] = v; img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255; }
+    x.putImageData(img, 0, 0); return c; });
+}
+function channelOf(g) { return String(2 + hash(g.id + 'ch') % 68).padStart(2, '0'); }
+/* the on-screen display of an old set: channel at the top right, title and studio in green at the bottom left */
+function osd(x, W, H, g, t) {
+  if (!g) return;
+  x.save(); x.textBaseline = 'alphabetic'; x.shadowColor = 'rgba(0,0,0,.85)'; x.shadowBlur = 0; x.shadowOffsetX = 2; x.shadowOffsetY = 2;
+  x.fillStyle = '#9dff9d'; x.font = `700 26px ${F.mono}`; x.textAlign = 'right';
+  if (t < 4) x.fillText('CH ' + channelOf(g), W - 44, 60);
+  x.textAlign = 'left'; let fs = 24; x.font = `700 ${fs}px ${F.mono}`; const title = g.t.toUpperCase();
+  while (x.measureText(title).width > W * .8 && fs > 12) { fs -= 1; x.font = `700 ${fs}px ${F.mono}`; }
+  x.fillStyle = '#f2fff2'; x.fillText(title, 40, H - 58);
+  x.fillStyle = '#9dff9d'; x.font = `700 17px ${F.mono}`; x.fillText([g.dev, g.year].filter(Boolean).join(' · ').slice(0, 40), 40, H - 34);
+  x.restore();
+}
 /* the idle picture: a washed-out sky drifting by, like an old channel left on */
 function makeSkyTape() {
   const W = 1024, H = 384, c = mkCanvas(W, H), x = c.getContext('2d'), r = rng(808);
@@ -20,6 +40,9 @@ function makeSkyTape() {
   return c;
 }
 function tvSet(state, c) {
+  /* the same game going from its picture to its trailer (or back) stays on the channel */
+  const same = (!c || c.g === tv.g) && ((state === 'trailer' && tv.state === 'channel') || (state === 'channel' && tv.state === 'trailer'));
+  if (NOISY[state] && !same && (state !== tv.state || (c && c.g !== tv.g))) tv.noiseUntil = performance.now() + 380 * SPEED;
   tv.state = state; tv.t0 = performance.now();
   if (c && tv.g !== c.g) {
     tv.g = c.g; tv.art = c.coverCanvas; tv.wide = mkCanvas(1024, 384); const wx = tv.wide.getContext('2d');
@@ -31,7 +54,12 @@ function drawTV(now) {
   if (now - tv.last < 40) return; tv.last = now;
   const x = tvCtx, W = 512, H = 384, t = (now - tv.t0) / 1000;
   x.globalAlpha = 1; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowBlur = 0;
-  if (tv.state === 'standby') {
+  if (now < tv.noiseUntil) {
+    if (!tv.snow) tv.snow = makeSnow();
+    x.imageSmoothingEnabled = false; x.drawImage(tv.snow[(now / 40 | 0) % 4], 0, 0, W, H); x.imageSmoothingEnabled = true;
+    x.fillStyle = 'rgba(0,0,0,.25)'; const roll = (now * .4) % H; x.fillRect(0, roll, W, 40);
+    x.fillStyle = '#9dff9d'; x.font = `700 26px ${F.mono}`; x.textAlign = 'right'; x.fillText('CH --', W - 44, 60);
+  } else if (tv.state === 'standby') {
     if (!tv.sky) tv.sky = makeSkyTape();
     const off = (now * .006) % 1024; x.drawImage(tv.sky, -off, 0); x.drawImage(tv.sky, 1024 - off, 0);
     x.fillStyle = 'rgba(255,255,255,.06)'; const band = (now * .05) % (H + 60) - 30; x.fillRect(0, band, W, 18);
@@ -59,6 +87,13 @@ function drawTV(now) {
   } else if (tv.state === 'trailer') {
     drawTrailerFrame(x, W, H);
     x.fillStyle = 'rgba(0,0,0,.45)'; x.fillRect(14, 14, 98, 24); x.fillStyle = '#ffffff'; x.font = `700 13px ${F.mono}`; x.textAlign = 'left'; x.fillText('▶ ' + T('TRÁILER'), 22, 27); x.textAlign = 'center';
+    osd(x, W, H, tv.g, t);
+  } else if (tv.state === 'channel' && tv.g) {
+    /* the game in your hands is on: its picture drifting slowly, with the channel's caption */
+    const wa = tv.wide; if (wa) { const off = (Math.sin(t * .18) * .5 + .5) * (wa.width - W * 1.1); x.drawImage(wa, -off, -10, wa.width, wa.height + 20); } else { x.fillStyle = '#000'; x.fillRect(0, 0, W, H); }
+    x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(0, 0, W, H);
+    if (Math.random() < .05) { x.fillStyle = 'rgba(255,255,255,.08)'; x.fillRect(0, Math.random() * H, W, 3 + Math.random() * 6); }
+    osd(x, W, H, tv.g, t);
   } else if (tv.state === 'play' && tv.wide) {
     const g = tv.g, wa = tv.wide, off = (Math.sin(t * .22) * .5 + .5) * (wa.width - W); x.drawImage(wa, -off, 0);
     if (g.real) {
@@ -81,7 +116,7 @@ function drawTV(now) {
 function updateTvLight(now) {
   let col = '#5d8be0', I = .32;
   if (tv.state === 'boot') { col = '#ffb547'; I = .45; }
-  if ((tv.state === 'title' || tv.state === 'play' || tv.state === 'wait') && tv.g) { col = tv.g.pal[2]; I = .6 + Math.sin(now * .013) * .06 + (Math.random() - .5) * .05; }
+  if ((tv.state === 'title' || tv.state === 'play' || tv.state === 'wait' || tv.state === 'channel') && tv.g) { col = tv.g.pal[2]; I = .6 + Math.sin(now * .013) * .06 + (Math.random() - .5) * .05; }
   tvLight.color.lerp(new THREE.Color(col), .08); tvLight.intensity += (I - tvLight.intensity) * .08;
 }
 function setLed(on) { const d = DEV[devKind]; if (d) d.led(on); }
@@ -91,12 +126,12 @@ const trailer = { video: null, c: null, ready: false, lastBack: 0 };
 function trailerVolume() { return prefs.sound === 'off' || prefs.trailer !== 'on' ? 0 : clamp(prefs.vol / 100, 0, 1) * .7; }
 function startTrailer(c) {
   if (!c || !c.g.trailerUrl || prefs.trailer === 'off') return;
-  if (trailer.c === c && trailer.video) { trailer.video.play().catch(() => { }); if (trailer.ready && tv.state === 'standby') tvSet('trailer', c); return; }
+  if (trailer.c === c && trailer.video) { trailer.video.play().catch(() => { }); if (trailer.ready && (tv.state === 'standby' || tv.state === 'channel')) tvSet('trailer', c); return; }
   stopTrailer();
   const v = document.createElement('video'); v.crossOrigin = 'anonymous'; v.loop = true; v.playsInline = true; v.preload = 'auto';
   v.volume = trailerVolume(); v.muted = v.volume === 0; v.src = c.g.trailerUrl;
   trailer.video = v; trailer.c = c; trailer.ready = false;
-  v.addEventListener('canplay', () => { if (trailer.video !== v) return; trailer.ready = true; if (active === c && (mode === 'inspect' || mode === 'open' || mode === 'manual')) tvSet('trailer', c); }, { once: true });
+  v.addEventListener('canplay', () => { if (trailer.video !== v) return; trailer.ready = true; if (active === c && (mode === 'inspect' || mode === 'open' || mode === 'manual' || mode === 'busy') && c.mode === 'inspect') tvSet('trailer', c); }, { once: true });
   v.addEventListener('error', () => { if (trailer.video === v) stopTrailer(); }, { once: true });
   v.play().catch(() => { v.muted = true; v.play().catch(() => { }); });
 }
@@ -104,7 +139,7 @@ function stopTrailer() {
   const v = trailer.video; if (!v) return;
   try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) { }
   trailer.video = null; trailer.c = null; trailer.ready = false;
-  if (tv.state === 'trailer') tvSet('standby');
+  if (tv.state === 'trailer') tvSet(active && active.mode === 'inspect' ? 'channel' : 'standby', active);
 }
 function drawTrailerFrame(x, W, H) {
   const v = trailer.video; if (!v || v.readyState < 2) { x.fillStyle = '#000'; x.fillRect(0, 0, W, H); return; }

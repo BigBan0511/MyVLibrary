@@ -21,7 +21,8 @@ Cada juego es una caja en una balda de pared. La sacas, le quitas el precinto, l
 - **Juegos sin estrenar.** Si nunca lo has abierto, llega precintado. Puedes tirar de la lengüeta roja para quitar el precinto.
 - **Polvo.** Lo que llevas tiempo sin tocar coge polvo, y se quita frotando la caja.
 - **Cambios que se guardan en Playnite.** Estado, categorías, valoración (estrellas) y notas. Nada cambia solo: solo cuando tú lo cambias.
-- **Ambientes.** Salón (el de la imagen), Nórdico, Acogedor, Cabaña, Japonés, Biblioteca, Loft, Videoclub, Gamer y Nave. También hay tres luces: noche, tarde y día.
+- **Luz de cine y estudio.** Por defecto la habitación está oscura, con un foco cálido desde arriba a la izquierda sobre la mesa, colores apagados y un poco de grano. Al sacar un juego, la habitación se funde a un estudio gris. La caja da una vuelta mientras se abre, la tapa rebota un poco al cerrarse, las esquinas sueltan destellos y puedes girarla arrastrando (vuelve sola). La tele cambia de canal con nieve y enseña el juego con su rótulo, y la pizarra se escribe sola. Si prefieres que la caja se quede en la habitación: Ajustes → Al sacar un juego.
+- **Ambientes.** Salón (el de la imagen), Nórdico, Acogedor, Cabaña, Japonés, Biblioteca, Loft, Videoclub, Gamer y Nave. También hay cuatro luces: cine, noche, tarde y día.
 
 ![Caja abierta con el disco y el manual](docs/caja-abierta.png)
 
@@ -117,6 +118,11 @@ node build.mjs                 # web/dist/, lo que lleva la extensión
 - Página y extensión se pasan mensajes JSON con `chrome.webview.postMessage`.
 - La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory` y `release`.
 - La extensión responde con `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad` y `focus`.
+
+## Créditos
+
+- El aspecto y el recorrido vienen del tema «CD Shelf» de Spicetify que se enseñó en r/spicetify.
+- El movimiento al abrir y cerrar la caja (curvas a mano suavizadas con splines cúbicos monótonos) y la luz del estudio siguen a [cd-case](https://github.com/annnguyentt/vibe-coding/tree/main/cd-case), de Ann Nguyen ([@ann_nnng](https://x.com/ann_nnng)).
 
 ## Licencia
 

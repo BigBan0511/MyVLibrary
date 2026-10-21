@@ -265,7 +265,7 @@ function pick(c) {
     /* the machine this game needs comes onto the table while you look at the box */
     ensureDevice(mediaOf(c.g.fmt));
     if (c.g.real) await LIB.prepare(c.g, 1500);
-    c.ensureDetail(); c.setShadow(true);
+    c.ensureDetail(); c.setShadow(true); tvSet('channel', c);
     /* the case slides out for as long as the recorded scrape lasts and comes free on its loudest moment */
     const h = clamp(sfx.slide(c.g.fmt), .18, .7);
     if (c.g.dust > .15) emit(spineWorld(c, _sp), Math.round(30 + c.g.dust * 70), 1.4, 1.5);
@@ -281,7 +281,12 @@ function pick(c) {
 }
 function flipCase() { if (!active || busy || mode !== 'inspect') return; active.flipT = active.flipT ? 0 : Math.PI; sfx.handle(active.g.fmt); renderPrompts(); }
 /* the lid starts to swing when the latch lets go in the recording */
-async function swingOpen(c) { const h = sfx.caseOpen(c.g.fmt); await waitReal(h - .01); await tween(.75, t => { c.openA = t; }, easeIO); }
+/* in the studio the case turns once round as the lid opens (the hinge sound lands as the lid lets go); in the room it just opens */
+const spinStage = () => !RM && prefs.stage !== 'room';
+async function swingOpen(c) {
+  if (!spinStage()) { const h = sfx.caseOpen(c.g.fmt); await waitReal(h - .01); await tween(.75, t => { c.openA = t; }, easeIO); return; }
+  sfx.play('caseOpen', c.g.fmt, { hitAt: .97 * SPEED }); await playMotion(c, OPEN_K, OPEN_T); c.openA = 1;
+}
 function openCase() {
   if (!active || mode !== 'inspect') return;
   if (active.wrap) { if (prefs.seal === 'manual') { toast(T('Primero quita el precinto tirando de la lengüeta roja')); return; } return unwrapAction(); }
@@ -320,7 +325,12 @@ async function finishWrap(c) {
 }
 function closeCase(internal) {
   /* the lid speeds up and lands exactly on the recorded snap */
-  const run = async () => { const c = active; if (!internal) setMode('busy'); const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0; if (!internal) setMode('inspect'); };
+  const run = async () => {
+    const c = active; if (!internal) setMode('busy');
+    if (!internal && spinStage()) { sfx.play('caseClose', c.g.fmt, { hitAt: 1.7 * SPEED }); await playMotion(c, CLOSE_K, CLOSE_T); }
+    else { const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); }
+    c.openA = 0; if (!internal) setMode('inspect');
+  };
   if (internal) return run();
   if (!active || mode !== 'open') return;
   return guarded(run);
@@ -336,7 +346,7 @@ function putBack() {
     c.mode = 'home'; c.pullHold = 1; c.leaving = true; c.fast = true;
     await tweenReal(h, t => { c.pullHold = 1 - t; }, t => t * t);
     c.pullHold = 0; await wait(90); c.fast = false; c.leaving = false; c.setShadow(false); c.placeExtras();
-    stopTrailer(); c.releaseDetail(); active = null; setMode('shelf');
+    stopTrailer(); c.releaseDetail(); active = null; tvSet('standby'); setMode('shelf');
   }).then(() => { if (pendingRelayout) { pendingRelayout = false; relayout({ follow: back }); } });
 }
 const _p0 = new V3(), _p1 = new V3(), _p2 = new V3(), _q0 = new Q4(), _q2 = new Q4(), _qz = new Q4(), _qt = new Q4(), ZAX = new V3(0, 0, 1);
@@ -470,7 +480,7 @@ function closeGame(o = {}) {
       msg = moved ? T('+{0} min. Ahora está en «{1}».', mins, g.status) : T('+{0} min en {1}. Tus horas ya están en la caja.', mins, g.t);
     }
     c.dirty = true; c.ensureDetail(); c.refreshSpine(); if (moved) pendingRelayout = true; focus = c;
-    c.mode = 'inspect'; setView('shelf'); await wait(700);
+    c.mode = 'inspect'; setView('shelf'); tvSet('channel', c); await wait(700);
     toast(msg);
     setMode('open'); startTrailer(c);
   });

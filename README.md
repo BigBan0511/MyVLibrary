@@ -21,7 +21,8 @@ Every game is a case on a wall shelf. You take it down, peel off the shrink wrap
 - **Unplayed games.** If you have never opened a game, it arrives shrink-wrapped. Pull the red tab to peel the wrap off.
 - **Dust.** Games you haven't touched in a while gather dust, and you wipe it off by rubbing the case.
 - **Changes saved to Playnite.** Status, categories, rating (stars) and notes. Nothing changes by itself, only when you change it.
-- **Rooms.** Living room (the one in the picture), Nordic, Cosy, Cabin, Japanese, Library, Industrial loft, Video store, Gamer and Spaceship. There are also three lights: night, evening and day.
+- **Cinema light and the studio.** By default the room is dark, with one warm spot from the upper left on the table, muted colours and a little film grain. When you take a game out, the room fades to a grey studio. The case turns once round as it opens, the lid lands with a small bounce, the corners catch little stars of light, and you can turn it by dragging (it springs back). The TV changes channel with a burst of snow and shows the game with its caption, and the whiteboard writes itself. You can keep the case in the room instead (Settings → When you take out a game).
+- **Rooms.** Living room (the one in the picture), Nordic, Cosy, Cabin, Japanese, Library, Industrial loft, Video store, Gamer and Spaceship. There are also four lights: cinema, night, evening and day.
 
 ![Open case with the disc and the manual](docs/caja-abierta.png)
 
@@ -117,6 +118,11 @@ node build.mjs                 # web/dist/, what the extension ships
 - The page and the extension exchange JSON messages with `chrome.webview.postMessage`.
 - The page sends: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory` and `release`.
 - The extension answers with `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad` and `focus`.
+
+## Credits
+
+- The look and the flow come from the "CD Shelf" Spicetify theme shown on r/spicetify.
+- The case's open and close motion (hand-keyed curves smoothed with monotone cubic splines) and the studio light follow [cd-case](https://github.com/annnguyentt/vibe-coding/tree/main/cd-case) by Ann Nguyen ([@ann_nnng](https://x.com/ann_nnng)).
 
 ## License
 

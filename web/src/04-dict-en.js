@@ -54,7 +54,8 @@ DICT.en = {
   'Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y {0} sale cuando lo cierres.': 'Playnite thinks it has closed, but it is still open: the shelf keeps the time and {0} comes out when you close it.',
   'Playnite cuenta el tiempo. Al cerrar el juego, {0} vuelve solo a su caja.': 'Playnite counts the time. When you close the game, {0} goes back to its case.',
   '{0} El tiempo hasta ahora se suma a {1} en Playnite.': '{0} The time so far is added to {1} in Playnite.',
-  'Al cerrar el juego, {0} vuelve solo a su caja': 'When you close the game, {0} goes back to its case', 'Esc para sacar {0}': 'Esc to take out {0}'
+  'Al cerrar el juego, {0} vuelve solo a su caja': 'When you close the game, {0} goes back to its case', 'Esc para sacar {0}': 'Esc to take out {0}',
+  'Cine': 'Cinema', 'Al sacar un juego': 'When you take out a game', 'Estudio': 'Studio', 'En la habitación': 'In the room'
 };
 /* the page itself was translated before the dictionary existed */
 if (document.body) applyDomLang();

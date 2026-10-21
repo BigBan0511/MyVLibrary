@@ -19,6 +19,9 @@ function onDrag(px, py) {
     drag.acc += dist / pxPerCm; if (drag.acc > 1.1) { sfx.crinkle(.8); drag.acc = 0; }
     c.updateStrip(); const th = $('#tearHint'); if (th) th.textContent = tearHintText(c);
     if (c.tear >= c.L - .01) { drag = null; c.dragging = false; canvasEl.style.cursor = 'default'; guarded(async () => { setMode('busy'); await finishWrap(c); setMode('inspect'); }); }
+  } else if (drag.kind === 'turn') {
+    /* turning the case by hand; it springs back when you let go */
+    const gb = c.grab; gb.y = clamp(gb.y + (pointer.cx - px) * .008, -.9, .9); gb.x = clamp(gb.x + (pointer.cy - py) * .006, -.45, .45); gb.vx = gb.vy = 0;
   } else if (drag.kind === 'wipe') {
     if (drag.moved < 8) return;
     const h = hit([c.shell, c.lid, c.spine]);
@@ -35,6 +38,7 @@ function endDrag() {
   if (!drag) return;
   if (active && drag.kind === 'tear' && active.wrap) { active.dragging = false; active.g.tear = active.tear; saveGame(active.g); }
   if (active && drag.kind === 'wipe') saveGame(active.g);
+  if (active) active.grab.held = false;
   drag = null; canvasEl.style.cursor = 'default';
 }
 canvasEl.addEventListener('pointermove', e => {
@@ -53,11 +57,12 @@ canvasEl.addEventListener('pointermove', e => {
 canvasEl.addEventListener('pointerleave', () => { if (mode === 'shelf' && !kbNav) setHovered(null); });
 canvasEl.addEventListener('pointerdown', e => {
   sfx.init(); pointer.type = e.pointerType || 'mouse'; setPointer(e); pointer.down = { x: e.clientX, y: e.clientY };
-  if (mode === 'inspect' && active && !busy) {
+  if ((mode === 'inspect' || mode === 'open') && active && !busy) {
     const h = hit();
     if (h && h.case === active) {
-      if (active.wrap && h.part === 'tab') { drag = { kind: 'tear', moved: 0, acc: 0 }; active.dragging = true; active.flipT = 0; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { } canvasEl.style.cursor = 'grabbing'; return; }
-      if (active.g.dust > .02) { drag = { kind: 'wipe', moved: 0, acc: 0 }; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { } }
+      if (mode === 'inspect' && active.wrap && h.part === 'tab') { drag = { kind: 'tear', moved: 0, acc: 0 }; active.dragging = true; active.flipT = 0; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { } canvasEl.style.cursor = 'grabbing'; return; }
+      if (mode === 'inspect' && active.g.dust > .02) { drag = { kind: 'wipe', moved: 0, acc: 0 }; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { } return; }
+      drag = { kind: 'turn', moved: 0 }; active.grab.held = true; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { }
     }
   }
 });
@@ -135,7 +140,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   if (LIB.paused || document.hidden) { lastT = now; return; }
   const dt = clamp((now - lastT) / 1000, 0, .05); lastT = now;
-  runTweens(now); updateCamera(dt); updateRoom(dt, now); pollGamepad(dt);
+  runTweens(now); updateCamera(dt); updateRoom(dt, now); pollGamepad(dt); updateStudio(dt, now);
   const inspecting = (mode === 'inspect' || mode === 'open') && !drag;
   tilt.tx = inspecting && pointer.type === 'mouse' && !RM ? -pointer.y * .1 : 0; tilt.ty = inspecting && pointer.type === 'mouse' && !RM ? pointer.x * .16 : 0;
   tilt.x += (tilt.tx - tilt.x) * (1 - Math.exp(-5 * dt)); tilt.y += (tilt.ty - tilt.y) * (1 - Math.exp(-5 * dt));
@@ -145,7 +150,7 @@ function frame(now) {
     const on = mode === 'open';
     active.discLabelMat.emissive.setScalar(on && hoverPart === 'disc' ? .16 : 0);
     active.manMat.emissive.setScalar(on && hoverPart === 'manual' ? .14 : 0);
-    if (on) active.disc.rotation.z += dt * (hoverPart === 'disc' ? 1.2 : 0);
+    if (on && mediaOf(active.g.fmt) === 'disc') active.disc.rotation.z += dt * (hoverPart === 'disc' ? 1.2 : 0);
   }
   updateParticles(dt); updateMotes(dt, now); updateContacts();
   drawTV(now); updateTvLight(now); drawBoard(); updateBackTrailer(now);
@@ -185,5 +190,5 @@ async function boot() {
   if (PLAYNITE && LIB.running && LIB.running.length) { const r = LIB.running[0]; setTimeout(() => restorePlaying(r.id, r.seconds), 600); }
   else if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
 }
-window.__mvl = { room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, state: () => ({ mode, busy, view: cam.view, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB, games: () => navOrder.map(c => ({ id: c.g.id, t: c.g.t, installed: c.g.installed })), ui: () => ({ toast: $('#toast').textContent, note: $('#playNote').textContent, eyebrow: $('#playEyebrow').textContent, pn: Object.assign({}, PN_STATE, { pendingEject: !!PN_STATE.pendingEject }), playnite: PLAYNITE }) };
+window.__mvl = { room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, state: () => ({ mode, busy, view: cam.view, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB, games: () => navOrder.map(c => ({ id: c.g.id, t: c.g.t, installed: c.g.installed })), ui: () => ({ studio: +studio.a.toFixed(3), bdOp: backdrop.material.opacity, bdVis: backdrop.visible, toast: $('#toast').textContent, note: $('#playNote').textContent, eyebrow: $('#playEyebrow').textContent, pn: Object.assign({}, PN_STATE, { pendingEject: !!PN_STATE.pendingEject }), playnite: PLAYNITE }) };
 boot();

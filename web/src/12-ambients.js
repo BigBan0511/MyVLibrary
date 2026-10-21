@@ -652,12 +652,16 @@ const ledLights = [-62, 0, 62].map(dx => { const l = new THREE.PointLight('#ffd5
 
 /* ---------- light presets ---------- */
 const LIGHT = {
+  /* the look of the CD Shelf video: a dark room, one warm spot from the upper left on the table, the rest in shadow */
+  cine: { exp: .96, env: .36, hemi: .05, key: 2.6, keyCol: '#ffcf9c', lamp: .6, shade: .5, led: .7, motes: .3, fill: .16, bg: '#080908', keyPos: [-150, 330, 215], keyAim: [-6, 80, 8], angle: .4, grade: true },
   noche: { exp: .95, env: .45, hemi: .12, key: .8, keyCol: '#ffc28a', lamp: 1.7, shade: .95, led: 1.35, motes: .16, fill: .55, bg: '#0b0a0c' },
   tarde: { exp: 1.05, env: .7, hemi: .22, key: 1.15, keyCol: '#ffcc98', lamp: 1.05, shade: .6, led: .95, motes: .26, fill: .8, bg: '#141210' },
   dia: { exp: 1.1, env: 1.0, hemi: .45, key: 1.4, keyCol: '#fff2e2', lamp: .25, shade: .15, led: .35, motes: .2, fill: .95, bg: '#26232a' }
 };
 let LP = LIGHT.tarde;
-function applyLight(name) { LP = LIGHT[name] || LIGHT.tarde; applyEnv(); }
+/* film grain for the cinema light, made once */
+try { document.documentElement.style.setProperty('--grain', `url(${makeGrainCanvas(7, 160, 128, 90).toDataURL()})`); } catch (e) { }
+function applyLight(name) { LP = LIGHT[name] || LIGHT.tarde; applyEnv(); document.documentElement.classList.toggle('cine', !!LP.grade); }
 
 function setSurface(mat, spec) { mat.map = spec.map || null; mat.color.set(spec.color); mat.roughness = spec.rough; mat.metalness = spec.metal || 0; mat.needsUpdate = true; }
 function applyRoom(name) {
@@ -693,6 +697,7 @@ function applyEnv() {
   renderer.toneMappingExposure = L.exp * (R.expMul || 1); setEnvK(L.env * R.envMul);
   hemi.color.set(R.sky); hemi.groundColor.set(R.ground); hemi.intensity = L.hemi * R.hemiMul;
   key.intensity = L.key * R.keyMul; key.color.set(L.keyCol).lerp(new THREE.Color(R.keyTint), .55);
+  KEY_POS.fromArray(L.keyPos || KEY_POS0); KEY_AIM.fromArray(L.keyAim || KEY_AIM0); key.angle = L.angle || .62; fill.intensity = L.grade ? .07 : .16;
   lampLight.intensity = R.lamp ? L.lamp : 0; lampShadeMat.emissiveIntensity = R.lamp ? L.shade : 0;
   shelfFill.forEach(l => { l.intensity = L.fill * (R.fillMul ?? 1); l.color.set(R.keyTint).lerp(new THREE.Color('#ffffff'), .5); });
   ledBase.set(R.led); stripLedMat.color.copy(ledBase).multiplyScalar(.25 + L.led * R.ledMul * .9); ledLights.forEach(l => { l.color.copy(ledBase); l.intensity = L.led * R.ledMul * .55; });

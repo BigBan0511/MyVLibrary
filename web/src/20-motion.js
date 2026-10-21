@@ -6,6 +6,42 @@ const tweens = [];
 function tween(dur, fn, ease = easeIO) { return new Promise(res => tweens.push({ t0: performance.now(), dur: Math.max(1, dur * 1000 * SPEED), fn, ease, res })); }
 function runTweens(now) { for (let i = tweens.length - 1; i >= 0; i--) { const tw = tweens[i], t = clamp((now - tw.t0) / tw.dur, 0, 1); tw.fn(tw.ease(t)); if (t >= 1) { tweens.splice(i, 1); tw.res(); } } }
 const wait = ms => new Promise(r => setTimeout(r, ms * SPEED));
+/* hand-keyed motion smoothed with monotone cubic splines (the way Ann Nguyen's cd-case moves) */
+function keyCurve(frames) {
+  const n = frames.length, ts = frames.map(f => f[0]), vs = frames.map(f => f[1]), d = [], m = new Array(n).fill(0);
+  for (let i = 0; i < n - 1; i++) d.push((vs[i + 1] - vs[i]) / (ts[i + 1] - ts[i]));
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+    if (s > 9) { const k = 3 / Math.sqrt(s); m[i] = k * a * d[i]; m[i + 1] = k * b * d[i]; }
+  }
+  return t => {
+    if (t <= ts[0]) return vs[0]; if (t >= ts[n - 1]) return vs[n - 1];
+    let i = 0; while (t > ts[i + 1]) i++;
+    const h = ts[i + 1] - ts[i], u = (t - ts[i]) / h, u2 = u * u, u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * vs[i] + (u3 - 2 * u2 + u) * h * m[i] + (-2 * u3 + 3 * u2) * vs[i + 1] + (u3 - u2) * h * m[i + 1];
+  };
+}
+/* opening: the case turns once round while the lid swings and the two halves spread; closing: the lid lands with a small bounce */
+const LID_OPEN = 3.05, OPEN_T = 2.3, CLOSE_T = 1.95;
+const OPEN_K = {
+  yaw: keyCurve([[0, 0], [.55, .3], [1, .85], [1.2, 2], [1.41, 3.4], [1.63, 4.9], [1.85, 6.05], [2.05, 6.36], [2.3, 2 * Math.PI]]),
+  lid: keyCurve([[0, 0], [.97, 0], [1.2, .45], [1.41, 1.35], [1.63, 2.3], [1.85, 2.92], [2.05, 3.12], [2.3, LID_OPEN]]),
+  spread: keyCurve([[0, 0], [1.12, 0], [1.9, .9], [2.3, 1]]),
+  pitch: keyCurve([[0, 0], [1.35, 0], [2.3, -.1]])
+};
+const CLOSE_K = {
+  lid: keyCurve([[0, LID_OPEN], [.22, 1.75], [.48, 1.55], [1.05, 1.08], [1.42, .6], [1.6, .26], [1.7, 0], [1.78, .07], [1.88, 0]]),
+  spread: keyCurve([[0, 1], [.3, .92], [1.2, .55], [1.72, 0]]),
+  yaw: keyCurve([[0, 0], [.5, .2], [1.3, .12], [1.88, 0]]),
+  pitch: keyCurve([[0, -.1], [1.6, -.05], [1.7, .035], [1.82, -.01], [1.95, 0]]),
+  roll: keyCurve([[0, 0], [.8, -.05], [1.95, 0]])
+};
+/* runs one of those timelines on a case; the case reads c.motion every frame */
+function playMotion(c, K, T, noSpin) {
+  return tween(T, t => { const q = t * T; c.motion = { lid: K.lid(q), spread: K.spread(q), yaw: K.yaw && !noSpin ? K.yaw(q) : 0, pitch: K.pitch ? K.pitch(q) : 0, roll: K.roll ? K.roll(q) : 0 }; }, t => t).then(() => { c.motion = null; });
+}
 function bez(a, b, c, t, out) { const u = 1 - t; return out.set(u * u * a.x + 2 * u * t * b.x + t * t * c.x, u * u * a.y + 2 * u * t * b.y + t * t * c.y, u * u * a.z + 2 * u * t * b.z + t * t * c.z); }
 
 /* ---------- camera: the whole wall, a closer look along the shelf, or the console ---------- */
