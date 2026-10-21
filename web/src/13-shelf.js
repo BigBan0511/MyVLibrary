@@ -90,6 +90,8 @@ function caseKey(g, ui) { return isCases() ? g.id + '@' + ui : g.id; }
 function casesOf(g) { const out = []; for (const c of caseById.values()) if (c.g === g && !c.disposed) out.push(c); return out; }
 function getCase(g, ui = curGroup) {
   const k = caseKey(g, ui); let c = caseById.get(k);
+  /* its format changed (Settings, or Playnite moved it to another platform): a new case takes its place */
+  if (c && !c.disposed && c !== active && c.dim !== DIMS[g.fmt]) { c.dispose(); caseById.delete(k); c = null; }
   if (!c || c.disposed) { c = new Case(g); c.fresh = true; c.key = k; caseById.set(k, c); }
   return c;
 }

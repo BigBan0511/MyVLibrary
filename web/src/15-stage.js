@@ -188,13 +188,15 @@ const DEV = {
   ugc: null,  /* filled when a model is in use */
   led(on) { if (DEV.cur) DEV.cur.led(on); }
 };
-/* a machine made from an EmuVR model: everything goes to its socket_media; a lid, if it has one, opens first */
+/* a machine made from an EmuVR model. The medium goes to its socket_media, and the machine moves the way
+   its maker animated it: a lid or a tray opens, a slot pulls the disc in, the power button goes down.
+   Models without those animations fall back to a lid (a mesh called lid) or to the nearest opening. */
 function ugcDevice(root) {
-  const A = root.userData.anchors || {}, lights = [];
+  const A = root.userData.anchors || {}, anim = root.userData.anim, clips = anim ? anim.clips : {}, holder = A.socket || root;
   root.updateMatrixWorld(true);
-  /* the lid turns on the edge farthest from you */
-  /* called while the model still stands at the origin, unturned: the pivots live in its own space */
-  const lidPivots = (root.userData.lids || []).map(lid => {
+  /* without its own animations, the lid turns on the edge farthest from you */
+  /* called while the model still stands at the origin, unturned: everything below lives in its own space */
+  const lidPivots = clips.open || clips.close ? [] : (root.userData.lids || []).map(lid => {
     const b = new THREE.Box3().setFromObject(lid), pivot = new THREE.Group();
     root.add(pivot); pivot.position.set((b.min.x + b.max.x) / 2, b.max.y, b.min.z);
     pivot.updateMatrixWorld(true); pivot.attach(lid); return pivot;
@@ -204,18 +206,70 @@ function ugcDevice(root) {
     const c = A.light.color || { r: 0, g: 1, b: 0 }, mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(c.r, c.g, c.b), toneMapped: false });
     led = new THREE.Mesh(new THREE.SphereGeometry(.22, 12, 8), mat); A.light.obj.add(led); led.scale.setScalar(1 / Math.abs(A.light.obj.getWorldScale(new V3()).x || 1)); led.visible = false;
   }
+  const sock = () => {
+    root.updateMatrixWorld(true);
+    if (!A.socket) { const b = new THREE.Box3().setFromObject(root); return { p: root.worldToLocal(new V3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2)), up: new V3(0, 1, 0) }; }
+    const p = A.socket.getWorldPosition(new V3()), up = A.socket.localToWorld(new V3(0, .01, 0)).sub(p).normalize();
+    return { p: root.worldToLocal(p), up: up.applyQuaternion(root.getWorldQuaternion(new Q4()).invert()) };
+  };
+  /* the machine empty and shut, as it stands on the floor */
+  const rest = () => { if (!anim) return; if (clips.open) anim.apply(clips.open, 0); else if (clips.close) anim.apply(clips.close, clips.close.dur); if (clips.insert) anim.apply(clips.insert, 0); else if (clips.remove) anim.apply(clips.remove, clips.remove.dur); };
+  /* where the medium is put down (after opening), and which way it then goes in */
+  const geo = (() => {
+    rest(); let ready = sock();
+    if (clips.open) { anim.apply(clips.open, clips.open.dur); ready = sock(); rest(); }
+    let inward = null;
+    const ins = clips.insert || clips.remove;
+    if (ins) { anim.apply(ins, clips.insert ? ins.dur : 0); const deep = sock(); rest(); const v = deep.p.clone().sub(ready.p); if (v.length() > .008) inward = v.normalize(); }
+    const b = new THREE.Box3().setFromObject(root), lb = { min: root.worldToLocal(b.min.clone()), max: root.worldToLocal(b.max.clone()) }, p = ready.p;
+    if (!inward) {
+      /* no animation says it: from above when the socket is near the top or something opens over it, otherwise through the nearest side (the front wins a close call) */
+      if (lb.max.y - p.y < Math.max(3, (lb.max.y - lb.min.y) * .25) || lidPivots.length || clips.open) inward = new V3(0, -1, 0);
+      else inward = [[new V3(0, 0, -1), (lb.max.z - p.z) * .7], [new V3(1, 0, 0), p.x - lb.min.x], [new V3(-1, 0, 0), lb.max.x - p.x], [new V3(0, 0, 1), p.z - lb.min.z]].sort((a, c) => a[1] - c[1])[0][0];
+    }
+    return { p: ready.p, up: ready.up, inward };
+  })();
+  const play = (c, a, b, sec) => c ? tweenReal(sec ?? c.dur * Math.abs(b - a), t => anim.apply(c, c.dur * lerp(a, b, t)), easeIO) : Promise.resolve();
+  const lids = (v0, v1, sec = .45) => lidPivots.length ? tweenReal(sec, t => setLids(dev, lerp(v0, v1, t)), easeIO) : Promise.resolve();
   const dev = {
-    name: 'ugc', group: root, flaps: [], floppyLed: null, lids: lidPivots,
-    led(on) { if (led) led.visible = on; },
-    socket() {
-      root.updateMatrixWorld(true);
-      if (A.socket) return A.socket.getWorldPosition(new V3());
-      const b = new THREE.Box3().setFromObject(root); return new V3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2);
+    name: 'ugc', group: root, flaps: [], floppyLed: null, lids: lidPivots, anim,
+    led(on) {
+      if (led) led.visible = on;
+      if (clips.on) { if (on) play(clips.on, 0, 1); else if (clips.off) play(clips.off, 0, 1); else anim.apply(clips.on, 0); }
     },
+    /* back to empty and shut (a new room, a reload) */
+    reset() { rest(); setLids(dev, 0); },
+    socket() { root.updateMatrixWorld(true); return root.localToWorld(geo.p.clone()); },
     port(m, c) {
-      const s = this.socket(), half = m === 'cart' ? MSIZE.cart.h / 2 : 0;
-      const inside = m === 'cart' ? s.clone().add(new V3(0, half - 2.5, 0)) : s.clone().add(new V3(0, .15, 0));
-      return { kind: 'socket', q: m === 'cart' ? QUP : QFLAT, entry: inside.clone().add(new V3(0, m === 'cart' ? 9 : 10, 0)), inside, out: inside.clone().add(new V3(0, m === 'cart' ? 3 : 4, 0)), lids: lidPivots };
+      root.updateMatrixWorld(true);
+      const rq = root.getWorldQuaternion(new Q4()), up = geo.up.clone().applyQuaternion(rq), inward = geo.inward.clone().applyQuaternion(rq), back = inward.clone().negate();
+      const cart = m === 'cart', fromTop = inward.y < -.7, at = root.localToWorld(geo.p.clone());
+      const inside = cart ? at.clone().add(new V3(0, MSIZE.cart.h / 2 - 2.5, 0)) : at.clone().addScaledVector(up, .15);
+      const R = DIMS.dvd.discR, entry = inside.clone().addScaledVector(back, cart ? 9 : fromTop ? 10 : R + 5), out = inside.clone().addScaledVector(back, cart ? 3 : fromTop ? 4 : R + 3);
+      const q = cart ? new Q4().setFromAxisAngle(new V3(0, 1, 0), new THREE.Euler().setFromQuaternion(rq, 'YXZ').y).multiply(QUP) : new Q4().setFromUnitVectors(new V3(0, 0, 1), up.y < 0 ? up.clone().negate() : up);
+      return {
+        kind: 'socket', m, q, entry, inside, out, lids: lidPivots,
+        /* before the medium flies over: the lid or the tray opens */
+        prepare() { if (clips.open) { sfx.click(.7); play(clips.open, 0, 1); } else if (lidPivots.length) { sfx.click(.7); lids(0, 1); } },
+        /* it has landed: the machine holds it, pulls it in and shuts */
+        async seat(d) {
+          holder.attach(d);
+          if (clips.insert) { sfx.slotIn(); await play(clips.insert, 0, 1); }
+          if (clips.close) { await waitReal(.15); sfx.caseClose('jewel'); await play(clips.close, 0, 1); }
+          else if (lidPivots.length) { await waitReal(.3); sfx.caseClose('jewel'); await lids(1, 0, .35); }
+        },
+        /* the game is over: the machine gives it back */
+        async unseat(d) {
+          if (clips.open) { sfx.click(.7); await play(clips.open, 0, 1); }
+          else if (clips.remove) { sfx.slotOut(); await play(clips.remove, 0, 1); }
+          else if (clips.insert) { sfx.slotOut(); await play(clips.insert, 1, 0); }
+          else if (lidPivots.length) { sfx.click(.7); await lids(0, 1); }
+          scene.attach(d);
+        },
+        after() { if (clips.close) { sfx.caseClose('jewel'); play(clips.close, 0, 1); } else if (lidPivots.length) { sfx.caseClose('jewel'); lids(1, 0, .35); } },
+        /* the shelf reopened with a game running: the medium is already in */
+        restore(d) { rest(); holder.attach(d); if (clips.insert) anim.apply(clips.insert, clips.insert.dur); }
+      };
     },
     bounds() { return new THREE.Box3().setFromObject(root); }
   };
@@ -268,7 +322,7 @@ function applyStage(sys) {
     const b = new THREE.Box3().setFromObject(sm || scrModel); at = new V3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2 + (sm ? 0 : 2), b.max.z);
   } else at = monOn ? MON.screen.clone() : flatOn ? flatTv.localToWorld(flatTv.userData.screen.clone()) : tvGroup.localToWorld(TV_SCREEN.clone());
   STAGE.screenAt = at; tvLight.position.set(at.x, at.y, at.z + 14);
-  setCartFlaps(0); setFlaps(cartFlaps, 0); setFlaps(pcFlaps, 0); setLids(DEV.cur, 0); DEV.led(false);
+  setCartFlaps(0); setFlaps(cartFlaps, 0); setFlaps(pcFlaps, 0); if (DEV.cur && DEV.cur.reset) DEV.cur.reset(); else setLids(DEV.cur, 0); DEV.led(false);
 }
 /* where the case waits while you play, lying cover up: on the desk right of the monitor, on the rug
    left of the console (its lid opens away from it) or on the table right of the console. When it opens

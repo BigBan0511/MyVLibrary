@@ -5,8 +5,10 @@
    file (with its type trees) and a .resS with the texture data. We read
    the hierarchy, meshes, materials and textures and build three.js
    objects, keeping the named points the mod brings (socket_media is
-   where the medium goes; a mesh with "lid" in its name opens; on a TV,
-   screen_mesh is where the picture goes).
+   where the medium goes; on a TV, screen_mesh is where the picture
+   goes) and the console's own animations (opening, closing, taking the
+   medium in, giving it back, powering on), which EmuVR keeps as Mecanim
+   clips listed by its GameSystemState script.
    Nothing leaves your computer: the files are kept in this browser.
    ===================================================================== */
 const UGC = (() => {
@@ -226,6 +228,64 @@ const UGC = (() => {
     return { w, h, rgba, name: t.m_Name };
   }
 
+  /* ---------- animations: Unity's muscle clips (streamed, dense and constant curves) ---------- */
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(s) { let c = 0xFFFFFFFF; for (const x of new TextEncoder().encode(s)) c = CRC[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  /* a streamed clip is a list of frames; each frame holds, per curve, the cubic that runs from that time on */
+  function streamedKeys(words, count) {
+    const dv = new DataView(new Uint32Array(words).buffer), keys = Array.from({ length: count }, () => []); let p = 0;
+    while (p + 8 <= dv.byteLength) {
+      const t = dv.getFloat32(p, true), n = dv.getInt32(p + 4, true); p += 8;
+      for (let k = 0; k < n && p + 20 <= dv.byteLength; k++, p += 20) { const i = dv.getInt32(p, true); if (keys[i]) keys[i].push({ t, c: [dv.getFloat32(p + 4, true), dv.getFloat32(p + 8, true), dv.getFloat32(p + 12, true), dv.getFloat32(p + 16, true)] }); }
+    }
+    return keys;
+  }
+  function clipData(a) {
+    if (!a || !a.m_MuscleClip) return null;
+    const mc = a.m_MuscleClip, cd = mc.m_Clip.data || mc.m_Clip, sc = cd.m_StreamedClip, dc = cd.m_DenseClip, cc = cd.m_ConstantClip;
+    const C = { sN: sc.curveCount, dN: dc.m_CurveCount, frames: dc.m_FrameCount, rate: dc.m_SampleRate || 60, begin: dc.m_BeginTime || 0, dense: dc.m_SampleArray || [], constant: cc.data || [], streamed: streamedKeys(sc.data || [], sc.curveCount) };
+    const binds = []; let idx = 0;
+    for (const b of a.m_ClipBindingConstant.genericBindings) {
+      if (b.isPPtrCurve) continue;
+      binds.push({ path: b.path >>> 0, attr: b.attribute >>> 0, type: b.typeID, idx });
+      idx += b.typeID === 4 ? (b.attribute === 2 ? 4 : b.attribute <= 4 ? 3 : 1) : 1;
+    }
+    return { name: a.m_Name, start: mc.m_StartTime || 0, dur: Math.max(.05, (mc.m_StopTime || 0) - (mc.m_StartTime || 0)), C, binds };
+  }
+  function curveAt(C, i, t) {
+    if (i < C.sN) {
+      const ks = C.streamed[i]; let k = ks[0]; for (const q of ks) { if (q.t <= t) k = q; else break; } if (!k) return 0;
+      const c = k.c; if (!(k.t > -1e30)) return c[3]; const d = t - k.t; return ((c[0] * d + c[1]) * d + c[2]) * d + c[3];
+    }
+    i -= C.sN;
+    if (i < C.dN) { const f = Math.min(Math.max((t - C.begin) * C.rate, 0), C.frames - 1), f0 = Math.floor(f), f1 = Math.min(C.frames - 1, f0 + 1), u = f - f0; return C.dense[f0 * C.dN + i] * (1 - u) + C.dense[f1 * C.dN + i] * u; }
+    return C.constant[i - C.dN] ?? 0;
+  }
+  const ISACTIVE = crc32('m_IsActive'), DEG = Math.PI / 180, _eu = new THREE.Euler();
+  /* the clips find their objects by the CRC of the path from the animated root */
+  function makeAnim(A, top, byGo) {
+    const hashes = new Map(), walk = (o, path) => { hashes.set(crc32(path), o); o.children.forEach(ch => { if (ch.userData.unity) walk(ch, path ? path + '/' + ch.name : ch.name); }); };
+    walk(top, '');
+    const clips = {};
+    for (const k of ['open', 'close', 'insert', 'remove', 'on', 'off']) {
+      const c = A[k]; if (!c) continue; c.binds.forEach(b => { b.node = hashes.get(b.path) || null; }); if (c.binds.some(b => b.node)) clips[k] = c;
+    }
+    /* Unity's Euler angles turn Z, then X, then Y: three.js calls that order YXZ */
+    function apply(c, t) {
+      t = c.start + Math.min(Math.max(t, 0), c.dur);
+      for (const b of c.binds) {
+        const o = b.node; if (!o) continue; const v = k => curveAt(c.C, b.idx + k, t);
+        if (b.type === 4) {
+          if (b.attr === 1) o.position.set(v(0), v(1), v(2));
+          else if (b.attr === 2) o.quaternion.set(v(0), v(1), v(2), v(3)).normalize();
+          else if (b.attr === 3) o.scale.set(v(0), v(1), v(2));
+          else if (b.attr === 4) o.quaternion.setFromEuler(_eu.set(v(0) * DEG, v(1) * DEG, v(2) * DEG, 'YXZ'));
+        } else if (b.type === 1 && b.attr === ISACTIVE) o.visible = v(0) > .5;
+      }
+    }
+    return { clips, apply, spindle: byGo.get(A.spindle) || null };
+  }
+
   /* ---------- read everything a model needs ---------- */
   function parse(buf, opts = {}) {
     const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf), files = readBundle(u8);
@@ -251,7 +311,7 @@ const UGC = (() => {
     };
     const node = t => {
       const go = get(t.m_GameObject.m_PathID), cs = comps.get(t.m_GameObject.m_PathID) || {};
-      const n = { name: go ? go.m_Name : '', active: go ? go.m_IsActive !== false : true, p: t.m_LocalPosition, q: t.m_LocalRotation, s: t.m_LocalScale, kids: [] };
+      const n = { name: go ? go.m_Name : '', go: t.m_GameObject.m_PathID, active: go ? go.m_IsActive !== false : true, p: t.m_LocalPosition, q: t.m_LocalRotation, s: t.m_LocalScale, kids: [] };
       if (cs[33] && cs[33].m_Mesh.m_PathID !== '0') {
         const me = get(cs[33].m_Mesh.m_PathID);
         if (me) { n.mesh = meshData(me, sf.little); n.meshName = me.m_Name; n.mats = (cs[23] ? cs[23].m_Materials : []).map(p => p.m_PathID !== '0' ? material(p.m_PathID) : null); n.visible = !cs[23] || !!cs[23].m_Enabled; }
@@ -261,7 +321,17 @@ const UGC = (() => {
       return n;
     };
     const roots = [...tfs.values()].filter(t => !t.m_Father || t.m_Father.m_PathID === '0').map(node);
-    return { roots };
+    /* the scripts EmuVR attaches: GameSystemState says which clip opens, closes, takes the medium in... */
+    const scripts = new Map(byCls(115).map(o => { try { return [o.id, get(o.id).m_ClassName]; } catch (e) { return [o.id, '']; } }));
+    let anim = null;
+    for (const o of byCls(114)) {
+      let d; try { d = get(o.id); } catch (e) { continue; }
+      if (!d || !d.m_Script || scripts.get(d.m_Script.m_PathID) !== 'GameSystemState') continue;
+      const clip = p => { if (!p || p.m_PathID === '0') return null; try { return clipData(get(p.m_PathID)); } catch (e) { console.warn('UGC clip', e); return null; } };
+      anim = { root: d.m_GameObject.m_PathID, open: clip(d.openAnimation), close: clip(d.closeAnimation), insert: clip(d.insertAnimation), remove: clip(d.removeAnimation), on: clip(d.onAnimation), off: clip(d.offAnimation), spindle: d.discSpindle ? d.discSpindle.m_PathID : null };
+      break;
+    }
+    return { roots, anim };
   }
 
   /* ---------- three.js objects ---------- */
@@ -307,9 +377,9 @@ const UGC = (() => {
   }
   /* the model in centimetres, facing the room (+Z), standing on y = 0; anchors in userData */
   function build(parsed) {
-    const made = new Map(), anchors = {}, lids = [], meshes = [];
+    const made = new Map(), anchors = {}, lids = [], meshes = [], byGo = new Map();
     const mk = n => {
-      const o = new THREE.Group(); o.name = n.name; o.visible = n.active;
+      const o = new THREE.Group(); o.name = n.name; o.visible = n.active; o.userData.unity = true; byGo.set(n.go, o);
       o.position.set(n.p.x, n.p.y, n.p.z); o.quaternion.set(n.q.x, n.q.y, n.q.z, n.q.w); o.scale.set(n.s.x, n.s.y, n.s.z);
       if (n.mesh && n.mesh.pos) {
         const mats = n.mesh.subs.map((_, i) => makeMaterial(n.mats[i] || n.mats[0], made));
@@ -330,7 +400,8 @@ const UGC = (() => {
     const box = new THREE.Box3(); meshes.forEach(m => { if (m.visible) box.expandByObject(m); });
     if (!box.isEmpty()) { model.position.y -= box.min.y; model.position.x -= (box.min.x + box.max.x) / 2; model.position.z -= (box.min.z + box.max.z) / 2; }
     root.updateMatrixWorld(true); box.setFromObject(model);
-    root.userData = { anchors, lids, size: box.getSize(new V3()), materials: [...made.values()] };
+    const anim = parsed.anim ? makeAnim(parsed.anim, byGo.get(parsed.anim.root) || model.children[0], byGo) : null;
+    root.userData = { anchors, lids, size: box.getSize(new V3()), materials: [...made.values()], anim: anim && Object.keys(anim.clips).length ? anim : null };
     return root;
   }
   function dispose(root) {

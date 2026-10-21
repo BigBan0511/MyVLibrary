@@ -67,6 +67,9 @@ DICT.en = {
   'Esc para sacar el disquete': 'Esc to take the floppy out', 'Esc para sacar el cartucho': 'Esc to take the cartridge out',
   'LEYENDO DISQUETE': 'READING FLOPPY', 'LEYENDO CARTUCHO': 'READING CARTRIDGE',
   'En esta demo cada segundo cuenta como un minuto de partida.': 'In this demo every second counts as a minute of play.',
+  'Formato en consolas': 'Console formats', 'El original': 'Original', 'Libre': 'Free',
+  'Con «El original», cada juego de consola va en la caja y el medio de su sistema (PlayStation en caja de CD grande, PS2 en caja DVD, Super Nintendo en cartucho…). Los de PC se pueden cambiar siempre.': 'With “Original”, each console game comes in its system’s case and medium (PlayStation in a big CD case, PS2 in a DVD case, Super Nintendo on a cartridge…). PC games can always be changed.',
+  'El original de {0}. Se puede cambiar en Ajustes → Formato en consolas.': 'The original for {0}. It can be changed in Settings → Console formats.',
   /* rooms by system and EmuVR models */
   'Salas por sistema': 'By system', 'Sistema anterior': 'Previous system', 'Sistema siguiente': 'Next system', 'sistemas': 'systems',
   'Disco del juego': 'Game disc', 'Para {0}': 'For {0}', 'Preparando la consola…': 'Setting up the console…',

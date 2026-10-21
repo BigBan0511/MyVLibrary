@@ -157,7 +157,8 @@ function renderInfo(force) {
   el.innerHTML = `<div class="info-bar"><button type="button" class="info-more" data-more="1" aria-expanded="${infoOpen}">${infoOpen ? T('Menos') : T('Estado y categorías')}</button><button type="button" class="info-hide" data-hide="1" aria-label="${T('Ocultar la ficha')}" title="${T('Ocultar la ficha')} (I) · ${T('Arrastra para moverla')}">${T('Ocultar')} <i aria-hidden="true">▴</i></button></div><div class="eyebrow">${esc([g.genre, g.year, g.real ? g.plat : T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</div><h2>${esc(g.t)}</h2>
     <dl><dt>${T('Jugado')}</dt><dd>${fmtH(g.hours)}${g.sessions ? ' · ' + T(g.sessions === 1 ? '{0} vez' : '{0} veces', g.sessions) : ''}</dd><dt>${T('Última vez')}</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>${T('Logros')}</dt><dd>${T('{0} de {1}', g.ach[0], g.ach[1])}</dd>` : ''}<dt>${T('Polvo')}</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : ''}</dd></dl>
     <div class="frow"><label for="stSel">${T('Estado')}</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : `<option value="" selected>${T('Sin estado')}</option>`}${statuses.map(s => `<option value="${esc(s)}"${s === g.status ? ' selected' : ''}>${esc(TD(s))}</option>`).join('')}<option value="__new">+ ${T('Nuevo estado…')}</option></select></div>
-    <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="fmt-ico" aria-hidden="true">${FMT_ICON[g.fmt] || ''}</span><select id="fmtSel">${FMTS.map(f => `<option value="${f}"${f === g.fmt ? ' selected' : ''}>${esc(T(DIMS[f].name))}</option>`).join('')}</select></div>
+    <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="fmt-ico" aria-hidden="true">${FMT_ICON[g.fmt] || ''}</span><select id="fmtSel"${fmtLocked(g) ? ' disabled' : ''}>${FMTS.map(f => `<option value="${f}"${f === g.fmt ? ' selected' : ''}>${esc(T(DIMS[f].name))}</option>`).join('')}</select></div>
+    ${fmtLocked(g) ? `<p class="fmt-lock">${T('El original de {0}. Se puede cambiar en Ajustes → Formato en consolas.', esc(g.platFull || g.plat))}</p>` : ''}
     ${newStatus ? `<form class="cat-new st-new"><input id="stNew" type="text" placeholder="${T('Nombre del estado nuevo')}" maxlength="40" autocomplete="off"><button type="submit">${T('Crear')}</button></form>` : ''}
     <div class="cats"><span class="lbl">${T('Categorías')}</span><div class="chips">${g.cats.length ? g.cats.map(c => `<span class="chip">${esc(TD(c))}</span>`).join('') : `<em>${T('Ninguna')}</em>`}<button type="button" class="chip add" data-edit="1">${infoEdit ? T('Listo') : '+ ' + T('Categorías')}</button></div></div>
     ${infoEdit ? `<div class="cat-edit">${prefs.cats.map(c => `<label><input type="checkbox" data-catbox="${esc(c)}"${g.cats.includes(c) ? ' checked' : ''}><span>${esc(TD(c))}</span></label>`).join('')}
@@ -198,7 +199,7 @@ $('#info').addEventListener('submit', e => {
 /* ---------- format: the case in your hands shrinks away and the new one takes its place ---------- */
 const FMT_ICON = { dvd: '▮', jewel: '◫', bigjewel: '◧', big: '▣', floppy: '▤', cart: '▭' };
 function setFormat(fmt) {
-  if (!active || !DIMS[fmt] || busy || !(mode === 'inspect' || mode === 'open')) { renderInfo(true); return; }
+  if (!active || !DIMS[fmt] || busy || !(mode === 'inspect' || mode === 'open') || fmtLocked(active.g)) { renderInfo(true); return; }
   if (active.g.fmt === fmt) return;
   return guarded(async () => {
     const c = active, g = c.g, wasOpen = mode === 'open';
@@ -304,6 +305,7 @@ setPop.addEventListener('click', e => {
   if (k === 'trailer') { if (active && (mode === 'inspect' || mode === 'open')) { stopTrailer(); startTrailer(active); } }
   if (k === 'layout') setLayout(prefs.layout);
   if (k === 'seal') renderPrompts();
+  if (k === 'fmtCon') { GAMES.forEach(resolveFmt); if (active) renderInfo(true); relayout({ full: true }); }
   if (k === 'sort') relayout({ full: true });
   if (k === 'group') { prefs.shelf = '__all'; savePrefs(); relayout({ full: true, reset: true }); }
 });
@@ -418,10 +420,9 @@ const QUP = new Q4();
 function portOf(c) { const P = DEV.cur.port(c.dim.media, c); P.m = c.dim.media; return P; }
 /* the flaps of a cartridge slot fold down as the cartridge's foot passes the mouth */
 function flapsFor(d, P) { setCartFlaps(clamp(((P.top ?? 0) + .4 - (d.position.y - MSIZE.cart.h / 2)) / 1.4, 0, 1)); }
-const lidTo = (v0, v1, sec = .45) => tweenReal(sec, t => setLids(DEV.cur, lerp(v0, v1, t)), easeIO);
 function trayTo(open, sec = .74) { const h = pcTray.userData.home, z0 = pcTray.position.z, z1 = h.z + (open ? pcTray.userData.out : 0); sfx.tray(); return tweenReal(sec, t => { pcTray.position.z = lerp(z0, z1, t); }, easeIO); }
 /* before the medium flies over: open what has to be open */
-function prepareIn(P) { if (P.kind === 'tray') trayTo(true); if (P.kind === 'socket' && P.lids && P.lids.length) { sfx.click(.7); lidTo(0, 1); } }
+function prepareIn(P) { if (P.kind === 'tray') trayTo(true); if (P.kind === 'socket' && P.prepare) P.prepare(); }
 async function pushIn(d, P) {
   if (P.kind === 'floppy') {
     sfx.floppyIn();
@@ -440,7 +441,7 @@ async function pushIn(d, P) {
   if (P.kind === 'socket') {
     await tweenReal(.42, t => { d.position.lerpVectors(P.entry, P.inside, t); }, easeOut);
     if (P.m === 'cart') sfx.cartIn(); else sfx.discIn();
-    if (P.lids && P.lids.length) { await waitReal(.3); sfx.caseClose('jewel'); await lidTo(1, 0, .35); }
+    if (P.seat) await P.seat(d);
     await waitReal(.2); return;
   }
   sfx.slotIn();
@@ -463,16 +464,16 @@ async function popOut(d, P) {
     await waitReal(.2); d.visible = true; await trayTo(true); scene.attach(d); return;
   }
   if (P.kind === 'socket') {
-    await waitReal(.15); if (P.lids && P.lids.length) { sfx.click(.7); await lidTo(0, 1); }
+    await waitReal(.15); if (P.unseat) await P.unseat(d);
     if (P.m === 'cart') sfx.cartOut();
-    await tweenReal(.35, t => { d.position.lerpVectors(P.inside, P.out, t); }, easeOut); return;
+    const from = d.position.clone(); await tweenReal(.35, t => { d.position.lerpVectors(from, P.out, t); }, easeOut); return;
   }
   await waitReal(.15); sfx.slotOut(); await waitReal(1.02);
   d.visible = true; const zIn = d.position.z;
   await tweenReal(.5, t => { d.position.z = lerp(zIn, P.out.z, t); }, easeIO);
 }
 /* once the medium has left the machine: close what was opened for it */
-function afterOut(P) { if (P.kind === 'tray') setTimeout(() => trayTo(false), 350); if (P.kind === 'socket' && P.lids && P.lids.length) setTimeout(() => { sfx.caseClose('jewel'); lidTo(1, 0, .35); }, 500); }
+function afterOut(P) { if (P.kind === 'tray') setTimeout(() => trayTo(false), 350); if (P.kind === 'socket' && P.after) setTimeout(() => P.after(), 500); }
 function insertDisc() {
   if (!active || mode !== 'open') return;
   return guarded(async () => {
@@ -518,6 +519,7 @@ async function restorePlaying(id, seconds) {
   { const tp = c.targetPose(); c.root.position.copy(tp.pos); c.root.quaternion.copy(tp.quat); c.root.scale.setScalar(1); }
   const d = c.disc, P = portOf(c); scene.attach(d); d.position.copy(P.inside); d.quaternion.copy(P.q); d.scale.setScalar(1); d.visible = P.kind === 'cart' || P.kind === 'socket'; if (P.kind === 'cart') setCartFlaps(1);
   if (P.kind === 'tray') { d.position.z -= pcTray.userData.out; pcTray.attach(d); }
+  if (P.kind === 'socket' && P.restore) P.restore(d);
   setLed(true); tvSet('play', c); playStart = performance.now() - (seconds || 0) * 1000;
   PN_STATE.running = id; PN_STATE.waiting = false; $('#playTitle').textContent = g.t; renderPlayBanner();
   setView('console'); setMode('playing');
