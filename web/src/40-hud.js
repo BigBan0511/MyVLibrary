@@ -36,7 +36,7 @@ function placeTip() {
 }
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), ms); }
 
-function setMode(m) { mode = m; renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
+function setMode(m) { mode = m; if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
 const btn = (k, label, a, primary) => `<button class="pbtn${primary ? ' primary' : ''}" type="button" data-act="${a}"><kbd>${k}</kbd>${label}</button>`;
 function tearHintText(c) { return c.tear > .05 ? T('Precinto {0} % · sigue tirando', Math.round(100 * c.tear / c.L)) : T('Arrastra la lengüeta roja para quitar el precinto'); }
 function renderPrompts() {
@@ -44,7 +44,7 @@ function renderPrompts() {
   if (mode === 'shelf') {
     const gr = groups[curGroup], np = gr ? gr.pages.length : 1;
     if (np > 1) h += `<div class="pager"><button class="pbtn icon" type="button" data-act="prevPage" aria-label="${T('Página anterior')}"${curPage === 0 ? ' disabled' : ''}>‹</button><span class="pg">${curPage + 1} / ${np}</span><button class="pbtn next" type="button" data-act="nextPage"${curPage >= np - 1 ? ' disabled' : ''}>${T('Siguiente')} <i aria-hidden="true">›</i></button></div>`;
-    h += coarse ? `<span class="hint">${T('Toca un lomo para sacar el juego')}</span>` : `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>`;
+    h += coarse ? `<span class="hint">${T('Toca un lomo para sacar el juego')}</span>` : isRooms() ? `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('sistemas')} · <kbd>Z</kbd><kbd>C</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>` : `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>`;
   }
   if (mode === 'inspect' && active) {
     if (active.wrap) {
@@ -65,6 +65,7 @@ function doAct(a) {
 
 /* ---------- header: brand count and the pills that choose what is on the shelf ---------- */
 function renderBrand() {
+  renderSysbar();
   const gr = groups[curGroup], n = gr ? gr.games.length : 0;
   $('#brandCount').textContent = T(GAMES.length === 1 ? '{0} de {1} juego' : '{0} de {1} juegos', n, GAMES.length);
 }
@@ -77,16 +78,16 @@ $('#pills').addEventListener('click', e => { const b = e.target.closest('[data-g
 
 /* switching shelf contents goes through a short dip to black, then the new cases settle in a wave */
 let swapBusy = false;
-async function swapShelf(fn, quiet, snap) {
+async function swapShelf(fn, quiet, snap, noFade) {
   if (swapBusy) return; swapBusy = true; busy = true; setHovered(null);
   try {
     if (!quiet) sfx.slide();
-    const f = $('#fade'); f.classList.add('on'); await new Promise(r => setTimeout(r, RM ? 20 : 200));
+    const f = $('#fade'); if (!noFade) { f.classList.add('on'); await new Promise(r => setTimeout(r, RM ? 20 : 200)); }
     fn(); layoutPage(); renderPills(); renderBrand(); renderPrompts();
     /* frame what is there now; after a change of design the camera jumps while the screen is dark */
     if (cam.view === 'shelf' || cam.view === 'browse') { setView(cam.view); if (snap) { cam.pos.copy(cam.tPos); cam.look.copy(cam.tLook); cam.snap = true; } }
     navOrder.forEach(c => { c.pullHold = .35; c.root.position.copy(c.home.pos); c.root.quaternion.copy(c.home.quat); });
-    requestAnimationFrame(() => f.classList.remove('on'));
+    if (!noFade) requestAnimationFrame(() => f.classList.remove('on'));
     navOrder.forEach((c, i) => setTimeout(() => { tween(.35, t => { c.pullHold = .35 * (1 - t); }, easeOut); }, i * 6 * SPEED));
     await wait(Math.min(700, navOrder.length * 6 + 380));
     navOrder.forEach(c => { c.pullHold = 0; });
@@ -108,6 +109,36 @@ function setPage(p, quiet) {
   p = clamp(p, 0, gr.pages.length - 1); if (p === curPage) return;
   return swapShelf(() => { curPage = p; }, quiet);
 }
+
+/* ---------- rooms by system: the switcher in the header, and walking to the next room ---------- */
+function renderSysbar() {
+  const el = $('#sysbar'), L = isRooms() ? systemsList() : [];
+  el.hidden = !L.length; if (!L.length) return;
+  const cur = L.find(s => s.key === curSysKey()) || L[0];
+  el.querySelector('b').textContent = cur.name;
+  el.querySelector('span').textContent = T(cur.n === 1 ? '{0} juego' : '{0} juegos', cur.n) + (L.length > 1 ? ` · ${L.indexOf(cur) + 1} / ${L.length}` : '');
+  el.querySelectorAll('[data-sys]').forEach(b => { b.disabled = L.length < 2; });
+}
+$('#sysbar').addEventListener('click', e => { const b = e.target.closest('[data-sys]'); if (b && !b.disabled) { sfx.init(); setSystem(+b.dataset.sys); } });
+async function setSystem(step) {
+  if (!isRooms() || busy || swapBusy || mode !== 'shelf') return;
+  const L = systemsList(); if (L.length < 2) return;
+  const i = Math.max(0, L.findIndex(s => s.key === curSysKey())), sys = L[(i + step + L.length) % L.length], key = sys.key;
+  const from = STAGE.name, to = stageFor(key);
+  prefs.sys = key; prefs.shelf = '__all'; savePrefs(); sfx.whoosh(); setHovered(null); kbNav = false;
+  const need = UGCS.keysFor(key).filter(k => UGCS.meta()[k] && !UGCS.models.has(k));
+  if (need.length) { toast(T('Preparando la consola…'), 2000); busy = true; await new Promise(r => setTimeout(r, 60)); await UGCS.load(need); busy = false; }
+  if (from !== to) {
+    /* another room: the camera walks over, then the shelf fills */
+    busy = true; applyStage(key); buildGroups(); curGroup = 0; curPage = 0;
+    setView('shelf'); renderSysbar(); renderPills(); renderBrand();
+    await wait(RM ? 50 : 700); busy = false;
+    await swapShelf(() => { }, true, false, true);
+  } else await swapShelf(() => { applyStage(key); buildGroups(); curGroup = 0; curPage = 0; setView('shelf'); }, true);
+  renderSysbar(); toast(sys.name, 1400);
+}
+/* re-dress the room after a model is chosen or removed; while a game is out it waits for the shelf */
+function refreshStage() { if (!isRooms()) return; if (mode === 'shelf' && !busy) applyStage(curSysKey()); else STAGE.dirty = true; }
 
 /* ---------- inspect card: status and categories ---------- */
 function renderInfo(force) {
@@ -227,7 +258,26 @@ qEl.addEventListener('keydown', e => { if (e.key === 'Enter') { const m = navOrd
 
 /* ---------- settings ---------- */
 const setBtn = $('#setBtn'), setPop = $('#settings');
-function renderSettings() { const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
+function renderUgcList() {
+  const el = $('#ugcList'); if (!el) return;
+  const rows = [...systemsList().map(s => ['sys:' + s.key, s.name, s.key === 'PC' ? T('PC genérico') : T('Consola genérica (ID-2)')]), ['scr:crt', T('Tele de tubo'), T('Genérica')], ['scr:flat', T('Tele plana'), T('Genérica')], ['scr:monitor', T('Monitor del PC'), T('Genérico')]];
+  el.innerHTML = rows.map(([k, label, gen]) => { const m = UGCS.meta()[k]; return `<div class="ugc-item"><div class="ugc-what"><b>${esc(label)}</b><span${m ? ' class="on"' : ''}>${m ? esc(m.name) : gen}</span></div><div class="ugc-btns">${m ? `<button type="button" data-ugc-rot="${k}" title="${T('Girar 180°')}" aria-label="${T('Girar 180°')}">↻</button><button type="button" data-ugc-del="${k}" title="${T('Quitar')}" aria-label="${T('Quitar')}">✕</button>` : ''}<button type="button" data-ugc-pick="${k}">${m ? T('Cambiar') : T('Elegir .ugc')}</button></div></div>`; }).join('');
+}
+let ugcPending = null;
+$('#ugcList').addEventListener('click', async e => {
+  const pick = e.target.closest('[data-ugc-pick]'), del = e.target.closest('[data-ugc-del]'), rot = e.target.closest('[data-ugc-rot]');
+  if (pick) { ugcPending = pick.dataset.ugcPick; const f = $('#ugcFile'); f.value = ''; f.click(); }
+  if (del) { try { await UGCS.remove(del.dataset.ugcDel); } catch (err) { console.error(err); } renderUgcList(); refreshStage(); sfx.tick(); }
+  if (rot) { const m = UGCS.meta()[rot.dataset.ugcRot]; if (m) { m.rot = !m.rot; savePrefs(); refreshStage(); sfx.tick(); } }
+});
+$('#ugcFile').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0], key = ugcPending; ugcPending = null; if (!file || !key) return;
+  toast(T('Leyendo {0}…', file.name), 8000); await new Promise(r => setTimeout(r, 60));
+  try { await UGCS.put(key, file); toast(T('{0} listo', UGCS.meta()[key].name), 2600); refreshStage(); }
+  catch (err) { console.error(err); toast(T(err && err.message ? err.message : 'No se ha podido leer el .ugc', err && err.arg), 5000); }
+  renderUgcList();
+});
+function renderSettings() { renderUgcList(); const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
 function renderRoomPick() {
   const el = $('#roomPick'); if (!el) return;
   el.innerHTML = ROOM_ORDER.map(k => { const R = ROOMS[k]; return `<button type="button" class="room" data-room="${k}" aria-pressed="${prefs.room === k}"><i style="background:linear-gradient(90deg,${R.sw[0]} 0 45%,${R.sw[1]} 45% 72%,${R.sw[2]} 72%)"></i><span>${T(R.name)}</span></button>`; }).join('');
@@ -354,26 +404,35 @@ const QFLAT = new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0));
 /* the medium leaves the case upwards, in front of it, so it never passes through the plastic */
 function discAbove(c, out) { return out.set(c.discHome.x, c.dim.h / 2 + mediaHalfH(c) + 1.4, c.discHome.z + 3.2); }
 const QUP = new Q4();
-/* each medium's way into the console: where it is offered (entry), where it rests inside, where it pops out to, how it is turned */
-function portOf(c) {
-  const m = c.dim.media;
-  if (m === 'floppy') { const H = MSIZE.floppy.h; return { m, q: QFLAT, entry: new V3(FSLOT.x, FSLOT.y, FSLOT.z + H / 2 + .5), inside: new V3(FSLOT.x, FSLOT.y, FSLOT.z - H / 2 - .4), out: new V3(FSLOT.x, FSLOT.y, FSLOT.z + H / 2 - 6.4) }; }
-  if (m === 'cart') { const H = MSIZE.cart.h; return { m, q: QUP, entry: new V3(CSLOT.x, CSLOT.top + H / 2 + 7, CSLOT.z), inside: new V3(CSLOT.x, CSLOT.top + H / 2 - 3.6, CSLOT.z), out: new V3(CSLOT.x, CSLOT.top + H / 2 + 2.5, CSLOT.z) }; }
-  const R = c.dim.discR;
-  return { m, q: QFLAT, entry: new V3(SLOT.x, SLOT.y, SLOT.z + R + .6), inside: new V3(SLOT.x, SLOT.y, SLOT.z - R - 1.2), out: new V3(SLOT.x, SLOT.y, SLOT.z + R - 3.6) };
-}
-/* the flaps of the cartridge slot fold down as the cartridge's foot passes the mouth */
-function flapsFor(d) { setCartFlaps(clamp((CSLOT.top + .4 - (d.position.y - MSIZE.cart.h / 2)) / 1.4, 0, 1)); }
+/* each medium's way into whatever machine is in the room: where it is offered (entry), where it rests
+   inside, where it pops out to and how it is turned. The machine says what kind of opening it is. */
+function portOf(c) { const P = DEV.cur.port(c.dim.media, c); P.m = c.dim.media; return P; }
+/* the flaps of a cartridge slot fold down as the cartridge's foot passes the mouth */
+function flapsFor(d, P) { setCartFlaps(clamp(((P.top ?? 0) + .4 - (d.position.y - MSIZE.cart.h / 2)) / 1.4, 0, 1)); }
+const lidTo = (v0, v1, sec = .45) => tweenReal(sec, t => setLids(DEV.cur, lerp(v0, v1, t)), easeIO);
+function trayTo(open, sec = .74) { const h = pcTray.userData.home, z0 = pcTray.position.z, z1 = h.z + (open ? pcTray.userData.out : 0); sfx.tray(); return tweenReal(sec, t => { pcTray.position.z = lerp(z0, z1, t); }, easeIO); }
+/* before the medium flies over: open what has to be open */
+function prepareIn(P) { if (P.kind === 'tray') trayTo(true); if (P.kind === 'socket' && P.lids && P.lids.length) { sfx.click(.7); lidTo(0, 1); } }
 async function pushIn(d, P) {
-  if (P.m === 'floppy') {
+  if (P.kind === 'floppy') {
     sfx.floppyIn();
     await tweenReal(.24, t => { d.position.z = lerp(P.entry.z, P.inside.z, t); }, t => t * t);
     d.visible = false; blinkFloppy(2.4); await waitReal(.25); return;
   }
-  if (P.m === 'cart') {
+  if (P.kind === 'cart') {
     sfx.cartIn();
-    await tweenReal(.32, t => { d.position.y = lerp(P.entry.y, P.inside.y, t); flapsFor(d); }, t => t * t);
+    await tweenReal(.32, t => { d.position.y = lerp(P.entry.y, P.inside.y, t); flapsFor(d, P); }, t => t * t);
     d.position.copy(P.inside); setCartFlaps(1); await waitReal(.38); return;
+  }
+  if (P.kind === 'tray') {
+    await tweenReal(.32, t => { d.position.lerpVectors(P.entry, P.inside, t); }, t => t * t); sfx.thud();
+    await waitReal(.25); pcTray.attach(d); await trayTo(false); d.visible = false; await waitReal(.2); return;
+  }
+  if (P.kind === 'socket') {
+    await tweenReal(.42, t => { d.position.lerpVectors(P.entry, P.inside, t); }, easeOut);
+    if (P.m === 'cart') sfx.cartIn(); else sfx.discIn();
+    if (P.lids && P.lids.length) { await waitReal(.3); sfx.caseClose('jewel'); await lidTo(1, 0, .35); }
+    await waitReal(.2); return;
   }
   sfx.slotIn();
   const z0 = d.position.z, z1 = z0 - 3.4, z2 = P.inside.z;
@@ -382,19 +441,29 @@ async function pushIn(d, P) {
   d.visible = false; await waitReal(.05);
 }
 async function popOut(d, P) {
-  if (P.m === 'floppy') {
+  if (P.kind === 'floppy') {
     await waitReal(.25); sfx.floppyOut(); await waitReal(.07);
     d.position.copy(P.inside); d.visible = true;
     await tweenReal(.16, t => { d.position.z = lerp(P.inside.z, P.out.z, t); }, easeOut); return;
   }
-  if (P.m === 'cart') {
+  if (P.kind === 'cart') {
     await waitReal(.2); sfx.cartOut(); await waitReal(.2);
-    await tweenReal(.42, t => { d.position.y = lerp(P.inside.y, P.out.y, t); flapsFor(d); }, easeIO); return;
+    await tweenReal(.42, t => { d.position.y = lerp(P.inside.y, P.out.y, t); flapsFor(d, P); }, easeIO); return;
+  }
+  if (P.kind === 'tray') {
+    await waitReal(.2); d.visible = true; await trayTo(true); scene.attach(d); return;
+  }
+  if (P.kind === 'socket') {
+    await waitReal(.15); if (P.lids && P.lids.length) { sfx.click(.7); await lidTo(0, 1); }
+    if (P.m === 'cart') sfx.cartOut();
+    await tweenReal(.35, t => { d.position.lerpVectors(P.inside, P.out, t); }, easeOut); return;
   }
   await waitReal(.15); sfx.slotOut(); await waitReal(1.02);
   d.visible = true; const zIn = d.position.z;
   await tweenReal(.5, t => { d.position.z = lerp(zIn, P.out.z, t); }, easeIO);
 }
+/* once the medium has left the machine: close what was opened for it */
+function afterOut(P) { if (P.kind === 'tray') setTimeout(() => trayTo(false), 350); if (P.kind === 'socket' && P.lids && P.lids.length) setTimeout(() => { sfx.caseClose('jewel'); lidTo(1, 0, .35); }, 500); }
 function insertDisc() {
   if (!active || mode !== 'open') return;
   return guarded(async () => {
@@ -403,7 +472,7 @@ function insertDisc() {
     await waitReal(sfx.mediaOut(c.g.fmt) - .005);
     await tween(.28, t => { d.position.z = home.z + 1.4 * t; d.rotation.x = -.06 * t; });
     await tween(.6, t => { d.position.y = lerp(home.y, above.y, t); d.position.z = lerp(home.z + 1.4, above.z, t); });
-    c.mode = 'parked'; setView('console'); await wait(750);
+    c.mode = 'parked'; setView('console'); prepareIn(P); await wait(750);
     scene.attach(d); _p0.copy(d.position); _q0.copy(d.quaternion); const s0 = d.scale.x;
     _p2.copy(P.entry); _p1.copy(_p0).lerp(_p2, .45); _p1.y = Math.max(_p0.y, _p2.y) + 18;
     await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, 1, t)); _qt.copy(_q0).slerp(P.q, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
@@ -429,12 +498,15 @@ function insertDisc() {
 /* the shelf was (re)opened while a game is running: its disc is already in the console */
 async function restorePlaying(id, seconds) {
   const g = GAMES.find(q => q.id === id); if (!g || active) return;
+  /* rooms by system: the game is played in its own system's room */
+  const moved = isRooms() && sysOf(g) !== curSysKey(); if (moved) { prefs.sys = sysOf(g); prefs.shelf = '__all'; buildGroups(); curGroup = 0; curPage = 0; }
   const gi = groups.findIndex(gr => gr.games.includes(g)), p = gi >= 0 ? pageOf(g, gi) : -1;
-  if (gi >= 0 && (gi !== curGroup || p !== curPage)) { curGroup = gi; curPage = Math.max(0, p); layoutPage(); renderPills(); renderBrand(); }
+  if (moved || (gi >= 0 && (gi !== curGroup || p !== curPage))) { if (gi >= 0) { curGroup = gi; curPage = Math.max(0, p); } layoutPage(); renderPills(); renderBrand(); }
   const c = navOrder.find(q => q.g === g) || getCase(g); if (!c) return;
   if (g.real) await LIB.prepare(g, 1200);
   active = c; c.ensureDetail(); c.setShadow(true); c.openA = 1; c.mode = 'parked'; c.leaving = true; c.placeExtras();
-  const d = c.disc, P = portOf(c); scene.attach(d); d.position.copy(P.inside); d.quaternion.copy(P.q); d.scale.setScalar(1); d.visible = P.m === 'cart'; if (P.m === 'cart') setCartFlaps(1);
+  const d = c.disc, P = portOf(c); scene.attach(d); d.position.copy(P.inside); d.quaternion.copy(P.q); d.scale.setScalar(1); d.visible = P.kind === 'cart' || P.kind === 'socket'; if (P.kind === 'cart') setCartFlaps(1);
+  if (P.kind === 'tray') { d.position.z -= pcTray.userData.out; pcTray.attach(d); }
   setLed(true); tvSet('play', c); playStart = performance.now() - (seconds || 0) * 1000;
   PN_STATE.running = id; PN_STATE.waiting = false; $('#playTitle').textContent = g.t; renderPlayBanner();
   setView('console'); setMode('playing');
@@ -457,13 +529,13 @@ function closeGame(o = {}) {
     PN_STATE.waiting = false; PN_STATE.selfTrack = false; if (!o.keepRunning) PN_STATE.running = null;
     setMode('busy'); tvSet('standby'); setLed(false); sfx.tvOff();
     await popOut(d, P);
-    await wait(320);
+    afterOut(P); await wait(320);
     _p0.copy(d.position); _q0.copy(d.quaternion);
     const tmp = new THREE.Object3D(); c.inner.add(tmp); tmp.position.copy(above); tmp.updateMatrixWorld(true);
     tmp.getWorldPosition(_p2); tmp.getWorldQuaternion(_q2); c.inner.remove(tmp);
     _p1.copy(_p0).lerp(_p2, .55); _p1.y = Math.max(_p0.y, _p2.y) + 22; const sT = c.root.scale.x;
-    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(1, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); if (P.m === 'cart') flapsFor(d); });
-    if (P.m === 'cart') setCartFlaps(0);
+    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(1, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); if (P.kind === 'cart') flapsFor(d, P); });
+    if (P.kind === 'cart') setCartFlaps(0);
     c.inner.attach(d); d.position.copy(above); d.quaternion.identity(); d.scale.set(1, 1, 1);
     sfx.mediaIn(g.fmt, { hitAt: (.55 + .22) * SPEED });
     await tween(.55, t => { d.position.y = lerp(above.y, home.y, t); d.position.z = lerp(above.z, home.z + 1.4, t); });
@@ -531,6 +603,21 @@ async function relayout(opts = {}) {
 /* ---------- keyboard / pad focus along the shelf ---------- */
 function moveFocus(dir) {
   if (!navOrder.length) return; kbNav = true;
+  if (inCabinet()) {
+    /* the TV cabinet: two rows; left and right run along a row and turn the page at the ends, up and down change row */
+    const look = c => { focus = c; setHovered(c); cam.browseX = c.home.x; cam.browseRow = c.row; setView('browse'); };
+    if (!focus || !navOrder.includes(focus)) { look(hovered && navOrder.includes(hovered) ? hovered : navOrder[0]); return; }
+    const np = groups[curGroup].pages.length;
+    if (dir === 'left' || dir === 'right') {
+      const j = navOrder.indexOf(focus) + (dir === 'right' ? 1 : -1);
+      if (j >= navOrder.length && np > 1) { setPage((curPage + 1) % np, true).then(() => look(navOrder[0])); return; }
+      if (j < 0 && np > 1) { setPage((curPage - 1 + np) % np, true).then(() => look(navOrder[navOrder.length - 1])); return; }
+      look(navOrder[clamp(j, 0, navOrder.length - 1)]); return;
+    }
+    const cand = navOrder.filter(c => c.row === focus.row + (dir === 'down' ? 1 : -1));
+    if (cand.length) look(cand.reduce((b, c) => Math.abs(c.home.x - focus.home.x) < Math.abs(b.home.x - focus.home.x) ? c : b));
+    return;
+  }
   if (isCases()) {
     if (!focus || !navOrder.includes(focus)) focus = hovered && navOrder.includes(hovered) ? hovered : navOrder[0];
     else if (dir === 'left' || dir === 'right') {

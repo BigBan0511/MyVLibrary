@@ -36,6 +36,23 @@ const FMT_ORDER = { dvd: 0, jewel: 1, bigjewel: 2, big: 3, floppy: 4, cart: 5 };
 /* the media themselves (cm): a 3½" disk and a cartridge, both drawn upright in their own XY plane */
 const MSIZE = { floppy: { w: 9, h: 9.4, t: .33 }, cart: { w: 12.7, h: 8.6, t: 2 } };
 function mediaOf(g) { return DIMS[g.fmt].media; }
+
+/* ---------- systems: PC games live at the desk, every other platform has its own room with a TV ---------- */
+const PC_SYSTEMS = new Set(['PC', 'LINUX', 'MAC']);
+/* from the PS3 generation on, the TV in the room is a flat one */
+const FLAT_SYSTEMS = new Set(['PS3', 'PS4', 'PS5', 'X360', 'XONE', 'XSX', 'WII', 'WII U', 'SWITCH', 'SWITCH 2']);
+const CART_SYSTEMS = new Set(['NES', 'SNES', 'N64', 'MD', 'SMS', 'GB', 'GBC', 'GBA', 'GG', 'NEO GEO']);
+const SYS_ORDER = ['PC', 'NES', 'SMS', 'MD', 'PCE', 'GB', 'GG', 'SNES', 'NEO GEO', 'MEGA CD', '3DO', 'SATURN', 'PS1', 'N64', 'GBC', 'DC', 'PS2', 'GBA', 'GC', 'XBOX', 'DS', 'PSP', 'X360', 'PS3', 'WII', '3DS', 'VITA', 'WII U', 'XONE', 'PS4', 'SWITCH', 'XSX', 'PS5', 'SWITCH 2', 'ARCADE'];
+function sysOf(g) { return g.plat && !PC_SYSTEMS.has(g.plat) ? g.plat : 'PC'; }
+function sysRank(s) { const i = SYS_ORDER.indexOf(s); return i < 0 ? 900 : i; }
+/* the format a game came in, from its platform (and, for PC, its year) */
+function fmtFor(plat, year) {
+  if (CART_SYSTEMS.has(plat)) return 'cart';
+  if (['PS1', 'SATURN', 'DC'].includes(plat)) return 'bigjewel';
+  if (['MEGA CD', 'PCE', '3DO'].includes(plat)) return 'jewel';
+  if ((!plat || PC_SYSTEMS.has(plat)) && year && year < 2001) return 'big';
+  return 'dvd';
+}
 /* texts that name the thing you put in the console: written for the disc, said right for the others */
 function mediaT(g, s, ...a) {
   const m = mediaOf(g);
@@ -256,8 +273,10 @@ const CAT0 = { faro: ['Partidas cortas', 'Favoritos'], turbo: ['Con amigos', 'Fa
 
 /* viewer preferences */
 const PREF_KEY = 'myvlibrary:prefs';
-const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'tarde', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'wall', room: 'salon', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
+const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'tarde', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'rooms', sys: 'PC', room: 'salon', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}); } catch (e) { }
+/* rooms by system arrived in 0.4: everyone starts there once; the older designs stay in Settings */
+if (prefs.layoutV !== 2) { prefs.layout = 'rooms'; prefs.layoutV = 2; }
 function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) { } }
 
 /* dust builds up while a game sits untouched; wiping it is remembered */
@@ -304,9 +323,15 @@ function fillerGames(n) {
   }
   return out;
 }
+/* the demo spreads its games over a few systems, so each room has something on its shelf */
+const DEMO_SYS = { pixel: 'SNES', kart: 'PS1', ritmo: 'PS1', neon: 'PS3', marea: 'PS3' };
+const DEMO_PLAT = { PC: 'PC (Windows)', PS1: 'Sony PlayStation', SNES: 'Nintendo SNES', PS3: 'Sony PlayStation 3' };
 function initDemoGames() {
   GAMES.push(...fillerGames(86));
   GAMES.forEach(g => {
+    const h = hash('sys' + g.id) % 100, k = DEMO_SYS[g.id] || (/^g\d/.test(g.id) ? (h < 9 ? 'PS1' : h < 16 ? 'SNES' : h < 21 ? 'PS3' : 'PC') : 'PC');
+    g.plat = k; g.platFull = DEMO_PLAT[k]; g.platName = DEMO_PLAT[k];
+    if (k !== 'PC') g.fmt = fmtFor(k, g.year);
     g.status = ST0[g.id] || g.status;
     g.cats = (CAT0[g.id] || []).slice();
     g.wrapped = g.sessions === 0; g.tear = 0;

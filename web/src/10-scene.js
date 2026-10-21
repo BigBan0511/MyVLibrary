@@ -395,8 +395,8 @@ class Case {
     if (this.stand) { this.stand.visible = this.faceOut && !this.hidden; if (this.stand.visible) this.stand.position.set(this.home.x, this.home.board, this.home.pos.z - .2); }
     this.foot.visible = show && this.g.dust > .04;
     if (this.foot.visible) this.foot.position.set(this.home.x, this.home.board + .03, this.home.pos.z);
-    const gap = SHELF.innerH - .4 - this.dim.h; this.web.visible = home && show && this.webMat.opacity > .02 && gap > 2.5;
-    if (this.web.visible) { this.web.scale.set(4.6, gap, 1); this.web.position.set(this.home.x + 1.9, this.home.board + this.dim.h + gap / 2, SHELF.front - 1.4); this.web.rotation.set(0, -.25, 0); }
+    const gap = (this.home.innerH || SHELF.innerH) - .4 - this.dim.h; this.web.visible = home && show && this.webMat.opacity > .02 && gap > 2.5;
+    if (this.web.visible) { this.web.scale.set(4.6, gap, 1); this.web.position.set(this.home.x + 1.9, this.home.board + this.dim.h + gap / 2, (this.home.front || SHELF.front) - 1.4); this.web.rotation.set(0, -.25, 0); }
   }
   ensureCover() {
     if (this.coverTex && !this.dirty) return;

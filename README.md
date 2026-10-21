@@ -4,17 +4,23 @@
 
 Your Playnite library turned into a shelf of physical games.
 
-Every game is a case on a wall shelf. You take it down, peel off the shrink wrap, open it and put the disc in the console to play. The description and the game's details are in the manual inside, and the back cover has the summary. Under the shelf there is a table with a CRT TV, a whiteboard that writes down in marker whatever you are holding, and the console.
+Every game is a case. You take it down, peel off the shrink wrap, open it and put the disc in the console to play. The description and the game's details are in the manual inside, and the back cover has the summary.
 
-![The shelf](docs/estanteria.png)
+Each system has its own place. PC games sit on a shelf above a desk with a beige 90s PC (CD-ROM drive, floppy drive and a CRT monitor) and a whiteboard that writes down in marker whatever you are holding. Each console's games are kept in the low TV cabinet: you sit on the rug, with the TV at eye height and the console on the floor in front of it.
+
+![The PC desk](docs/mesa-pc.png)
+
+![The TV room](docs/sala-tv.png)
 
 ## What it does
 
 - **Your real library.** Covers, backgrounds, descriptions, playtime, completion statuses and categories come from Playnite.
 - **Shelves.** At the top right you choose what is on the shelf: all your games or one status (Playing, Beaten…). You can also group them by category, platform or format. If they don't fit, the shelf has pages ("Next").
 - **Any format you like.** Each game can come in a DVD case, a CD jewel case, a big CD case (like the PAL PlayStation or Dreamcast ones), a cardboard big box, a late-90s box of 3½" floppies or a 16-bit cartridge box. Pick it in the game's card (Format) and mix them on the same shelf. The case in your hands changes on the spot, and the shelf makes room when you put it back.
-- **One console for everything.** The ID-2 has a disc slot, a 3½" floppy drive and a cartridge slot on top. Discs go in the slot, floppies in the drive (with its reading light), and cartridges stay sticking out of the top while you play.
-- **Two designs.** One long wall shelf above the table with the TV and the console, or a row of bookcases (one per status, category or platform). Change it in Settings → Design.
+- **A place per system.** The ‹ › buttons next to the system name (or Q / E, LB / RB) walk you from one system to the next. Only the systems you have in Playnite show up. PC games are on the desk; the rest are in the TV room: a CRT up to the PS2 generation and a flat TV from the PS3, Xbox 360 and Wii on.
+- **Machines for every medium.** The PC has a CD tray that slides out and back, a floppy drive with its light and a cartridge slot on top. The generic ID-2 console has a disc slot, a floppy drive and a cartridge slot. Discs, floppies and cartridges each go in where they belong.
+- **Your EmuVR consoles.** In Settings → EmuVR consoles and screens you can pick an EmuVR `.ugc` file for each system, and another one for the CRT TV, the flat TV or the monitor. When you walk into that system's room, the model replaces the generic console; if it has a lid (like the PlayStation), the lid opens to take the disc. If it faces the wall, the ↻ button turns it around. Models are read on your computer and kept in the extension's data: the extension ships none of them and nothing is uploaded. `.ugc` files compressed with LZMA can't be read yet.
+- **Three designs.** By system (the one in the pictures), one long wall shelf above the table with the TV and the console, or a row of bookcases (one per status, category or platform). Change it in Settings → Design.
 - **Actually playing.** When you put the disc in, Playnite starts the game. While you play, the TV shows it. When you close the game, the disc goes back to its case on its own. If Playnite thinks the game has closed but a program from its folder is still open, the disc stays in until you close it, and that time is added to your playtime.
 - **Trailer.** The TV and the back cover play the game's trailer: the one from Extra Metadata Loader if you have it, or a video found in the description.
 - **Your language.** The shelf follows Playnite's language (Spanish and English for now).
@@ -24,6 +30,8 @@ Every game is a case on a wall shelf. You take it down, peel off the shrink wrap
 - **Rooms.** Living room (the one in the picture), Nordic, Cosy, Cabin, Japanese, Library, Industrial loft, Video store, Gamer and Spaceship. There are also three lights: night, evening and day.
 
 ![Open case with the disc and the manual](docs/caja-abierta.png)
+
+![The wall shelf design](docs/estanteria.png)
 
 ## Install
 
@@ -64,7 +72,8 @@ There are three ways to open the shelf:
 | Peel off the shrink wrap | drag the tab | Enter | A |
 | Open the case / insert the disc | buttons at the bottom | Enter | A |
 | Read the manual | click the manual | M | X |
-| Change shelf | pills at the top | Q / E | LB / RB |
+| Change system (By system design) | ‹ › next to the system | Q / E | LB / RB |
+| Change shelf | pills at the top | Q / E (Z / C in the By system design) | LB / RB (LT / RT in the By system design) |
 | Change page | "Next" | Page Up / Page Down | LT / RT |
 | Go back | | Esc | B |
 | Change room | Settings | H | |
@@ -80,7 +89,7 @@ There are three ways to open the shelf:
 ## What is saved, and where
 
 - **In Playnite:** completion status, categories, user score (each star is 20 points) and notes.
-- **In the extension's data:** the shrink wrap, dust and chosen format of each case, the shelf preferences (room, light, sort order) and a cache of downsized covers. If you never change a game's format, it uses the one its platform suggests.
+- **In the extension's data:** the shrink wrap, dust and chosen format of each case, the shelf preferences (room, light, sort order, system), the `.ugc` files you picked and a cache of downsized covers. If you never change a game's format, it uses the one its platform suggests.
 
 ## Development
 
@@ -120,4 +129,4 @@ node build.mjs                 # web/dist/, what the extension ships
 
 ## License
 
-GPL-3.0. The demo games are made up, and the console and the TV are original designs.
+GPL-3.0. The demo games are made up, and the console, the PC, the TVs and the monitor are original designs. EmuVR models belong to their authors: none are included in or distributed with the extension.

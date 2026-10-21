@@ -115,6 +115,8 @@ function setCloth(canvas) {
 const TV = { x: -40, w: 58, h: 47, d: 22, zFront: 28 };
 TV.y = TABLE.top + .8 + TV.h / 2;
 const tvPlastic = M(THREE.MeshPhysicalMaterial, { color: '#141416', roughness: .48, clearcoat: .2, clearcoatRoughness: .5 }, .9);
+/* everything of the TV hangs from one group, so the same set can stand on the table or on the TV cabinet */
+const tvGroup = new THREE.Group(); scene.add(tvGroup);
 function makeCrtFront() {
   const W = 1160, H = 940, c = mkCanvas(W, H), x = c.getContext('2d'), r = rng(44), k = W / TV.w;
   x.fillStyle = lg(x, 0, 0, 0, H, [[0, '#1d1d20'], [.7, '#151517'], [1, '#101012']]); x.fillRect(0, 0, W, H);
@@ -134,9 +136,9 @@ function makeCrtFront() {
   x.fillStyle = '#b9bcc4'; x.font = `800 26px ${F.saira}`; x.textAlign = 'left'; x.fillText('VISIÓN 21', 2.6 * k + 190, by + 22);
   return c;
 }
-const tvBody = new THREE.Mesh(slabGeometry(TV.w, TV.h, TV.d, 2.4, 1.1), tvPlastic); tvBody.position.set(TV.x, TV.y, TV.zFront - 4.6 - TV.d / 2); tvBody.castShadow = tvBody.receiveShadow = true; scene.add(tvBody);
-const tvRear = new THREE.Mesh(slabGeometry(TV.w * .74, TV.h * .8, 15, 4, 2), tvPlastic); tvRear.position.set(TV.x, TV.y - 1.5, TV.zFront - 4.6 - TV.d - 5.5); tvRear.castShadow = true; scene.add(tvRear);
-[[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => addBox(5, .8, 4, tvPlastic, TV.x + sx * (TV.w / 2 - 6), TABLE.top + .4, TV.zFront - 4.6 - TV.d / 2 + sz * (TV.d / 2 - 4)));
+const tvBody = new THREE.Mesh(slabGeometry(TV.w, TV.h, TV.d, 2.4, 1.1), tvPlastic); tvBody.position.set(TV.x, TV.y, TV.zFront - 4.6 - TV.d / 2); tvBody.castShadow = tvBody.receiveShadow = true; tvGroup.add(tvBody);
+const tvRear = new THREE.Mesh(slabGeometry(TV.w * .74, TV.h * .8, 15, 4, 2), tvPlastic); tvRear.position.set(TV.x, TV.y - 1.5, TV.zFront - 4.6 - TV.d - 5.5); tvRear.castShadow = true; tvGroup.add(tvRear);
+[[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => addBox(5, .8, 4, tvPlastic, TV.x + sx * (TV.w / 2 - 6), TABLE.top + .4, TV.zFront - 4.6 - TV.d / 2 + sz * (TV.d / 2 - 4), tvGroup));
 const SCR = { w: 45, h: 34, cy: 3.4, R: 130 };
 {
   const outer = new THREE.Shape(), hole = new THREE.Path(), hw = TV.w / 2 - .4, hh = TV.h / 2 - .4;
@@ -145,16 +147,18 @@ const SCR = { w: 45, h: 34, cy: 3.4, R: 130 };
   const bg = new THREE.ExtrudeGeometry(outer, { depth: 4.6, bevelEnabled: true, bevelThickness: .35, bevelSize: .35, bevelSegments: 3, curveSegments: 10 });
   const P = bg.attributes.position, U = bg.attributes.uv; for (let i = 0; i < P.count; i++) U.setXY(i, (P.getX(i) + TV.w / 2) / TV.w, (P.getY(i) + TV.h / 2) / TV.h); U.needsUpdate = true;
   const bezel = new THREE.Mesh(bg, [M(THREE.MeshPhysicalMaterial, { map: tex(makeCrtFront()), roughness: .45, clearcoat: .2, clearcoatRoughness: .45 }, .9), tvPlastic]);
-  bezel.position.set(TV.x, TV.y, TV.zFront - 4.6); bezel.castShadow = bezel.receiveShadow = true; scene.add(bezel);
+  bezel.position.set(TV.x, TV.y, TV.zFront - 4.6); bezel.castShadow = bezel.receiveShadow = true; tvGroup.add(bezel);
   /* the tube's dark surround inside the opening */
-  const well = new THREE.Mesh(new THREE.PlaneGeometry(SCR.w + 1, SCR.h + 1), new THREE.MeshBasicMaterial({ color: '#050506' })); well.position.set(TV.x, TV.y + SCR.cy, TV.zFront - 4.55); scene.add(well);
+  const well = new THREE.Mesh(new THREE.PlaneGeometry(SCR.w + 1, SCR.h + 1), new THREE.MeshBasicMaterial({ color: '#050506' })); well.position.set(TV.x, TV.y + SCR.cy, TV.zFront - 4.55); tvGroup.add(well);
 }
 const tvC = mkCanvas(512, 384), tvTex = tex(tvC); tvTex.anisotropy = 1;
 const SCR_PL = (SCR.w + .6) / SCR.R, SCR_TL = (SCR.h + .6) / SCR.R;
 const scrGeo = new THREE.SphereGeometry(SCR.R, 48, 36, Math.PI / 2 - SCR_PL / 2, SCR_PL, Math.PI / 2 - SCR_TL / 2, SCR_TL);
-const screen = new THREE.Mesh(scrGeo, new THREE.MeshBasicMaterial({ map: tvTex, toneMapped: false })); screen.position.set(TV.x, TV.y + SCR.cy, TV.zFront - .4 - SCR.R); scene.add(screen);
-const screenGlass = new THREE.Mesh(scrGeo, M(THREE.MeshPhysicalMaterial, { color: '#000000', transparent: true, opacity: .16, roughness: .03, clearcoat: 1, clearcoatRoughness: .02, depthWrite: false }, 2.4)); screenGlass.position.copy(screen.position); screenGlass.position.z += .06; scene.add(screenGlass);
+const screen = new THREE.Mesh(scrGeo, new THREE.MeshBasicMaterial({ map: tvTex, toneMapped: false })); screen.position.set(TV.x, TV.y + SCR.cy, TV.zFront - .4 - SCR.R); tvGroup.add(screen);
+const screenGlass = new THREE.Mesh(scrGeo, M(THREE.MeshPhysicalMaterial, { color: '#000000', transparent: true, opacity: .16, roughness: .03, clearcoat: 1, clearcoatRoughness: .02, depthWrite: false }, 2.4)); screenGlass.position.copy(screen.position); screenGlass.position.z += .06; tvGroup.add(screenGlass);
 tvLight.position.set(TV.x, TV.y + SCR.cy, TV.zFront + 14);
+/* where the picture is, in table coordinates (the group moves it) */
+const TV_SCREEN = new V3(TV.x, TV.y + SCR.cy, TV.zFront);
 
 /* ---------- the whiteboard: aluminium frame, leaning against the wall ---------- */
 const BOARD = { x: 26, w: 62, h: 44, fr: 1.6 };
@@ -178,6 +182,8 @@ const boardGroup = new THREE.Group(); scene.add(boardGroup);
 const CON = { x: 40, w: 44, h: 8.4, d: 30, zFront: 25 };
 CON.y = TABLE.top + .6; CON.cy = CON.y + CON.h / 2;
 const conMat = M(THREE.MeshPhysicalMaterial, { color: '#141518', roughness: .5, metalness: .05, clearcoat: .35, clearcoatRoughness: .4 }, .9);
+/* like the TV, the ID-2 and its pad hang from one group: on the table, or on the floor of the TV room */
+const conGroup = new THREE.Group(); scene.add(conGroup);
 /* the front panel is drawn at 20 px per cm, from the console's left edge and top */
 const CF = { k: 20, disc: [60, 44, 280, 15], bay: [392, 26, 236, 58], floppy: [414, 47, 192, 10] };
 const conFrontC = mkCanvas(880, 168);
@@ -209,16 +215,16 @@ const conFrontC = mkCanvas(880, 168);
   x.fillStyle = '#5c5f66'; x.font = `800 22px ${F.saira}`; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText('MYV', 60, 132); x.font = `700 13px ${F.mono}`; x.fillText('ID-2', 112, 133);
 }
 const conFrontMat = M(THREE.MeshStandardMaterial, { map: tex(conFrontC), roughness: .5 }, .9);
-const conBody = new THREE.Mesh(slabGeometry(CON.w, CON.h, CON.d, .6, .4), [conFrontMat, conMat, conMat]); conBody.position.set(CON.x, CON.cy, CON.zFront - CON.d / 2); conBody.castShadow = conBody.receiveShadow = true; scene.add(conBody);
+const conBody = new THREE.Mesh(slabGeometry(CON.w, CON.h, CON.d, .6, .4), [conFrontMat, conMat, conMat]); conBody.position.set(CON.x, CON.cy, CON.zFront - CON.d / 2); conBody.castShadow = conBody.receiveShadow = true; conGroup.add(conBody);
 const ventC = mkCanvas(440, 300); { const x = ventC.getContext('2d'); for (let i = 0; i < 18; i++) { x.fillStyle = 'rgba(0,0,0,.6)'; rr(x, 250, 24 + i * 14, 160, 5, 2.5); x.fill(); x.fillStyle = 'rgba(255,255,255,.04)'; x.fillRect(252, 30 + i * 14, 156, 1); } }
-const vent = new THREE.Mesh(new THREE.PlaneGeometry(CON.w, CON.d), new THREE.MeshStandardMaterial({ map: tex(ventC), transparent: true, depthWrite: false, roughness: .6 })); vent.rotation.x = -Math.PI / 2; vent.position.set(CON.x, CON.y + CON.h + .02, CON.zFront - CON.d / 2); scene.add(vent);
-[[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => addBox(3, .6, 3, M(THREE.MeshStandardMaterial, { color: '#0c0c0e' }, .5), CON.x + sx * (CON.w / 2 - 4), TABLE.top + .3, CON.zFront - CON.d / 2 + sz * (CON.d / 2 - 4)));
+const vent = new THREE.Mesh(new THREE.PlaneGeometry(CON.w, CON.d), new THREE.MeshStandardMaterial({ map: tex(ventC), transparent: true, depthWrite: false, roughness: .6 })); vent.rotation.x = -Math.PI / 2; vent.position.set(CON.x, CON.y + CON.h + .02, CON.zFront - CON.d / 2); conGroup.add(vent);
+[[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => addBox(3, .6, 3, M(THREE.MeshStandardMaterial, { color: '#0c0c0e' }, .5), CON.x + sx * (CON.w / 2 - 4), TABLE.top + .3, CON.zFront - CON.d / 2 + sz * (CON.d / 2 - 4), conGroup));
 /* panel coordinates (px from the top-left of the front) to the room */
 const conPx = (px, py) => [CON.x - CON.w / 2 + px / CF.k, CON.y + CON.h - py / CF.k];
 const ledMat = new THREE.MeshBasicMaterial({ color: '#ff9b3a', toneMapped: false });
-{ const [lx, ly] = conPx(760, 52); addBox(1.1, .4, .2, ledMat, lx, ly, CON.zFront + .12); }
+{ const [lx, ly] = conPx(760, 52); addBox(1.1, .4, .2, ledMat, lx, ly, CON.zFront + .12, conGroup); }
 const floppyLedMat = new THREE.MeshBasicMaterial({ color: '#1d3a22', toneMapped: false });
-{ const [lx, ly] = conPx(CF.floppy[0] + 8, CF.bay[1] + CF.bay[3] - 12); addBox(.6, .25, .15, floppyLedMat, lx, ly, CON.zFront + .1); }
+{ const [lx, ly] = conPx(CF.floppy[0] + 8, CF.bay[1] + CF.bay[3] - 12); addBox(.6, .25, .15, floppyLedMat, lx, ly, CON.zFront + .1, conGroup); }
 /* where each medium goes in: the middle of the disc slit, the middle of the floppy slit, the cartridge slot on top */
 const SLOT = (() => { const [dx, dy, dw, dh] = CF.disc, [x, y] = conPx(dx + dw / 2, dy + dh / 2); return { x, y, z: CON.zFront + .05 }; })();
 const FSLOT = (() => { const [fx, fy, fw, fh] = CF.floppy, [x, y] = conPx(fx + fw / 2, fy + fh / 2); return { x, y, z: CON.zFront + .05 }; })();
@@ -227,18 +233,19 @@ CSLOT.top = CON.y + CON.h + CSLOT.h;
 const cartFlaps = [];
 {
   /* a raised collar with a dark mouth and two spring flaps that fold down when a cartridge goes in */
-  fbox(CSLOT.w, CSLOT.h + .2, CSLOT.d, conMat, CSLOT.x, CON.y + CON.h + (CSLOT.h - .2) / 2, CSLOT.z);
+  fbox(CSLOT.w, CSLOT.h + .2, CSLOT.d, conMat, CSLOT.x, CON.y + CON.h + (CSLOT.h - .2) / 2, CSLOT.z, conGroup);
   const mouth = new THREE.Mesh(new THREE.PlaneGeometry(MSIZE.cart.w + .9, MSIZE.cart.t + .7), new THREE.MeshBasicMaterial({ color: '#030304' }));
-  mouth.rotation.x = -Math.PI / 2; mouth.position.set(CSLOT.x, CSLOT.top + .015, CSLOT.z); scene.add(mouth);
+  mouth.rotation.x = -Math.PI / 2; mouth.position.set(CSLOT.x, CSLOT.top + .015, CSLOT.z); conGroup.add(mouth);
   const flapGeo = new THREE.BoxGeometry(MSIZE.cart.w + .6, .12, (MSIZE.cart.t + .6) / 2 - .06), flapMat = M(THREE.MeshStandardMaterial, { color: '#0b0c0e', roughness: .8 }, .5);
   [-1, 1].forEach(s => {
-    const hinge = new THREE.Group(); hinge.position.set(CSLOT.x, CSLOT.top + .02, CSLOT.z + s * (MSIZE.cart.t + .6) / 2); scene.add(hinge);
+    const hinge = new THREE.Group(); hinge.position.set(CSLOT.x, CSLOT.top + .02, CSLOT.z + s * (MSIZE.cart.t + .6) / 2); conGroup.add(hinge);
     const f = new THREE.Mesh(flapGeo, flapMat); f.position.z = -s * (MSIZE.cart.t + .6) / 4; f.receiveShadow = true; hinge.add(f);
     hinge.userData.s = s; cartFlaps.push(hinge);
   });
 }
-/* 0 = flaps shut, 1 = folded down into the slot */
-function setCartFlaps(v) { cartFlaps.forEach(h => { h.rotation.x = -h.userData.s * v * 1.45; }); }
+/* 0 = flaps shut, 1 = folded down into the slot (of whichever machine is in use) */
+function setFlaps(list, v) { list.forEach(h => { h.rotation.x = -h.userData.s * v * 1.45; }); }
+function setCartFlaps(v) { setFlaps(typeof DEV !== 'undefined' && DEV.cur ? DEV.cur.flaps || [] : cartFlaps, v); }
 const tray = new THREE.Object3D(); tray.visible = false; scene.add(tray);
 const trayState = { out: 0 };
 function setTray(v) { trayState.out = v; }
@@ -270,7 +277,7 @@ function makeController() {
   return g;
 }
 /* it lies at the back of the console, out of the way of the cartridge slot */
-const pad = makeController(); pad.position.set(CON.x + 10, CON.y + CON.h, CON.zFront - 19); pad.rotation.y = -.3; scene.add(pad);
+const pad = makeController(); pad.position.set(CON.x + 10, CON.y + CON.h, CON.zFront - 19); pad.rotation.y = -.3; conGroup.add(pad);
 
 /* ---------- the ashtray and a couple of cigarettes ---------- */
 const propsGroup = new THREE.Group(); scene.add(propsGroup);

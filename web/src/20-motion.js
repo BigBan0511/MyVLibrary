@@ -12,6 +12,8 @@ function bez(a, b, c, t, out) { const u = 1 - t; return out.set(u * u * a.x + 2 
 const cam = { pos: new V3(), look: new V3(), tPos: new V3(), tLook: new V3(), view: 'shelf', par: { x: 0, y: 0 }, browseX: 0 };
 function viewPose(name, outPos, outLook) {
   const narrow = camera.aspect < .95; let box, dir;
+  const sb = typeof stageBox === 'function' ? stageBox(name) : null;
+  if (sb) { sb.dir.normalize(); outLook.set(sb.box.cx, sb.box.cy, sb.box.cz ?? 0); outPos.copy(outLook).addScaledVector(sb.dir, fitDist(sb.box.w, sb.box.h)); return; }
   if (isCases() && (name === 'shelf' || name === 'browse')) {
     /* the earlier design: the camera stands in front of one bookcase */
     const u = units[curGroup], H = u ? u.H : 80;
@@ -38,10 +40,11 @@ function updateCamera(dt) {
   camera.position.copy(cam.pos); camera.position.x += cam.par.x; camera.position.y += cam.par.y; camera.lookAt(cam.look);
   /* with the bookcases the ceiling light follows you along the room; over the wall shelf it stays put */
   const k = cam.snap ? 1 : 1 - Math.exp(-2.5 * dt / SPEED); cam.snap = false;
-  if (isCases()) { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(_KOFF); key.position.lerp(_kp, k); }
+  if (isCases() || STAGE.name === 'tv') { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(_KOFF); key.position.lerp(_kp, k); }
   else { key.target.position.lerp(KEY_AIM, k); key.position.lerp(KEY_POS, k); }
   key.target.updateMatrixWorld();
-  if (typeof shelfFill !== 'undefined') shelfFill.forEach((l, i) => { _kl.set(isCases() ? cam.look.x + (i ? 22 : -22) : SHELF.cx + (i ? 55 : -60), isCases() ? cam.look.y + 6 : SHELF.board + 26, isCases() ? 70 : SHELF.front + 75); l.position.lerp(_kl, k); });
+  const follow = isCases() || STAGE.name === 'tv';
+  if (typeof shelfFill !== 'undefined') shelfFill.forEach((l, i) => { _kl.set(follow ? cam.look.x + (i ? 22 : -22) : SHELF.cx + (i ? 55 : -60), follow ? cam.look.y + 6 : SHELF.board + 26, follow ? 70 : SHELF.front + 75); l.position.lerp(_kl, k); });
 }
 const _kl = new V3(), _kp = new V3(), _KOFF = new V3(66, 222, 236);
 function updateRowLights() { }

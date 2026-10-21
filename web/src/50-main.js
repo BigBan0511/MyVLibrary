@@ -76,13 +76,15 @@ canvasEl.addEventListener('wheel', e => {
   clearTimeout(canvasEl.wheelT); canvasEl.wheelT = setTimeout(() => setPage(curPage + ((e.deltaY || e.deltaX) > 0 ? 1 : -1)), 60);
 }, { passive: true });
 function handleKey(k) {
-  if (mode === 'manual') { if (k === 'ArrowRight' || k === 'PageDown' || k === 'e') turn(1); else if (k === 'ArrowLeft' || k === 'PageUp' || k === 'q') turn(-1); else if (k === 'Escape' || k === 'm' || k === 'M') closeManual(); else return false; return true; }
+  if (mode === 'manual') { if (k === 'ArrowRight' || k === 'PageDown' || k === 'e' || k === 'c') turn(1); else if (k === 'ArrowLeft' || k === 'PageUp' || k === 'q' || k === 'z') turn(-1); else if (k === 'Escape' || k === 'm' || k === 'M') closeManual(); else return false; return true; }
   if (busy) return false;
   if (mode === 'shelf') {
     if (k.startsWith('Arrow')) { moveFocus(k.slice(5).toLowerCase()); return true; }
     if (k === 'Enter' || k === ' ') { if (focus && hovered === focus && navOrder.includes(focus)) pick(focus); else moveFocus('right'); return true; }
-    if (k === 'q' || k === 'Q') { setGroup(curGroup - 1); return true; }
-    if (k === 'e' || k === 'E') { setGroup(curGroup + 1); return true; }
+    if (k === 'q' || k === 'Q') { if (isRooms()) setSystem(-1); else setGroup(curGroup - 1); return true; }
+    if (k === 'e' || k === 'E') { if (isRooms()) setSystem(1); else setGroup(curGroup + 1); return true; }
+    if (k === 'z' || k === 'Z') { if (isRooms()) setGroup(curGroup - 1); else setPage(curPage - 1); return true; }
+    if (k === 'c' || k === 'C') { if (isRooms()) setGroup(curGroup + 1); else setPage(curPage + 1); return true; }
     if (k === 'PageUp') { setPage(curPage - 1); return true; }
     if (k === 'PageDown') { setPage(curPage + 1); return true; }
     if (k === 'h' || k === 'H') { switchRoom(ROOM_ORDER[(ROOM_ORDER.indexOf(prefs.room) + 1) % ROOM_ORDER.length]); return true; }
@@ -114,7 +116,7 @@ function pollGamepad(dt) {
   if (LIB.hostPad) return;
   let pads; try { pads = navigator.getGamepads ? navigator.getGamepads() : []; } catch (e) { return; }
   const p = pads && Array.from(pads).find(Boolean); if (!p) return;
-  const map = { 0: 'Enter', 1: 'Escape', 2: 'm', 3: 'f', 4: 'q', 5: 'e', 6: 'PageUp', 7: 'PageDown', 8: 'i', 9: 'Enter', 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight' };
+  const map = { 0: 'Enter', 1: 'Escape', 2: 'm', 3: 'f', 4: 'q', 5: 'e', 6: 'z', 7: 'c', 8: 'i', 9: 'Enter', 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight' };
   for (const k in map) { const on = !!(p.buttons[k] && p.buttons[k].pressed); if (on && !gp.prev[k]) { sfx.init(); handleKey(map[k]); } gp.prev[k] = on; }
   const ax = p.axes[0] || 0, ay = p.axes[1] || 0; gp.stickT -= dt;
   if (gp.stickT <= 0 && (Math.abs(ax) > .6 || Math.abs(ay) > .6)) { gp.stickT = .16; handleKey(Math.abs(ax) > Math.abs(ay) ? (ax > 0 ? 'ArrowRight' : 'ArrowLeft') : (ay > 0 ? 'ArrowDown' : 'ArrowUp')); }
@@ -172,10 +174,13 @@ async function boot() {
   /* printed parts (stickers, the tray, the pull tab) are drawn once the language is known */
   buildSharedMaterials(); applyLight(prefs.light);
   document.documentElement.classList.toggle('is-demo', !PLAYNITE);
+  applyStage(curSysKey());
   buildGroups();
   curGroup = Math.max(0, groups.findIndex(g => g.key === prefs.shelf)); curPage = 0;
   applyRoom(ROOMS[prefs.room] ? prefs.room : 'salon');
   layoutPage();
+  /* the EmuVR models this room uses are read in the background and swapped in when ready */
+  UGCS.load(UGCS.keysFor(curSysKey())).then(() => { if (UGCS.keysFor(curSysKey()).some(k => UGCS.models.has(k))) refreshStage(); });
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); syncHudHeight();
   setView('shelf'); cam.pos.copy(cam.tPos).add(new V3(RM ? 0 : 6, RM ? 0 : 10, RM ? 0 : 60)); cam.look.copy(cam.tLook);
   setTray(0); tvSet('standby'); setLed(false); renderSettings(); renderPills(); renderBrand();
@@ -185,5 +190,5 @@ async function boot() {
   if (PLAYNITE && LIB.running && LIB.running.length) { const r = LIB.running[0]; setTimeout(() => restorePlaying(r.id, r.seconds), 600); }
   else if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
 }
-window.__mvl = { room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, state: () => ({ mode, busy, view: cam.view, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB, games: () => navOrder.map(c => ({ id: c.g.id, t: c.g.t, installed: c.g.installed })), ui: () => ({ toast: $('#toast').textContent, note: $('#playNote').textContent, eyebrow: $('#playEyebrow').textContent, pn: Object.assign({}, PN_STATE, { pendingEject: !!PN_STATE.pendingEject }), playnite: PLAYNITE }) };
+window.__mvl = { room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, sys: setSystem, cam: () => ({ pos: camera.position.toArray().map(v => +v.toFixed(1)), look: cam.look.toArray().map(v => +v.toFixed(1)), fov: camera.fov, room: tvRoom.visible, tv: tvGroup.visible, flat: flatTv.visible, con: conGroup.visible, pc: pcGroup.visible, tray: pcTray ? +pcTray.position.z.toFixed(2) : null, fmt: active && active.g.fmt, port: active && portOf(active).kind }), systems: () => systemsList().map(s => s.key), state: () => ({ mode, busy, view: cam.view, stage: STAGE.name, sys: STAGE.sys, device: DEV.cur && DEV.cur.name, screen: STAGE.screen, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB, games: () => navOrder.map(c => ({ id: c.g.id, t: c.g.t, installed: c.g.installed })), ui: () => ({ toast: $('#toast').textContent, note: $('#playNote').textContent, eyebrow: $('#playEyebrow').textContent, pn: Object.assign({}, PN_STATE, { pendingEject: !!PN_STATE.pendingEject }), playnite: PLAYNITE }) };
 boot();

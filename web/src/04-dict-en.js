@@ -67,6 +67,19 @@ DICT.en = {
   'Esc para sacar el disquete': 'Esc to take the floppy out', 'Esc para sacar el cartucho': 'Esc to take the cartridge out',
   'LEYENDO DISQUETE': 'READING FLOPPY', 'LEYENDO CARTUCHO': 'READING CARTRIDGE',
   'En esta demo cada segundo cuenta como un minuto de partida.': 'In this demo every second counts as a minute of play.',
+  /* rooms by system and EmuVR models */
+  'Salas por sistema': 'By system', 'Sistema anterior': 'Previous system', 'Sistema siguiente': 'Next system', 'sistemas': 'systems',
+  'Disco del juego': 'Game disc', 'Para {0}': 'For {0}', 'Preparando la consola…': 'Setting up the console…',
+  'Consolas y pantallas de EmuVR (.ugc)': 'EmuVR consoles and screens (.ugc)',
+  'En las salas por sistema, un .ugc de EmuVR sustituye a la consola genérica de ese sistema, a una tele o al monitor. Se guarda solo en este equipo.': 'In the “By system” design, an EmuVR .ugc replaces that system’s generic console, a TV or the monitor. It is kept on this computer only.',
+  'PC genérico': 'Generic PC', 'Consola genérica (ID-2)': 'Generic console (ID-2)', 'Tele de tubo': 'CRT TV', 'Tele plana': 'Flat TV', 'Monitor del PC': 'PC monitor',
+  'Genérica': 'Generic', 'Genérico': 'Generic', 'Girar 180°': 'Turn 180°', 'Quitar': 'Remove', 'Cambiar': 'Change', 'Elegir .ugc': 'Choose .ugc',
+  'Leyendo {0}…': 'Reading {0}…', '{0} listo': '{0} ready', 'No se ha podido leer {0}': 'Could not read {0}', 'No se ha podido leer el .ugc': 'Could not read the .ugc',
+  'No parece un .ugc de EmuVR (no es un paquete de Unity).': 'This does not look like an EmuVR .ugc (it is not a Unity bundle).',
+  'Versión de Unity no soportada ({0}).': 'Unsupported Unity version ({0}).',
+  'Este .ugc usa compresión LZMA, que todavía no se puede leer aquí.': 'This .ugc uses LZMA compression, which cannot be read here yet.',
+  'Compresión desconocida en el .ugc.': 'Unknown compression in the .ugc.', 'El .ugc no trae la descripción de sus tipos.': 'The .ugc does not include its type tree.',
+  'El .ugc no contiene ningún objeto.': 'The .ugc contains no objects.', 'Una malla del .ugc está comprimida y todavía no se puede leer.': 'A mesh in the .ugc is compressed and cannot be read yet.',
 };
 /* the page itself was translated before the dictionary existed */
 if (document.body) applyDomLang();

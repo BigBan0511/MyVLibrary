@@ -27,7 +27,7 @@ function imgW(i) { return i.naturalWidth || i.videoWidth || i.width; }
 function imgH(i) { return i.naturalHeight || i.videoHeight || i.height; }
 function coverFit(x, img, X, Y, W, H, fx = .5, fy = .5) { const iw = imgW(img), ih = imgH(img); if (!iw || !ih) return; const sc = Math.max(W / iw, H / ih); x.drawImage(img, X + (W - iw * sc) * fx, Y + (H - ih * sc) * fy, iw * sc, ih * sc); }
 function fmtLabel(g) {
-  if (!g.real) return T(DIMS[g.fmt].label);
+  if (!g.real && sysOf(g) === 'PC') return T(DIMS[g.fmt].label);
   return `${g.plat} · ` + ({ jewel: 'CD', bigjewel: 'CD', big: T('CAJA'), floppy: '3½" HD', cart: T('CARTUCHO') }[g.fmt] || 'DVD');
 }
 const isClear = g => DIMS[g.fmt].shell === 'clear', isCard = g => DIMS[g.fmt].shell === 'card', isWide = g => !!DIMS[g.fmt].wide;
