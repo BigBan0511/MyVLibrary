@@ -12,6 +12,8 @@ Cada juego es una caja en una balda de pared. La sacas, le quitas el precinto, l
 
 - **Tu biblioteca real.** Carátulas, fondos, descripciones, tiempo jugado, estados y categorías salen de Playnite.
 - **Estantes.** Arriba a la derecha eliges qué hay en la balda: todos los juegos o un estado (Jugando, Superados…). También puedes agruparlos por categoría o plataforma. Si no caben, la balda tiene páginas («Siguiente»).
+- **Formatos.** Cada juego viene en la caja que le toca: caja de DVD, caja de CD grande (como las PAL de PlayStation o Dreamcast), caja de cartón con CD, disquetes en caja de cartón o cartucho. Por defecto depende de la plataforma y, en PC, del año (hasta 1995 disquetes, de 1996 a 2003 CD, después DVD). Puedes cambiarlo en la ficha de cada juego (Formato) y mezclar los que quieras.
+- **Un aparato por formato.** Los discos van a la consola con ranura, los disquetes a un PC beige de sobremesa y los cartuchos a una consola con ranura arriba. Si sacas un juego que necesita otro aparato, entra en la mesa deslizándose. Los tres son diseños propios.
 - **Dos diseños.** Una sola balda larga sobre la mesa con la tele y la consola, o una fila de estanterías (una por estado, categoría o plataforma). Se cambia en Ajustes → Diseño.
 - **Jugar de verdad.** Al meter el disco, Playnite arranca el juego. Mientras juegas, la tele lo enseña. Al cerrar el juego, el disco vuelve solo a su caja. Si Playnite da el juego por cerrado pero sigue abierto algún programa de su carpeta, el disco se queda dentro hasta que lo cierres y ese tiempo se suma a tus horas.
 - **Tráiler.** La tele y la contraportada ponen el tráiler del juego: el de Extra Metadata Loader si lo tienes, o el vídeo que venga en la descripción.

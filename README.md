@@ -12,6 +12,8 @@ Every game is a case on a wall shelf. You take it down, peel off the shrink wrap
 
 - **Your real library.** Covers, backgrounds, descriptions, playtime, completion statuses and categories come from Playnite.
 - **Shelves.** At the top right you choose what is on the shelf: all your games or one status (Playing, Beaten…). You can also group them by category or platform. If they don't fit, the shelf has pages ("Next").
+- **Formats.** Each game comes in the box it would have had: a DVD case, a big CD case (like PAL PlayStation or Dreamcast games), a cardboard box with a CD, floppy disks in a cardboard box, or a cartridge. By default it depends on the platform and, for PC games, on the year (up to 1995 floppies, 1996–2003 CD, then DVD). You can change it for any game in its card (Format), and mix them as you like.
+- **One machine per media.** Discs go into the slot-loading console, floppies into a beige desktop PC, cartridges into a console with a slot on top. When you take out a game that needs another machine, it slides onto the table. All three are original designs.
 - **Two designs.** One long wall shelf above the table with the TV and the console, or a row of bookcases (one per status, category or platform). Change it in Settings → Design.
 - **Actually playing.** When you put the disc in, Playnite starts the game. While you play, the TV shows it. When you close the game, the disc goes back to its case on its own. If Playnite thinks the game has closed but a program from its folder is still open, the disc stays in until you close it, and that time is added to your playtime.
 - **Trailer.** The TV and the back cover play the game's trailer: the one from Extra Metadata Loader if you have it, or a video found in the description.

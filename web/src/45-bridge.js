@@ -17,11 +17,6 @@ const PLAT_SHORT = [
   [/windows|pc\b|\(windows\)|dos/i, 'PC'], [/linux/i, 'LINUX'], [/mac/i, 'MAC'], [/android/i, 'ANDROID'], [/ios/i, 'IOS']
 ];
 function shortPlat(name) { if (!name) return 'PC'; for (const [re, s] of PLAT_SHORT) if (re.test(name)) return s; return name.split(/\s+/).pop().slice(0, 7).toUpperCase(); }
-function fmtFor(plat, year) {
-  if (['PS1', 'SATURN', 'MEGA CD', 'PCE', '3DO', 'NEO GEO'].includes(plat)) return 'jewel';
-  if ((plat === 'PC' || plat === 'MAC') && year && year < 2001) return 'big';
-  return 'dvd';
-}
 function defaultPal(seed) { const h = hash(seed) % 360; return [hslHex(h, .35, .14), hslHex(h + 10, .3, .3), hslHex(h + 160, .55, .55), hslHex(h + 30, .6, .8), '#f6f2ea']; }
 function htmlToText(html) {
   if (!html) return '';
@@ -136,7 +131,7 @@ const LIB = {
     const g = old || { id: r.id, real: true, ach: [0, 0], font: 'saira', tag: '', tpos: 'top', artOpt: {}, tear: 0 };
     Object.assign(g, {
       t: r.name || T('Sin título'), sort: r.sort || r.name || '', status: r.status || '', cats: (r.cats || []).slice(), genres: r.genres || [], genre: (r.genres || []).slice(0, 2).join(' / '),
-      dev: (r.devs || []).slice(0, 2).join(', '), pub: (r.pubs || []).slice(0, 2).join(', '), year, release: r.release || '', plat, platName: plats.join(', '), fmt: old ? old.fmt : fmtFor(plat, year),
+      dev: (r.devs || []).slice(0, 2).join(', '), pub: (r.pubs || []).slice(0, 2).join(', '), year, release: r.release || '', plat, platName: plats.join(', '), fmtAuto: fmtFor(plat, year),
       hours: (r.playtime || 0) / 3600, sessions: r.playCount || 0, last: days(r.lastActivity), added: days(r.added), installed: !!r.installed, favorite: !!r.favorite,
       rating: r.score ? clamp(Math.round(r.score / 20), 0, 5) : 0, critic: r.critic || null, community: r.community || null, features: r.features || [], series: (r.series || []).join(', '),
       ageRating: (r.age || []).join(', '), age: (() => { const m = (r.age || []).join(' ').match(/\b(3|7|12|16|18)\b/); return m ? +m[1] : null; })(), src: r.src || '', sum: r.sum || '', hasCover: !!r.hasCover, hasBg: !!r.hasBg, hasLogo: !!r.hasLogo
@@ -149,7 +144,9 @@ const LIB = {
       g.wrapped = !g.hours && !g.sessions && g.last === null;
       g.dust = g.wrapped ? 0 : dustFor(g.last !== null ? g.last : (g.added ?? 0));
       restoreUi(g); if (g.wrapped) g.dust = 0; g.dust0 = g.dust;
-    } else if (g.wrapped && (g.hours || g.sessions)) { g.wrapped = false; }
+    }
+    applyFmt(g);
+    if (old && g.wrapped && (g.hours || g.sessions)) g.wrapped = false;
     return g;
   },
   setLists(m) {
@@ -172,8 +169,10 @@ const LIB = {
     for (const r of list || []) {
       const g = GAMES.find(q => q.id === r.id);
       if (!g) { GAMES.push(this.fromHost(r)); regroup = true; continue; }
-      const before = keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '');
+      const before = keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : ''), fmt0 = g.fmt;
       this.fromHost(r, g);
+      /* a new platform or year can change the box: the old one goes, the shelf makes the new one */
+      if (g.fmt !== fmt0 && !(active && active.g === g)) { dropCases(g); regroup = true; continue; } else if (g.fmt !== fmt0) g.fmt = fmt0;
       if (before !== keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '')) regroup = true;
       for (const c of casesOf(g)) { c.dirty = true; c.refreshSpine(); if (c === active || c.faceOut) c.ensureDetail(); }
     }

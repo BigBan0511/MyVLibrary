@@ -84,7 +84,7 @@ function updateTvLight(now) {
   if ((tv.state === 'title' || tv.state === 'play' || tv.state === 'wait') && tv.g) { col = tv.g.pal[2]; I = .6 + Math.sin(now * .013) * .06 + (Math.random() - .5) * .05; }
   tvLight.color.lerp(new THREE.Color(col), .08); tvLight.intensity += (I - tvLight.intensity) * .08;
 }
-function setLed(on) { ledMat.color.set(on ? '#4dff88' : '#ff9b3a'); }
+function setLed(on) { const d = DEV[devKind]; if (d) d.led(on); }
 
 /* ---------- trailer: on the TV and on the back of the case while the game is in your hands ---------- */
 const trailer = { video: null, c: null, ready: false, lastBack: 0 };

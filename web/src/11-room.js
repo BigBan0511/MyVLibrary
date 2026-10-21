@@ -173,41 +173,11 @@ const boardGroup = new THREE.Group(); scene.add(boardGroup);
   addBox(9, 2, 3.4, M(THREE.MeshStandardMaterial, { color: '#2a2b30', roughness: .8 }, .5), 12, f + 1.3, 2.1, boardGroup);
 }
 
-/* ---------- the console ("ID-2", our own design): a black slab with a slot-loading drive ---------- */
+/* ---------- where the machine stands (the machines themselves are in 14-devices.js) ---------- */
 const CON = { x: 40, w: 44, h: 8.4, d: 30, zFront: 25 };
 CON.y = TABLE.top + .6; CON.cy = CON.y + CON.h / 2;
-const conMat = M(THREE.MeshPhysicalMaterial, { color: '#141518', roughness: .5, metalness: .05, clearcoat: .35, clearcoatRoughness: .4 }, .9);
-const conFrontC = mkCanvas(880, 168);
-{
-  const x = conFrontC.getContext('2d'), k = 20;
-  x.fillStyle = lg(x, 0, 0, 0, 168, [[0, '#1a1b1f'], [.5, '#141518'], [1, '#101114']]); x.fillRect(0, 0, 880, 168);
-  x.fillStyle = 'rgba(255,255,255,.05)'; x.fillRect(0, 104, 880, 2); x.fillStyle = 'rgba(0,0,0,.4)'; x.fillRect(0, 106, 880, 2);
-  /* the slot */
-  x.fillStyle = '#030304'; rr(x, 60, 44, 440, 15, 7.5); x.fill();
-  x.fillStyle = 'rgba(255,255,255,.07)'; x.fillRect(66, 61, 428, 2); x.fillStyle = 'rgba(0,0,0,.5)'; x.fillRect(64, 41, 432, 3);
-  x.fillStyle = '#6d7078'; x.beginPath(); x.moveTo(528, 58); x.lineTo(538, 46); x.lineTo(548, 58); x.closePath(); x.fill(); x.fillRect(528, 61, 20, 3);
-  /* power and reset */
-  x.fillStyle = '#0a0a0c'; x.beginPath(); x.arc(610, 52, 13, 0, 7); x.fill(); x.strokeStyle = 'rgba(255,255,255,.12)'; x.lineWidth = 2; x.beginPath(); x.arc(610, 52, 13, 0, 7); x.stroke();
-  x.strokeStyle = '#7d8088'; x.lineWidth = 2.4; x.beginPath(); x.arc(610, 53, 6, -1.1, 4.25); x.stroke(); x.beginPath(); x.moveTo(610, 44); x.lineTo(610, 52); x.stroke();
-  x.fillStyle = '#0a0a0c'; rr(x, 640, 46, 26, 12, 6); x.fill();
-  /* two controller ports */
-  [[700, 120], [790, 120]].forEach(([px, py]) => { x.fillStyle = '#060607'; rr(x, px, py, 66, 28, 5); x.fill(); x.fillStyle = 'rgba(255,255,255,.08)'; x.fillRect(px + 8, py + 10, 50, 3); });
-  x.fillStyle = '#5c5f66'; x.font = `800 22px ${F.saira}`; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText('MYV', 60, 132); x.font = `700 13px ${F.mono}`; x.fillText('ID-2', 112, 133);
-}
-const conFrontMat = M(THREE.MeshStandardMaterial, { map: tex(conFrontC), roughness: .5 }, .9);
-const conBody = new THREE.Mesh(slabGeometry(CON.w, CON.h, CON.d, .6, .4), [conFrontMat, conMat, conMat]); conBody.position.set(CON.x, CON.cy, CON.zFront - CON.d / 2); conBody.castShadow = conBody.receiveShadow = true; scene.add(conBody);
-const ventC = mkCanvas(440, 300); { const x = ventC.getContext('2d'); for (let i = 0; i < 18; i++) { x.fillStyle = 'rgba(0,0,0,.6)'; rr(x, 250, 24 + i * 14, 160, 5, 2.5); x.fill(); x.fillStyle = 'rgba(255,255,255,.04)'; x.fillRect(252, 30 + i * 14, 156, 1); } }
-const vent = new THREE.Mesh(new THREE.PlaneGeometry(CON.w, CON.d), new THREE.MeshStandardMaterial({ map: tex(ventC), transparent: true, depthWrite: false, roughness: .6 })); vent.rotation.x = -Math.PI / 2; vent.position.set(CON.x, CON.y + CON.h + .02, CON.zFront - CON.d / 2); scene.add(vent);
-[[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => addBox(3, .6, 3, M(THREE.MeshStandardMaterial, { color: '#0c0c0e' }, .5), CON.x + sx * (CON.w / 2 - 4), TABLE.top + .3, CON.zFront - CON.d / 2 + sz * (CON.d / 2 - 4)));
-const ledMat = new THREE.MeshBasicMaterial({ color: '#ff9b3a', toneMapped: false });
-addBox(1.1, .4, .2, ledMat, CON.x + 4.6, CON.y + CON.h - 2.6, CON.zFront + .12);
-/* where the disc goes in: the middle of the slit */
-const SLOT = { x: CON.x - CON.w / 2 + 14, y: CON.y + CON.h - 2.6, z: CON.zFront + .05 };
-const tray = new THREE.Object3D(); tray.visible = false; scene.add(tray);
-const trayState = { out: 0 };
-function setTray(v) { trayState.out = v; }
 
-/* ---------- the controller: an original two-grip pad lying on the console ---------- */
+/* ---------- the controller: an original two-grip pad ---------- */
 function makeController() {
   const g = new THREE.Group(), s = new THREE.Shape();
   s.moveTo(0, 3.3); s.lineTo(4.4, 3.3); s.bezierCurveTo(6.6, 3.4, 7.9, 2.4, 8.2, .4); s.bezierCurveTo(8.6, -2.6, 8.4, -5.6, 6.6, -6.4);
@@ -233,7 +203,8 @@ function makeController() {
   [-1, 1].forEach(sd => { const sh = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 1.2), btn); sh.position.set(sd * 5.6, 2.1, -3.6); g.add(sh); });
   return g;
 }
-const pad = makeController(); pad.position.set(CON.x - 5, CON.y + CON.h, CON.zFront - 14); pad.rotation.y = -.42; scene.add(pad);
+/* the pad travels with whichever machine is on the table */
+const pad = makeController();
 
 /* ---------- the ashtray and a couple of cigarettes ---------- */
 const propsGroup = new THREE.Group(); scene.add(propsGroup);

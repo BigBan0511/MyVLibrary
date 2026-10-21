@@ -77,7 +77,7 @@ function drawBoard(force) {
       marker(x, T(PN_STATE.waiting ? 'ARRANCANDO…' : 'JUGANDO AHORA'), L, y + 20, 70, { col: INK3, rot: -.025 });
       const m = Math.max(0, Math.floor((performance.now() - playStart) / 60000));
       marker(x, PN_STATE.waiting ? T('Playnite está abriendo el juego') : T('Esta sesión: {0}', m < 1 ? T('acaba de empezar') : m === 1 ? T('1 minuto') : T('{0} minutos', m)), L, y + 110, 40);
-      wrapMarker(x, T(PLAYNITE ? 'Al cerrar el juego, el disco vuelve solo a su caja' : 'Esc para sacar el disco'), L, y + 190, maxW * .9, 34, 44, 2, INK2);
+      wrapMarker(x, PLAYNITE ? T('Al cerrar el juego, {0} vuelve solo a su caja', mediaNoun(g)) : T('Esc para sacar {0}', mediaNoun(g)), L, y + 190, maxW * .9, 34, 44, 2, INK2);
       boardTex.needsUpdate = true; return;
     }
     const st = g.status ? TD(g.status) : T('Sin estado');

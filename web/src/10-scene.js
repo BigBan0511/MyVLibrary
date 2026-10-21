@@ -114,10 +114,30 @@ function pgeo(fmt, kind) {
 }
 function caseGeo(fmt) {
   if (GEO[fmt]) return GEO[fmt];
-  const { w, h, d, split } = DIMS[fmt], shellD = split + d / 2, lidD = d / 2 - split;
-  const rc = fmt === 'big' ? .3 : fmt === 'jewel' ? .25 : .6, b = fmt === 'big' ? .12 : fmt === 'jewel' ? .06 : .15;
-  GEO[fmt] = { shell: slabGeometry(w, h, shellD, rc, Math.min(b, shellD * .3)), lid: slabGeometry(w, h, lidD, rc, Math.min(b, lidD * .3)), wrap: slabGeometry(w + .1, h + .1, d + .1, rc + .05, .03), bevel: b };
+  const { w, h, d, split } = DIMS[fmt], shellD = split + d / 2, lidD = d / 2 - split, card = isCard(fmt);
+  const rc = card ? .3 : fmt === 'jewel' ? .25 : .6, b = card ? .12 : fmt === 'jewel' ? .06 : .15;
+  GEO[fmt] = { shell: card ? cavityGeometry(w, h, shellD, BOX_WALL) : slabGeometry(w, h, shellD, rc, Math.min(b, shellD * .3)), lid: slabGeometry(w, h, lidD, rc, Math.min(b, lidD * .3)), wrap: slabGeometry(w + .1, h + .1, d + .1, rc + .05, .03), bevel: b };
   return GEO[fmt];
+}
+/* a cardboard box open at the front: back panel and four walls; the flap is the lid.
+   Groups as in slabGeometry: 0 the inside floor, 1 the back, 2 every edge and wall */
+const BOX_WALL = .15;
+function cavityGeometry(w, h, D, t) {
+  const parts = [], out = [0, 1, 2].map(() => ({ p: [], n: [], u: [] }));
+  const piece = (bw, bh, bd, x, y, z, map) => { const b = new THREE.BoxGeometry(bw, bh, bd); b.translate(x, y, z); parts.push([b, map]); };
+  piece(w, h, t, 0, 0, -D / 2 + t / 2, i => i === 4 ? 0 : i === 5 ? 1 : 2);
+  const wd = D - t, wz = t / 2;
+  [-1, 1].forEach(sx => piece(t, h, wd, sx * (w / 2 - t / 2), 0, wz, () => 2));
+  [-1, 1].forEach(sy => piece(w - 2 * t, t, wd, 0, sy * (h / 2 - t / 2), wz, () => 2));
+  for (const [b, map] of parts) {
+    const nb = b.toNonIndexed(), P = nb.attributes.position.array, Nn = nb.attributes.normal.array, U = nb.attributes.uv.array;
+    for (const gr of nb.groups) { const o = out[map(gr.materialIndex)]; for (let i = gr.start; i < gr.start + gr.count; i++) { o.p.push(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); o.n.push(Nn[i * 3], Nn[i * 3 + 1], Nn[i * 3 + 2]); o.u.push(U[i * 2], U[i * 2 + 1]); } }
+    b.dispose(); nb.dispose();
+  }
+  const geo = new THREE.BufferGeometry(), P = [], Nn = [], U = []; let start = 0;
+  out.forEach((o, mi) => { for (let i = 0; i < o.p.length; i++) P.push(o.p[i]); for (let i = 0; i < o.n.length; i++) Nn.push(o.n[i]); for (let i = 0; i < o.u.length; i++) U.push(o.u[i]); const cnt = o.p.length / 3; geo.addGroup(start, cnt, mi); start += cnt; });
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(Nn, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+  return geo;
 }
 
 /* ---------- shared case materials ---------- */
@@ -135,9 +155,10 @@ const MAT = {
 };
 let TEXS = {};
 function buildSharedMaterials() {
-  ['dvd', 'jewel', 'big'].forEach(f => {
-    MAT.tray[f] = M(THREE.MeshPhysicalMaterial, { map: tex(makeTrayCanvas(f)), roughness: f === 'big' ? .85 : .4, clearcoat: f === 'big' ? 0 : .5, clearcoatRoughness: .2 }, f === 'big' ? .5 : 1);
-    MAT.lid[f] = M(THREE.MeshPhysicalMaterial, { map: tex(makeLidCanvas(f)), roughness: f === 'big' ? .85 : .4, clearcoat: f === 'big' ? 0 : .5, clearcoatRoughness: .2 }, f === 'big' ? .5 : 1);
+  FMT_LIST.forEach(f => {
+    const card = isCard(f);
+    MAT.tray[f] = M(THREE.MeshPhysicalMaterial, { map: tex(makeTrayCanvas(f)), roughness: card ? .85 : .4, clearcoat: card ? 0 : .5, clearcoatRoughness: .2 }, card ? .5 : 1);
+    MAT.lid[f] = M(THREE.MeshPhysicalMaterial, { map: tex(makeLidCanvas(f)), roughness: card ? .85 : .4, clearcoat: card ? 0 : .5, clearcoatRoughness: .2 }, card ? .5 : 1);
   });
   MAT.discBottom.map = tex(makeRainbowCanvas()); MAT.discBottom.needsUpdate = true;
   TEXS = {
@@ -150,7 +171,7 @@ function buildSharedMaterials() {
     tab: tex(makeTabCanvas()),
     foot: {}
   };
-  ['dvd', 'jewel', 'big'].forEach(f => { const { w, d } = DIMS[f]; TEXS.foot[f] = new THREE.CanvasTexture(makeFootCanvas(d / (d + 1.8), w / (w + 1.2))); });
+  FMT_LIST.forEach(f => { const { w, d } = DIMS[f]; TEXS.foot[f] = new THREE.CanvasTexture(makeFootCanvas(d / (d + 1.8), w / (w + 1.2))); });
   TEXS.contact = new THREE.CanvasTexture(makeContactCanvas());
   MAT.acrylic = M(THREE.MeshPhysicalMaterial, { color: '#f4f8ff', transparent: true, opacity: .22, roughness: .02, clearcoat: 1, clearcoatRoughness: .01, depthWrite: false }, 2.4);
   MAT.sticker = M(THREE.MeshStandardMaterial, { map: TEXS.sticker, transparent: true, roughness: .4 }, .8);
@@ -164,6 +185,54 @@ function makeDisc(R, labelMat) {
   grp.add(top, bot, side); grp.traverse(m => { if (m.isMesh) m.castShadow = true; });
   return grp;
 }
+/* a 3½-inch floppy: plastic body, metal shutter over the head window, the label below, the hub behind */
+const FLOPPY = { w: 9, h: 9.4, t: .33 }, CART = { w: 11.6, h: 9.2, t: 1.9 };
+const FLOPPY_COLS = ['#1c1d21', '#24344f', '#2e3036', '#5a1f22', '#1f3b2c'], CART_COLS = ['#8b8d93', '#2b2c31', '#5d6068', '#b9b5aa'];
+const shutterMat = M(THREE.MeshStandardMaterial, { color: '#c9ccd2', roughness: .32, metalness: .9 }, 1.3);
+const darkPlastic = M(THREE.MeshStandardMaterial, { color: '#08080a', roughness: .6 }, .6);
+const mediaBody = {};
+function mediaBodyMat(kind, g) {
+  const list = kind === 'cart' ? CART_COLS : FLOPPY_COLS, col = list[hash(g.id + kind) % list.length], k = kind + col;
+  return mediaBody[k] || (mediaBody[k] = M(THREE.MeshPhysicalMaterial, { color: col, roughness: kind === 'cart' ? .55 : .42, clearcoat: kind === 'cart' ? .1 : .35, clearcoatRoughness: .4 }, .9));
+}
+let FLOPPY_GEO = null, CART_GEO = null;
+function floppyGeo() {
+  if (FLOPPY_GEO) return FLOPPY_GEO;
+  const { w, h, t } = FLOPPY;
+  FLOPPY_GEO = { body: slabGeometry(w, h, t, .22, .04), shutter: new THREE.BoxGeometry(4.6, 3.1, t + .04), win: new THREE.PlaneGeometry(1, 2), label: new THREE.PlaneGeometry(7.4, 5.6), hub: new THREE.CircleGeometry(1.25, 32) };
+  Object.values(FLOPPY_GEO).forEach(g => { g.userData.shared = true; }); return FLOPPY_GEO;
+}
+function makeFloppy(labelMat, bodyMat) {
+  const G = floppyGeo(), { h, t } = FLOPPY, grp = new THREE.Group();
+  grp.add(new THREE.Mesh(G.body, bodyMat));
+  const sh = new THREE.Mesh(G.shutter, shutterMat); sh.position.set(.3, h / 2 - 1.55, 0); grp.add(sh);
+  const win = new THREE.Mesh(G.win, darkPlastic); win.position.set(.3, h / 2 - 1.4, t / 2 + .025); grp.add(win);
+  const lab = new THREE.Mesh(G.label, labelMat); lab.position.set(0, -1.7, t / 2 + .004); grp.add(lab);
+  const hub = new THREE.Mesh(G.hub, MAT.discEdge); hub.rotation.y = Math.PI; hub.position.set(0, -.3, -t / 2 - .004); grp.add(hub);
+  grp.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  return grp;
+}
+/* a cartridge (our own shape): narrower at the connector, rounded on top, grip lines under the label */
+function cartGeo() {
+  if (CART_GEO) return CART_GEO;
+  const { w, h, t } = CART, s = new THREE.Shape(), a = w / 2, b = h / 2, r = .9, nb = .45, nh = 1.4;
+  s.moveTo(-a + nb, -b); s.lineTo(a - nb, -b); s.lineTo(a - nb, -b + nh); s.lineTo(a, -b + nh + .4); s.lineTo(a, b - r); s.quadraticCurveTo(a, b, a - r, b); s.lineTo(-a + r, b); s.quadraticCurveTo(-a, b, -a, b - r); s.lineTo(-a, -b + nh + .4); s.lineTo(-a + nb, -b + nh); s.closePath();
+  const body = new THREE.ExtrudeGeometry(s, { depth: t - .16, bevelEnabled: true, bevelThickness: .08, bevelSize: .08, bevelSegments: 2, curveSegments: 8 }); body.translate(0, 0, -(t - .16) / 2);
+  CART_GEO = { body, label: new THREE.PlaneGeometry(9.4, 5.8), groove: new THREE.BoxGeometry(8.6, .16, .08), pins: new THREE.PlaneGeometry(w - 2 * nb - .6, .7) };
+  Object.values(CART_GEO).forEach(g => { g.userData.shared = true; }); return CART_GEO;
+}
+function makeCart(labelMat, bodyMat) {
+  const G = cartGeo(), { h, t } = CART, grp = new THREE.Group();
+  const body = new THREE.Mesh(G.body, bodyMat); grp.add(body);
+  const lab = new THREE.Mesh(G.label, labelMat); lab.position.set(0, .95, t / 2 + .005); grp.add(lab);
+  for (let i = 0; i < 4; i++) { const gr = new THREE.Mesh(G.groove, darkPlastic); gr.position.set(0, -2.45 - i * .38, t / 2); grp.add(gr); }
+  const pins = new THREE.Mesh(G.pins, darkPlastic); pins.rotation.x = Math.PI / 2; pins.position.set(0, -h / 2 - .002, 0); grp.add(pins);
+  grp.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  return grp;
+}
+function makeMedia(kind, labelMat, g) { return kind === 'floppy' ? makeFloppy(labelMat, mediaBodyMat(kind, g)) : kind === 'cart' ? makeCart(labelMat, mediaBodyMat(kind, g)) : makeDisc(DIMS.dvd.discR, labelMat); }
+/* how thick each piece of media is, to rest it on the floor of a box */
+const MEDIA_T = { disc: .124, floppy: FLOPPY.t, cart: CART.t };
 const STRIP_GEO = new THREE.BoxGeometry(1, .32, .03);
 const UNIT_PLANE = new THREE.PlaneGeometry(1, 1);
 let IGEO = null; const MGEO = {};
@@ -183,7 +252,7 @@ function viewW(dist) { return viewH(dist) * camera.aspect; }
 class Case {
   constructor(g) {
     this.g = g; const D = this.dim = DIMS[g.fmt], { w, h, d, split } = D, G = caseGeo(g.fmt);
-    const isJ = g.fmt === 'jewel', isB = g.fmt === 'big';
+    const isJ = g.fmt === 'jewel', isB = isCard(g.fmt);
     this.root = new THREE.Group(); this.inner = new THREE.Group(); this.root.add(this.inner); scene.add(this.root);
     this.edge = isB ? M(THREE.MeshStandardMaterial, { color: g.spine || g.pal[0], roughness: .7 }, .6) : MAT.edge[g.fmt];
     const cp = isB ? { roughness: .62, clearcoat: .3, clearcoatRoughness: .4 } : isJ ? { roughness: .45, clearcoat: .7, clearcoatRoughness: .08 } : { roughness: .52, clearcoat: .55, clearcoatRoughness: .14 };
@@ -217,7 +286,9 @@ class Case {
     this.web = new THREE.Mesh(UNIT_PLANE, this.webMat); this.web.visible = false; scene.add(this.web);
     /* the inside (hub, clips, disc, manual) is only built while the case is in your hands */
     this.disc = null; this.manual = null; this.interior = null;
-    this.discHome = new V3(D.discX, 0, split + .075);
+    /* the media lies on the tray of a plastic case, or on the floor of a cardboard box (floppies stacked, the top one goes in) */
+    const floor = -d / 2 + BOX_WALL, kind = D.media;
+    this.discHome = isB ? new V3(D.discX, kind === 'cart' ? .4 : 0, floor + (kind === 'floppy' ? 2 * .34 : 0) + MEDIA_T[kind] / 2 + .03) : new V3(D.discX, 0, split + .075);
     this.discLabelMat = M(THREE.MeshPhysicalMaterial, { color: g.pal[0], roughness: .4, metalness: .05, clearcoat: .8, clearcoatRoughness: .1, emissive: new THREE.Color('#000000') }, 1);
     this.manMat = M(THREE.MeshStandardMaterial, { color: '#efe9dc', roughness: .7, emissive: new THREE.Color('#000000') }, .8);
     this.shell.receiveShadow = this.lid.receiveShadow = true; this.spine.receiveShadow = true;
@@ -277,14 +348,18 @@ class Case {
   }
   buildInterior() {
     if (this.interior) return;
-    const g = this.g, D = this.dim, { w, h, split } = D, isJ = g.fmt === 'jewel', isB = g.fmt === 'big', parts = [];
+    const g = this.g, D = this.dim, { w, h, split } = D, isJ = g.fmt === 'jewel', isB = isCard(g.fmt), parts = [];
     if (!isB) {
       const m = isJ ? MAT.edge.jewel : MAT.edge.dvd, G = interiorGeo();
       const hub = new THREE.Mesh(G.hub, m); hub.rotation.x = Math.PI / 2; hub.position.set(D.discX, 0, split + .17); this.inner.add(hub); parts.push([this.inner, hub]);
       for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, tooth = new THREE.Mesh(G.tooth, m); tooth.position.set(D.discX + Math.cos(a) * .55, Math.sin(a) * .55, split + .2); tooth.rotation.z = a; this.inner.add(tooth); parts.push([this.inner, tooth]); }
       [1, -1].forEach(sy => { const clip = new THREE.Mesh(G.clip, m); clip.position.set(w - .9, sy * (h / 2 - 1.3), -.13); this.pivot.add(clip); parts.push([this.pivot, clip]); });
     }
-    this.disc = makeDisc(D.discR, this.discLabelMat); this.disc.position.copy(this.discHome); this.inner.add(this.disc);
+    this.disc = D.media === 'disc' ? makeDisc(D.discR, this.discLabelMat) : makeMedia(D.media, this.discLabelMat, g); this.disc.position.copy(this.discHome); this.inner.add(this.disc);
+    if (D.media === 'floppy') {
+      /* the rest of the set under the first disk */
+      [[-1.7, 1.5, .09, 0], [-.85, .75, -.05, 1]].forEach(([dx, dy, rz, i]) => { const f = makeFloppy(this.discLabelMat, mediaBodyMat('floppy', g)); f.position.set(this.discHome.x + dx, this.discHome.y + dy, this.discHome.z - (2 - i) * .34); f.rotation.z = rz; this.inner.add(f); parts.push([this.inner, f]); });
+    }
     const [mw, mh] = D.man;
     this.manual = new THREE.Mesh(manualGeo(g.fmt), [MAT.paper, MAT.paper, MAT.paper, MAT.paper, MAT.paper, this.manMat]);
     this.manual.position.set(w / 2 - .1, 0, -.09); this.pivot.add(this.manual);
@@ -312,7 +387,7 @@ class Case {
     [this.root, this.foot, this.contact, this.web, this.stand].forEach(o => { if (o) scene.remove(o); });
     if (this.stand) this.stand.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
     [this.spineTex, this.coverTex, this.backTex, this.discTex, this.manTex].forEach(t => t && t.dispose());
-    if (this.g.fmt === 'big') unM(this.edge);
+    if (isCard(this.g.fmt)) unM(this.edge);
     [this.frontMat, this.backMat, this.spineMat, this.dustMat, this.filmMat, this.topMat, this.footMat, this.discLabelMat, this.manMat].forEach(unM);
     this.contactMat.dispose(); this.webMat.dispose();
     this.disposed = true;
@@ -350,7 +425,7 @@ class Case {
     this.ensureCover();
     [this.backTex, this.discTex, this.manTex].forEach(t => t && t.dispose());
     this.backTex = tex(drawBack(this.g, this.coverCanvas)); this.backMat.map = this.backTex; this.backMat.color.set('#ffffff'); this.backMat.needsUpdate = true;
-    this.discTex = tex(drawDisc(this.g, this.coverCanvas)); this.discLabelMat.map = this.discTex; this.discLabelMat.color.set('#ffffff'); this.discLabelMat.needsUpdate = true;
+    this.discTex = tex(drawMedia(this.g, this.coverCanvas)); this.discLabelMat.map = this.discTex; this.discLabelMat.color.set('#ffffff'); this.discLabelMat.needsUpdate = true;
     this.manTex = tex(drawManualCover(this.g, this.coverCanvas)); this.manMat.map = this.manTex; this.manMat.color.set('#ffffff'); this.manMat.needsUpdate = true;
     this.detail = true; this.dirty = false;
   }
@@ -366,7 +441,7 @@ class Case {
   }
   dropCover() { if (!this.coverTex) return; this.coverTex.dispose(); this.coverTex = null; this.coverCanvas = null; this.frontMat.map = null; this.frontMat.color.set(this.g.pal[0]); this.frontMat.needsUpdate = true; }
   refreshSpine() { const c = drawSpine(this.g), x = this.spineCanvas.getContext('2d'); x.clearRect(0, 0, c.width, c.height); x.drawImage(c, 0, 0); this.spineTex.needsUpdate = true; if (!this.g.real || this.g.pal) { this.edgeTint(); } }
-  edgeTint() { if (this.g.fmt === 'big') this.edge.color.set(this.g.spine || this.g.pal[0]); if (!this.frontMat.map) this.frontMat.color.set(this.g.pal[0]); if (!this.backMat.map) this.backMat.color.set(this.g.pal[0]); if (!this.discLabelMat.map) this.discLabelMat.color.set(this.g.pal[0]); }
+  edgeTint() { if (isCard(this.g.fmt)) this.edge.color.set(this.g.spine || this.g.pal[0]); if (!this.frontMat.map) this.frontMat.color.set(this.g.pal[0]); if (!this.backMat.map) this.backMat.color.set(this.g.pal[0]); if (!this.discLabelMat.map) this.discLabelMat.color.set(this.g.pal[0]); }
   targetPose() {
     const P = _tp.pos, Qt = _tp.quat;
     if (this.mode === 'home' || this.mode === 'pulled') {

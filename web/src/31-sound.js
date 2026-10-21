@@ -224,6 +224,51 @@ function makeFoley(SR) {
       add(y, norm(modes(pulse(L, T1 + .01, .6, 1), MAT.chassis, r), .1));
       return fadeOut(y, .05);
     },
+    /* a 3½-inch drive: the disk slides past the flap, the latch drops it on the hub, the head steps and the motor turns */
+    floppyIn(r) {
+      const L = 2.4, y = arr(L);
+      add(y, norm(biquad(rub(L, hann(0, .22, 1.2), 140, r, .4), 'bp', 1900, .6), .07));
+      add(y, norm(modes(pulse(L, .24, .7, 1), MAT.chassis, r), .55)); add(y, snap(L, .243, 'dvd', r, .4));
+      add(y, norm(modes(pulse(L, .27, .2, 1), MAT.tick, r), .3));
+      [[.55, .28], [.98, .16], [1.3, .42], [1.86, .2]].forEach(([t0, d]) => {
+        const s = arr(L), e = hann(t0, t0 + d, .5); let ph = 0;
+        for (let n = N(t0); n < Math.min(s.length, N(t0 + d)); n++) { const t = n / SR; ph += 2 * Math.PI * (88 + 18 * Math.sin(t * 40)) / SR; s[n] = (Math.sin(ph) > 0 ? 1 : -1) * e(t); }
+        biquad(s, 'bp', 1150, 1.1); biquad(s, 'lp', 3500, .7); add(y, norm(s, .085));
+      });
+      const sp = arr(L); let p2 = 0; for (let n = N(.5); n < sp.length; n++) { const t = n / SR; p2 += 2 * Math.PI * 300 / SR; sp[n] = fsin(p2) * Math.min(1, (t - .5) / .15) * (t > L - .3 ? (L - t) / .3 : 1); }
+      add(y, norm(biquad(sp, 'lp', 700, .7), .02));
+      return fadeOut(y, .1);
+    },
+    floppyOut(r) {
+      const L = .7, y = arr(L);
+      add(y, norm(modes(pulse(L, 0, .25, 1), MAT.tick, r), .35)); add(y, snap(L, .004, 'dvd', r, .3));
+      add(y, norm(modes(pulse(L, .09, .9, 1), MAT.chassis, r), .45));
+      add(y, norm(biquad(rub(L, hann(.09, .32, 1), 160, r, .45), 'bp', 2000, .6), .08));
+      return fadeOut(y, .05);
+    },
+    /* a cartridge: plastic against the slot's guides, the connector seating, then the power switch */
+    cartIn(r) {
+      const L = 1.2, y = arr(L);
+      add(y, norm(biquad(rub(L, hann(0, .32, 1), 120, r, .35), 'bp', 1300, .55), .08));
+      add(y, norm(modes(pulse(L, .33, 1.4, 1), MAT.pp, r), .6)); add(y, norm(modes(pulse(L, .335, 3, 1), MAT.chassis, r), .45));
+      add(y, norm(modes(pulse(L, .8, .3, 1), MAT.tick, r), .4)); add(y, snap(L, .802, 'dvd', r, .45));
+      return fadeOut(y, .05);
+    },
+    cartOut(r) {
+      const L = .8, y = arr(L);
+      add(y, norm(modes(pulse(L, 0, .3, 1), MAT.tick, r), .4)); add(y, snap(L, .002, 'dvd', r, .4));
+      add(y, norm(modes(pulse(L, .26, 1.2, 1), MAT.pp, r), .4));
+      add(y, norm(biquad(rub(L, hann(.27, .6, 1), 120, r, .35), 'bp', 1300, .55), .07));
+      return fadeOut(y, .05);
+    },
+    /* a machine pushed along the table */
+    machine(r) {
+      const L = .9, y = arr(L), e = t => t < .05 ? t / .05 : t < .6 ? 1 : t < .7 ? 1 - (t - .6) / .1 : 0;
+      add(y, norm(modes(rub(L, e, 160, r, .08), damped(MAT.wood, .5), r), .14));
+      add(y, norm(biquad(rub(L, e, 60, r, .5), 'lp', 900, .7), .08));
+      add(y, norm(modes(pulse(L, .7, 4, 1), MAT.chassis, r), .2));
+      return fadeOut(y);
+    },
     tvOn(r) {
       const L = 1.5, y = arr(L);
       add(y, norm(modes(pulse(L, 0, .4, 1), MAT.chassis, r), .25));
@@ -282,7 +327,7 @@ function makeFoley(SR) {
   }
   return { R, impulse };
 }
-const SFX_LEVEL = { slotIn: .5, slotOut: .45, caseOpen: .8, caseClose: .85, handle: .3, slideOut: .42, slideIn: .48, discOut: .5, discIn: .5, discDrop: .38, tray: .5, spin: .32, tvOn: .5, tvOff: .32, boot: .4, page: .38, crinkle: .32, wrap: .45, brush: .22, tick: .22, click: .42, whoosh: .16 };
+const SFX_LEVEL = { floppyIn: .5, floppyOut: .45, cartIn: .55, cartOut: .45, machine: .4, slotIn: .5, slotOut: .45, caseOpen: .8, caseClose: .85, handle: .3, slideOut: .42, slideIn: .48, discOut: .5, discIn: .5, discDrop: .38, tray: .5, spin: .32, tvOn: .5, tvOff: .32, boot: .4, page: .38, crinkle: .32, wrap: .45, brush: .22, tick: .22, click: .42, whoosh: .16 };
 const SFX_VARIANTS = { crinkle: 5, tick: 3, page: 3, click: 3, slideOut: 2, slideIn: 2, handle: 2, brush: 3, caseOpen: 2, caseClose: 2 };
 const SFX_HIT = { caseOpen: .032, caseClose: .6, slideOut: .3, slideIn: .41, discOut: .055, discIn: .0, handle: .21 };
 const REC_GAIN = { caseOpen: .8, caseClose: .85, slideOut: .6, slideIn: .62, handle: .42, discOut: .62, discIn: .62 };
@@ -343,6 +388,8 @@ const sfx = {
   play(name, arg, o = {}) {
     if (!this.ok()) return SFX_HIT[name] ?? 0;
     try {
+      /* every cardboard box sounds like the big box */
+      if (arg && typeof isCard === 'function' && isCard(arg)) arg = 'big';
       const c = this.ctx, list = this.rec && this.rec[name], rec = list && list.length ? list[Math.floor(Math.random() * list.length)] : null;
       const fmtRate = rec ? (arg === 'jewel' ? 1.14 : arg === 'big' ? .86 : 1) : 1;
       const rate = o.exact ? 1 : fmtRate * (1 + (Math.random() - .5) * (rec ? .04 : .06));
@@ -365,7 +412,9 @@ const sfx = {
   slideIn(fmt) { return this.play('slideIn', fmt || 'dvd'); },
   discOut() { return this.play('discOut'); }, discIn(o) { return this.play('discIn', undefined, o); }, thud() { return this.play('discDrop'); },
   slotIn() { return this.play('slotIn', undefined, { exact: true }); }, slotOut() { return this.play('slotOut', undefined, { exact: true }); },
-  tray() { return this.play('tray', undefined, { exact: true }); }, spin() { return this.play('spin', undefined, { exact: true }); },
+  tray() { return this.play('tray', undefined, { exact: true }); },
+  floppyIn() { return this.play('floppyIn', undefined, { exact: true }); }, floppyOut() { return this.play('floppyOut'); },
+  cartIn() { return this.play('cartIn', undefined, { exact: true }); }, cartOut() { return this.play('cartOut'); }, machine() { return this.play('machine'); }, spin() { return this.play('spin', undefined, { exact: true }); },
   tvOn() { this.play('tvOn', undefined, { exact: true }); }, tvOff() { this.play('tvOff'); }, boot() { this.play('boot', undefined, { exact: true }); },
   page() { this.play('page'); }, crinkle(v = 1) { this.play('crinkle', undefined, { gain: v }); }, wrap() { this.play('wrap'); },
   brush() { this.play('brush'); }, tick() { this.play('tick'); }, click(v = 1) { this.play('click', undefined, { gain: v }); }, whoosh() { this.play('whoosh'); },

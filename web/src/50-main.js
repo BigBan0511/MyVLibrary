@@ -178,7 +178,7 @@ async function boot() {
   layoutPage();
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); syncHudHeight();
   setView('shelf'); cam.pos.copy(cam.tPos).add(new V3(RM ? 0 : 6, RM ? 0 : 10, RM ? 0 : 60)); cam.look.copy(cam.tLook);
-  setTray(0); tvSet('standby'); setLed(false); renderSettings(); renderPills(); renderBrand();
+  tvSet('standby'); setLed(false); renderSettings(); renderPills(); renderBrand();
   if (sfx.on) setTimeout(() => sfx.init(), 400);
   setMode('shelf');
   requestAnimationFrame(t => { lastT = t; frame(t); const l = $('#load'); l.classList.add('gone'); setTimeout(() => { l.hidden = true; }, 600); });
