@@ -131,7 +131,7 @@ const LIB = {
     const g = old || { id: r.id, real: true, ach: [0, 0], font: 'saira', tag: '', tpos: 'top', artOpt: {}, tear: 0 };
     Object.assign(g, {
       t: r.name || T('Sin título'), sort: r.sort || r.name || '', status: r.status || '', cats: (r.cats || []).slice(), genres: r.genres || [], genre: (r.genres || []).slice(0, 2).join(' / '),
-      dev: (r.devs || []).slice(0, 2).join(', '), pub: (r.pubs || []).slice(0, 2).join(', '), year, release: r.release || '', plat, platName: plats.join(', '), fmtAuto: fmtFor(plat, year),
+      dev: (r.devs || []).slice(0, 2).join(', '), pub: (r.pubs || []).slice(0, 2).join(', '), year, release: r.release || '', plat, platName: plats.join(', '), platFull: plats[0] || 'PC',
       hours: (r.playtime || 0) / 3600, sessions: r.playCount || 0, last: days(r.lastActivity), added: days(r.added), installed: !!r.installed, favorite: !!r.favorite,
       rating: r.score ? clamp(Math.round(r.score / 20), 0, 5) : 0, critic: r.critic || null, community: r.community || null, features: r.features || [], series: (r.series || []).join(', '),
       ageRating: (r.age || []).join(', '), age: (() => { const m = (r.age || []).join(' ').match(/\b(3|7|12|16|18)\b/); return m ? +m[1] : null; })(), src: r.src || '', sum: r.sum || '', hasCover: !!r.hasCover, hasBg: !!r.hasBg, hasLogo: !!r.hasLogo
@@ -144,9 +144,8 @@ const LIB = {
       g.wrapped = !g.hours && !g.sessions && g.last === null;
       g.dust = g.wrapped ? 0 : dustFor(g.last !== null ? g.last : (g.added ?? 0));
       restoreUi(g); if (g.wrapped) g.dust = 0; g.dust0 = g.dust;
-    }
-    applyFmt(g);
-    if (old && g.wrapped && (g.hours || g.sessions)) g.wrapped = false;
+    } else if (g.wrapped && (g.hours || g.sessions)) { g.wrapped = false; }
+    resolveFmt(g);
     return g;
   },
   setLists(m) {
@@ -169,11 +168,10 @@ const LIB = {
     for (const r of list || []) {
       const g = GAMES.find(q => q.id === r.id);
       if (!g) { GAMES.push(this.fromHost(r)); regroup = true; continue; }
-      const before = keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : ''), fmt0 = g.fmt;
+      const f0 = g.fmt, before = keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '');
       this.fromHost(r, g);
-      /* a new platform or year can change the box: the old one goes, the shelf makes the new one */
-      if (g.fmt !== fmt0 && !(active && active.g === g)) { dropCases(g); regroup = true; continue; } else if (g.fmt !== fmt0) g.fmt = fmt0;
       if (before !== keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '')) regroup = true;
+      if (g.fmt !== f0) regroup = true;
       for (const c of casesOf(g)) { c.dirty = true; c.refreshSpine(); if (c === active || c.faceOut) c.ensureDetail(); }
     }
     if (active) renderInfo(true);
@@ -240,7 +238,7 @@ const LIB = {
   dupe(key, from) { const now = performance.now(), r = this.recent, d = r.key === key && r.from !== from && now - r.t < 160; this.recent = { key, t: now, from }; return d; },
   pad(button, state) {
     this.hostPad = true; if (state !== 'Pressed') return;
-    const map = { A: 'Enter', B: 'Escape', X: 'm', Y: 'f', Start: 'Enter', Back: 'i', LeftShoulder: 'q', RightShoulder: 'e', TriggerLeft: 'PageUp', TriggerRight: 'PageDown', DPadUp: 'ArrowUp', DPadDown: 'ArrowDown', DPadLeft: 'ArrowLeft', DPadRight: 'ArrowRight', LeftStickUp: 'ArrowUp', LeftStickDown: 'ArrowDown', LeftStickLeft: 'ArrowLeft', LeftStickRight: 'ArrowRight' };
+    const map = { A: 'Enter', B: 'Escape', X: 'm', Y: 'f', Start: 'Enter', Back: 'i', LeftShoulder: 'q', RightShoulder: 'e', TriggerLeft: 'z', TriggerRight: 'c', DPadUp: 'ArrowUp', DPadDown: 'ArrowDown', DPadLeft: 'ArrowLeft', DPadRight: 'ArrowRight', LeftStickUp: 'ArrowUp', LeftStickDown: 'ArrowDown', LeftStickLeft: 'ArrowLeft', LeftStickRight: 'ArrowRight' };
     const k = map[button]; if (!k) return;
     if (this.dupe(k, 'pad')) return;
     sfx.init();
@@ -250,6 +248,7 @@ const LIB = {
   async focusGame(id) {
     const g = GAMES.find(q => q.id === id); if (!g) return;
     if (mode !== 'shelf') { this.focusId = id; return; }
+    if (isRooms() && sysOf(g) !== curSysKey()) { prefs.sys = sysOf(g); prefs.shelf = '__all'; savePrefs(); buildGroups(); await swapShelf(() => { curGroup = 0; curPage = 0; setView('shelf'); }, true); }
     const gi = groups.findIndex(gr => gr.games.includes(g)), p = gi >= 0 ? pageOf(g, gi) : -1; if (p < 0) return;
     if (gi !== curGroup || p !== curPage) await swapShelf(() => { curGroup = gi; curPage = p; }, true);
     const c = navOrder.find(q => q.g === g); if (c) { focus = c; kbNav = true; setHovered(c); cam.browseX = c.home.x; setView('browse'); }
@@ -262,6 +261,8 @@ const MOCKHOST = {
   lib: null,
   post(m) { setTimeout(() => LIB.onMessage(JSON.parse(JSON.stringify(m))), 40); },
   iso(days) { return days === null || days === undefined ? null : new Date(Date.now() - days * 864e5).toISOString(); },
+  /* ?mock&running=id: the shelf opens while that game is already running */
+  runningAtStart() { const id = new URLSearchParams(location.search).get('running'); return id ? [{ id, seconds: 300 }] : []; },
   build() {
     const base = GAMES.concat(fillerGames(70));
     const plats = ['PC (Windows)', 'PC (Windows)', 'PC (Windows)', 'Sony PlayStation 2', 'Nintendo Switch', 'Sony PlayStation', 'Sega Dreamcast', 'Nintendo GameCube'];
@@ -269,7 +270,7 @@ const MOCKHOST = {
     return base.map((g, i) => ({ id: g.id, name: g.t, sort: g.t, status: ST0[g.id] || g.status, cats: (CAT0[g.id] || []).slice(), plats: [plats[i % plats.length]], genres: [g.genre], devs: [g.dev], pubs: [g.pub], features: g.online ? ['Multijugador en línea', 'Mando'] : ['Un jugador'], series: [], age: [`PEGI ${g.age}`], src: i % 3 ? 'Steam' : 'GOG', year: g.year, release: String(g.year), playtime: Math.round(g.hours * 3600), playCount: g.sessions, lastActivity: this.iso(g.last), added: this.iso(g.added), installed: i % 5 !== 0, score: g.rating ? g.rating * 20 : null, critic: 70 + (i % 25), community: null, hasCover: true, hasBg: true, hasLogo: i % 4 === 1, ver: '1', sum: g.sum }));
   },
   receive(m) {
-    if (m.type === 'ready') { this.lib = this.build(); this.post({ type: 'library', mode: 'desktop', statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib }); }
+    if (m.type === 'ready') { this.lib = this.build(); this.post({ type: 'library', mode: 'desktop', statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib, running: this.runningAtStart() }); }
     if (m.type === 'detail') { const s = this.src.get(m.id); this.post({ type: 'detail', id: m.id, desc: s ? `<p>${esc(s.desc)}</p><p>${esc(s.sum)}</p><script>alert(1)<\/script>` : '', links: [{ name: 'Web oficial', url: 'https://example.com' }, { name: 'Wiki', url: 'https://example.org/wiki' }] }); }
     if (m.type === 'start') { const r = this.lib.find(q => q.id === m.id); if (r && !r.installed) { this.post({ type: 'notInstalled', id: m.id }); return; } setTimeout(() => this.post({ type: 'started', id: m.id }), 1800);
       /* ?mock&leftover: Playnite gives up after a few seconds while the game keeps running */

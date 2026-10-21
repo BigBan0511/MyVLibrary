@@ -18,34 +18,50 @@ const F = {
 };
 
 /* ---------- formats (cm) ----------
-   media: what goes into the machine. card: a cardboard box with a front flap and room inside.
-   discR is half the height of the media (the disc's radius, half a floppy, half a cartridge). */
+   shell: what the case is made of (keep = DVD keep case, clear = jewel case, card = cardboard box)
+   media: what goes into the console (disc, floppy, cart); wide: the spine is wide enough to be printed like a front */
 const DIMS = {
-  dvd:    { w: 13.5, h: 19,   d: 1.4, split: 0,    discX: 0.45, discR: 6,   man: [12.2, 17.4], label: 'PC · DVD-ROM', short: 'DVD',  name: 'Caja DVD',           media: 'disc' },
-  jewel:  { w: 14.8, h: 13.4, d: 1.2, split: 0.25, discX: 0.25, discR: 5.9, man: [12.4, 12.2], label: 'CD-ROM',       short: 'CD',   name: 'Caja de CD',         media: 'disc' },
-  big:    { w: 19,   h: 22,   d: 5,   split: 2.2,  discX: 0,    discR: 6,   man: [15.2, 19],   label: 'PC CD-ROM',    short: 'BIG',  name: 'Caja grande',        media: 'disc',   card: true },
-  floppy: { w: 19,   h: 22,   d: 5,   split: 2.2,  discX: 0,    discR: 4.7, man: [15.2, 19],   label: 'PC · 3½" HD',  short: 'FD',   name: 'Caja con disquetes', media: 'floppy', card: true },
-  cart:   { w: 18.6, h: 13,   d: 3.6, split: 1.5,  discX: 0,    discR: 4.6, man: [15.4, 10.6], label: 'CARTUCHO',     short: 'CART', name: 'Cartucho',           media: 'cart',   card: true }
+  dvd:      { w: 13.5, h: 19,   d: 1.4,  split: 0,   discX: 0.45, discR: 6,   man: [12.2, 17.4], label: 'PC · DVD-ROM', short: 'DVD',  name: 'Caja DVD',          shell: 'keep',  media: 'disc' },
+  jewel:    { w: 14.2, h: 12.5, d: 1.0,  split: 0.2, discX: 0.25, discR: 5.9, man: [11.6, 11.4], label: 'CD-ROM',       short: 'CD',   name: 'Caja de CD',        shell: 'clear', media: 'disc' },
+  /* the bulky PAL jewel case of PlayStation and Dreamcast games: taller, almost twice as thick, black tray */
+  bigjewel: { w: 14.3, h: 13.1, d: 1.75, split: 0.3, discX: 0.3,  discR: 5.9, man: [12.4, 11.9], label: 'CD-ROM',       short: 'CD',   name: 'Caja de CD grande', shell: 'clear', media: 'disc' },
+  big:      { w: 19,   h: 22,   d: 5,    split: 2.2, discX: 0,    discR: 6,   man: [15.2, 19],   label: 'PC CD-ROM',    short: 'BIG',  name: 'Caja grande',       shell: 'card',  media: 'disc', wide: true },
+  /* late-90s PC games on 3½" floppies: a cardboard box with a few disks inside */
+  floppy:   { w: 15.5, h: 21,   d: 4,    split: 0,   discX: 0,    discR: 0,   man: [13.6, 18.4], label: 'PC · 3½" HD',  short: '3½"',  name: 'Caja de disquetes', shell: 'card',  media: 'floppy', wide: true, disks: 3 },
+  /* a 16-bit cartridge in its cardboard box, in the style of the European Super Nintendo */
+  cart:     { w: 13.6, h: 18.2, d: 3.4,  split: -0.7, discX: 0,   discR: 0,   man: [12, 16.2],   label: 'CARTUCHO',     short: 'CART', name: 'Caja de cartucho',  shell: 'card',  media: 'cart', wide: true }
 };
-const FMT_LIST = ['dvd', 'jewel', 'big', 'floppy', 'cart'];
-const FMT_ORDER = { dvd: 0, jewel: 1, big: 2, floppy: 3, cart: 4 };
-/* how each format is offered in the card */
-const FMT_CHOICE = { dvd: 'DVD', jewel: 'CD en caja grande', big: 'CD en caja de cartón', floppy: 'Disquetes en caja de cartón', cart: 'Cartucho' };
-const isCard = fmt => !!(DIMS[fmt] && DIMS[fmt].card);
-const mediaOf = fmt => (DIMS[fmt] && DIMS[fmt].media) || 'disc';
-/* the format a game gets unless you choose another: by platform, and for PC by year */
-const CART_PLATS = ['NES', 'SNES', 'N64', 'MD', 'SMS', 'GB', 'GBC', 'GBA', 'GG'];
-const CD_PLATS = ['PS1', 'SATURN', 'MEGA CD', 'PCE', '3DO', 'NEO GEO', 'DC'];
+const FMTS = Object.keys(DIMS);
+const FMT_ORDER = { dvd: 0, jewel: 1, bigjewel: 2, big: 3, floppy: 4, cart: 5 };
+/* the media themselves (cm): a 3½" disk and a cartridge, both drawn upright in their own XY plane */
+const MSIZE = { floppy: { w: 9, h: 9.4, t: .33 }, cart: { w: 12.7, h: 8.6, t: 2 } };
+function mediaOf(g) { return DIMS[g.fmt].media; }
+
+/* ---------- systems: PC games live at the desk, every other platform has its own room with a TV ---------- */
+const PC_SYSTEMS = new Set(['PC', 'LINUX', 'MAC']);
+/* from the PS3 generation on, the TV in the room is a flat one */
+const FLAT_SYSTEMS = new Set(['PS3', 'PS4', 'PS5', 'X360', 'XONE', 'XSX', 'WII', 'WII U', 'SWITCH', 'SWITCH 2']);
+const CART_SYSTEMS = new Set(['NES', 'SNES', 'N64', 'MD', 'SMS', 'GB', 'GBC', 'GBA', 'GG', 'NEO GEO', 'DS', '3DS', 'VITA', 'SWITCH', 'SWITCH 2']);
+const SYS_ORDER = ['PC', 'NES', 'SMS', 'MD', 'PCE', 'GB', 'GG', 'SNES', 'NEO GEO', 'MEGA CD', '3DO', 'SATURN', 'PS1', 'N64', 'GBC', 'DC', 'PS2', 'GBA', 'GC', 'XBOX', 'DS', 'PSP', 'X360', 'PS3', 'WII', '3DS', 'VITA', 'WII U', 'XONE', 'PS4', 'SWITCH', 'XSX', 'PS5', 'SWITCH 2', 'ARCADE'];
+function sysOf(g) { return g.plat && !PC_SYSTEMS.has(g.plat) ? g.plat : 'PC'; }
+function sysRank(s) { const i = SYS_ORDER.indexOf(s); return i < 0 ? 900 : i; }
+/* the format a game came in, from its platform (and, for PC, its year) */
+/* the case each system's games came in. PC games by their year: floppies before 1994, CDs up to 2003, DVDs after */
+const SYS_FMT = { PS1: 'bigjewel', SATURN: 'bigjewel', DC: 'bigjewel', 'MEGA CD': 'jewel', PCE: 'jewel', '3DO': 'jewel' };
 function fmtFor(plat, year) {
-  if (CART_PLATS.includes(plat)) return 'cart';
-  if (CD_PLATS.includes(plat)) return 'jewel';
-  if (['PC', 'MAC', 'LINUX'].includes(plat) && year) { if (year <= 1995) return 'floppy'; if (year <= 2003) return 'jewel'; }
-  return 'dvd';
+  if (!plat || PC_SYSTEMS.has(plat)) return !year ? 'dvd' : year < 1994 ? 'floppy' : year <= 2003 ? 'jewel' : 'dvd';
+  if (CART_SYSTEMS.has(plat)) return 'cart';
+  return SYS_FMT[plat] || 'dvd';
 }
-/* what the media is called in prompts and messages */
-const MEDIA_NOUN = { disc: 'el disco', floppy: 'el disquete', cart: 'el cartucho' }, MEDIA_OUT = { disc: 'Disco fuera.', floppy: 'Disquete fuera.', cart: 'Cartucho fuera.' };
-function mediaNoun(g) { return T(MEDIA_NOUN[mediaOf(g ? g.fmt : 'dvd')]); }
-function applyFmt(g) { g.fmt = DIMS[g.fmtUser] ? g.fmtUser : g.fmtAuto; }
+/* console games keep the case they came in unless Settings frees them; PC games can always change */
+function fmtLocked(g) { return prefs.fmtCon !== 'free' && sysOf(g) !== 'PC'; }
+function resolveFmt(g) { g.fmt = !fmtLocked(g) && g.fmtPick && DIMS[g.fmtPick] ? g.fmtPick : fmtFor(g.plat, g.year); return g.fmt; }
+/* texts that name the thing you put in the console: written for the disc, said right for the others */
+function mediaT(g, s, ...a) {
+  const m = mediaOf(g);
+  if (m !== 'disc') { const w = m === 'floppy' ? ['disquete', 'Disquete', 'DISQUETE'] : ['cartucho', 'Cartucho', 'CARTUCHO']; s = s.replace(/disco/g, w[0]).replace(/Disco/g, w[1]).replace(/DISCO/g, w[2]); }
+  return T(s, ...a);
+}
 
 /* ---------- library ---------- */
 const GAMES = [
@@ -133,13 +149,13 @@ const GAMES = [
    hours:25.6, sessions:50, last:1500, added:3500, status:'Completado', ach:[10,12], art:'blocks', artOpt:{night:true, hero:'knight'}, font:'press', tpos:'top', rating:4,
    pal:['#1d2b53','#7e2553','#ab5236','#ffa300','#fff1e8'],
    sum:'Ocho mundos, trescientas monedas escondidas y un dragón que no es tan malo como parece.',
-   desc:'Un clásico de la época del CD-ROM: niveles cortos, secretos en cada esquina y una dificultad que sube sin piedad en el último mundo. Incluye el editor de niveles original y los mapas que creó la comunidad de entonces.' },
- { id:'ritmo', t:'Ritmo Cósmico', tag:'Baila entre galaxias', genre:'Música y ritmo', ctl:'rhythm', dev:'Latido', pub:'Latido', year:2002, fmt:'jewel', players:'1–2 jugadores', online:false, pad:true, age:3,
+   desc:'Un clásico de los dieciséis bits: niveles cortos, secretos en cada esquina y una dificultad que sube sin piedad en el último mundo. El cartucho lleva pila, así que tus monedas y tus récords siguen ahí treinta años después.' },
+ { id:'ritmo', t:'Ritmo Cósmico', tag:'Baila entre galaxias', genre:'Música y ritmo', ctl:'rhythm', dev:'Latido', pub:'Latido', year:2002, fmt:'bigjewel', players:'1–2 jugadores', online:false, pad:true, age:3,
    hours:6.8, sessions:12, last:800, added:2900, status:'Pausado', ach:[6,30], art:'rings', artOpt:{stars:true}, font:'bungee', tpos:'bottom', rating:3,
    pal:['#120a26','#3b1a6b','#ffcc33','#ff6ad5','#fdf6ff'],
    sum:'Pulsa al compás para que tu nave atraviese anillos de luz. Treinta canciones originales.',
    desc:'La secuela espiritual de Pulso cambia el tablero por el espacio. Cada canción es una ruta entre planetas y cada fallo te saca de órbita. Modo historia, desafíos diarios y duelos a dos.' },
- { id:'kart', t:'Kart de Barrio', tag:'El gran premio de las fiestas', genre:'Carreras de karts', ctl:'race', dev:'Velocípedo Games', pub:'Velocípedo', year:2000, fmt:'cart', players:'1–4 jugadores', online:false, pad:true, age:3,
+ { id:'kart', t:'Kart de Barrio', tag:'El gran premio de las fiestas', genre:'Carreras de karts', ctl:'race', dev:'Velocípedo Games', pub:'Velocípedo', year:2000, fmt:'bigjewel', players:'1–4 jugadores', online:false, pad:true, age:3,
    hours:15, sessions:30, last:1100, added:3100, status:'Completado', ach:[16,20], art:'sun', font:'bungee', tpos:'top', rating:4,
    pal:['#2b6cff','#9fd3ff','#ff5a36','#ffe066','#ffffff'],
    sum:'Karts de cartón, cuestas imposibles y atajos por el patio de la vecina.',
@@ -245,9 +261,11 @@ let saved = {};
 try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { saved = {}; }
 function persist() { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (e) { } }
 function saveGame(g) {
-  if (PLAYNITE) { saved[g.id] = { wrapped: g.wrapped, tear: g.tear, dust: +g.dust.toFixed(3), dustAt: Date.now(), fmt: g.fmtUser || undefined }; persist(); return; }
-  saved[g.id] = { hours: g.hours, sessions: g.sessions, last: g.last, status: g.status, wrapped: g.wrapped, tear: g.tear, dust: g.dust, notes: g.notes, rating: g.rating, ach: g.ach, cats: g.cats, fmtUser: g.fmtUser || undefined }; persist();
+  /* fmt is only kept when you chose it; otherwise each game keeps the format its platform suggests */
+  if (PLAYNITE) { saved[g.id] = { wrapped: g.wrapped, tear: g.tear, dust: +(g.dust || 0).toFixed(3), dustAt: Date.now(), fmt: g.fmtPick || undefined }; persist(); return; }
+  saved[g.id] = { hours: g.hours, sessions: g.sessions, last: g.last, status: g.status, wrapped: g.wrapped, tear: g.tear, dust: g.dust, notes: g.notes, rating: g.rating, ach: g.ach, cats: g.cats, fmt: g.fmtPick || undefined }; persist();
 }
+function restoreFmt(g, s) { if (s && s.fmt && DIMS[s.fmt]) g.fmtPick = s.fmt; resolveFmt(g); }
 
 /* Playnite's default completion statuses, in Spanish (replaced by the real ones inside Playnite) */
 let STATUSES = ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'];
@@ -258,15 +276,17 @@ const CAT0 = { faro: ['Partidas cortas', 'Favoritos'], turbo: ['Con amigos', 'Fa
 
 /* viewer preferences */
 const PREF_KEY = 'myvlibrary:prefs';
-const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'tarde', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'wall', room: 'salon', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
+const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'tarde', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'rooms', sys: 'PC', fmtCon: 'lock', room: 'salon', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}); } catch (e) { }
+/* rooms by system arrived in 0.4: everyone starts there once; the older designs stay in Settings */
+if (prefs.layoutV !== 2) { prefs.layout = 'rooms'; prefs.layoutV = 2; }
 function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) { } }
 
 /* dust builds up while a game sits untouched; wiping it is remembered */
 function dustFor(idleDays) { return clamp((idleDays - 120) / 700, 0, 1); }
 function restoreUi(g) {
   const s = saved[g.id]; if (!s) return;
-  if (DIMS[s.fmt]) g.fmtUser = s.fmt;
+  restoreFmt(g, s);
   if ('wrapped' in s && !s.wrapped) g.wrapped = false;
   if (g.wrapped && 'tear' in s) g.tear = s.tear || 0;
   if ('dust' in s && s.dustAt) g.dust = clamp(s.dust + Math.max(0, (Date.now() - s.dustAt) / 864e5) / 700, 0, 1);
@@ -291,7 +311,10 @@ function fillerGames(n) {
     do { const k = r(); t = k < .3 ? `${pick(nouns)} ${pick(adjs)}` : k < .55 ? `El ${pick(nouns)} de ${pick(places)}` : k < .8 ? `${pick(nouns)}: ${pick(subs)}` : `${pick(nouns)} ${2 + Math.floor(r() * 3)}`; } while (used.has(t) && ++tries < 20);
     used.add(t);
     const [genre, ctl] = pick(genres), year = 1994 + Math.floor(r() * 32), h = r() * 360;
-    const k = r(), fmt = year <= 1995 ? (k < .7 ? 'floppy' : 'big') : year < 2001 && /Plataformas|Carreras|Lucha/.test(genre) && k < .5 ? 'cart' : year <= 2003 ? (k < .55 ? 'jewel' : k < .8 ? 'big' : 'dvd') : k < .08 ? 'jewel' : 'dvd';
+    let fmt = year < 2001 ? (r() < .55 ? 'jewel' : r() < .5 ? 'big' : 'dvd') : r() < .12 ? 'jewel' : 'dvd';
+    /* a few on floppies, cartridges and fat jewel cases; from a separate hash so the rest of the demo stays as it was */
+    const fk = hash('fmt' + i) % 100;
+    if (year < 1999 && fk < 35) fmt = 'floppy'; else if (fk >= 92) fmt = 'cart'; else if (fmt === 'jewel' && fk >= 60) fmt = 'bigjewel';
     const status = pick(kinds), played = status !== 'No jugado' && status !== 'Planeado';
     const hours = played ? +(1 + r() * r() * 90).toFixed(1) : 0, sessions = played ? Math.max(1, Math.round(hours * (.6 + r()))) : 0;
     const last = played ? Math.floor(r() * r() * 1400) : null, added = (last || 0) + Math.floor(r() * 900) + 30;
@@ -303,9 +326,16 @@ function fillerGames(n) {
   }
   return out;
 }
+/* the demo spreads its games over a few systems, so each room has something on its shelf */
+const DEMO_SYS = { pixel: 'SNES', kart: 'PS1', ritmo: 'PS1', neon: 'PS3', marea: 'PS3' };
+const DEMO_PLAT = { PC: 'PC (Windows)', PS1: 'Sony PlayStation', SNES: 'Nintendo SNES', PS3: 'Sony PlayStation 3' };
 function initDemoGames() {
   GAMES.push(...fillerGames(86));
   GAMES.forEach(g => {
+    const h = hash('sys' + g.id) % 100, k = DEMO_SYS[g.id] || (/^g\d/.test(g.id) ? (h < 9 ? 'PS1' : h < 16 ? 'SNES' : h < 21 ? 'PS3' : 'PC') : 'PC');
+    g.plat = k; g.platFull = DEMO_PLAT[k]; g.platName = DEMO_PLAT[k];
+    /* the demo's PC games come in the cases picked for them, as if you had chosen them */
+    if (k === 'PC') g.fmtPick = g.fmt;
     g.status = ST0[g.id] || g.status;
     g.cats = (CAT0[g.id] || []).slice();
     g.wrapped = g.sessions === 0; g.tear = 0;
@@ -313,9 +343,8 @@ function initDemoGames() {
     g.dust = g.wrapped ? 0 : dustFor(idle);
     g.notes = ''; g.artOpt = g.artOpt || {};
     const s = saved[g.id];
-    g.fmtAuto = g.fmt;
-    if (s) for (const k of ['hours', 'sessions', 'last', 'status', 'wrapped', 'tear', 'dust', 'notes', 'rating', 'ach', 'cats', 'fmtUser']) if (k in s) g[k] = s[k];
-    applyFmt(g);
+    if (s) { for (const k of ['hours', 'sessions', 'last', 'status', 'wrapped', 'tear', 'dust', 'notes', 'rating', 'ach', 'cats']) if (k in s) g[k] = s[k]; restoreFmt(g, s); }
+    resolveFmt(g);
     if (g.wrapped) { g.dust = 0; g.tear = g.tear || 0; }
     g.dust0 = g.dust;
     g.cats.forEach(c => { if (!prefs.cats.includes(c)) prefs.cats.push(c); });

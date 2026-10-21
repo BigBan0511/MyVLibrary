@@ -15,6 +15,15 @@ const SORTS = {
   year: (a, b) => (a.year || 9999) - (b.year || 9999) || SORTS.alpha(a, b)
 };
 function isCases() { return prefs.layout === 'cases'; }
+/* ---------- systems (rooms by system): the ones in your library, PC first, then by generation ---------- */
+function sysLabel(g) { const s = sysOf(g); return s === 'PC' ? 'PC' : (g.platFull || g.plat || s); }
+function systemsList() {
+  const m = new Map();
+  GAMES.forEach(g => { const s = sysOf(g); if (!m.has(s)) m.set(s, { key: s, name: sysLabel(g), n: 0 }); m.get(s).n++; });
+  return [...m.values()].sort((a, b) => sysRank(a.key) - sysRank(b.key) || a.name.localeCompare(b.name, LANG));
+}
+function curSysKey() { const L = systemsList(); return L.some(s => s.key === prefs.sys) ? prefs.sys : (L[0] ? L[0].key : 'PC'); }
+function inCabinet() { return isRooms() && STAGE.name === 'tv'; }
 function keysOf(g) {
   if (prefs.group === 'status') return [g.status || '__none'];
   if (prefs.group === 'cat') return g.cats.length ? g.cats : ['__none'];
@@ -27,7 +36,7 @@ function groupLabel(k) {
   if (k === '__none') return T({ status: 'Sin estado', cat: 'Sin categoría', plat: 'Sin plataforma' }[prefs.group] || 'Otros');
   if (prefs.group === 'status') return TD(STATUS_SHELF[k] || k);
   if (prefs.group === 'cat') return TD(k);
-  if (prefs.group === 'fmt') return T({ dvd: 'Cajas DVD', jewel: 'Cajas de CD', big: 'Cajas grandes', floppy: 'Disquetes', cart: 'Cartuchos' }[k]);
+  if (prefs.group === 'fmt') return T({ dvd: 'Cajas DVD', jewel: 'Cajas de CD', bigjewel: 'Cajas de CD grandes', big: 'Cajas grandes', floppy: 'Disquetes', cart: 'Cartuchos' }[k] || k);
   return k;
 }
 function groupRank(k, n) {
@@ -40,12 +49,12 @@ function groupRank(k, n) {
 }
 function belongs(g, key) { return key === '__all' || keysOf(g).includes(key); }
 function buildGroups() {
-  const all = GAMES.slice(), map = new Map();
+  const sys = curSysKey(), all = isRooms() ? GAMES.filter(g => sysOf(g) === sys) : GAMES.slice(), map = new Map();
   if (prefs.group !== 'all') all.forEach(g => keysOf(g).forEach(k => { if (!map.has(k)) map.set(k, []); map.get(k).push(g); }));
   const keys = [...map.keys()].sort((a, b) => groupRank(a, map.get(a).length) - groupRank(b, map.get(b).length) || String(a).localeCompare(String(b), LANG));
   const G = [{ key: '__all', label: T('Todos'), games: all }, ...keys.map(k => ({ key: k, label: groupLabel(k), games: map.get(k) }))];
   groups = isCases() ? bookcasesFrom(G) : G;
-  if (!isCases()) groups.forEach(gr => { gr.pages = paginate(gr); });
+  if (!isCases()) groups.forEach(gr => { gr.pages = stageFor(sys) === 'tv' ? paginateCabinet(gr) : paginate(gr); });
 }
 /* the two games you are playing right now stand face-out at the start of the shelf */
 function faceOutOf(gr) {
@@ -62,30 +71,52 @@ function paginate(gr) {
   if (page.length || !pages.length) pages.push(page);
   return pages;
 }
+/* the TV cabinet: two rows of spines, a page is both rows */
+function paginateCabinet(gr) {
+  const pages = []; let page = [], row = 0, x = 0;
+  for (const it0 of sortedItems(gr, .14)) {
+    const it = Object.assign({}, it0, { fo: false, w: DIMS[it0.g.fmt].d + .14 });
+    if (x + it.w > CAB.innerW - 1 && (page.length || row)) { row++; x = 0; if (row > 1) { pages.push(page); page = []; row = 0; } }
+    it.row = row; it.x = x; page.push(it); x += it.w;
+  }
+  if (page.length || !pages.length) pages.push(page);
+  return pages;
+}
 function curItems() { const gr = groups[curGroup]; return gr ? gr.pages[curPage] || [] : []; }
 function pageOf(g, gi = curGroup) { const gr = groups[gi]; if (!gr) return -1; return gr.pages.findIndex(p => p.some(it => it.g === g)); }
 
 /* ---------- cases ---------- */
 function caseKey(g, ui) { return isCases() ? g.id + '@' + ui : g.id; }
 function casesOf(g) { const out = []; for (const c of caseById.values()) if (c.g === g && !c.disposed) out.push(c); return out; }
-/* a game changed format: its boxes go, and the next layout builds new ones */
-function dropCases(g) { for (const [k, c] of [...caseById]) if (c.g === g && c !== active) { c.dispose(); caseById.delete(k); } navOrder = navOrder.filter(c => !c.disposed); cases = [...caseById.values()]; }
 function getCase(g, ui = curGroup) {
   const k = caseKey(g, ui); let c = caseById.get(k);
+  /* its format changed (Settings, or Playnite moved it to another platform): a new case takes its place */
+  if (c && !c.disposed && c !== active && c.dim !== DIMS[g.fmt]) { c.dispose(); caseById.delete(k); c = null; }
   if (!c || c.disposed) { c = new Case(g); c.fresh = true; c.key = k; caseById.set(k, c); }
   return c;
 }
-function placeCase(c, xc, fo, by = SHELF.board, front = SHELF.front) {
-  const { w, h, d } = c.dim; c.faceOut = fo; c.home.x = xc; c.home.board = by;
+function placeCase(c, xc, fo, by = SHELF.board, front = SHELF.front, innerH = SHELF.innerH) {
+  const { w, h, d } = c.dim; c.faceOut = fo; c.home.x = xc; c.home.board = by; c.home.front = front; c.home.innerH = innerH;
   if (fo) { const lean = .12; c.home.pos.set(xc, by + (h / 2) * Math.cos(lean) + (d / 2) * Math.sin(lean) + .05, front - 4.6 - (h / 2) * Math.sin(lean)); c.home.quat.setFromEuler(new EU(-lean, 0, 0)); }
   else { c.home.pos.set(xc, by + h / 2 + .03, front - .6 - w / 2); c.home.quat.setFromEuler(new EU(0, Math.PI / 2, 0)); }
 }
 function settle(c) { if (c.fresh) { c.root.position.copy(c.home.pos); c.root.quaternion.copy(c.home.quat); c.fresh = false; } }
 function layoutPage() {
   const keep = new Set(); navOrder = [];
+  if (STAGE.sys !== curSysKey() || STAGE.name !== stageFor(curSysKey())) applyStage(curSysKey());
   showWallShelf(!isCases()); if (decorLayout !== prefs.layout) buildDecor();
   let shown;
-  if (isCases()) {
+  if (inCabinet()) {
+    clearBookcases();
+    const items = curItems(), x0 = CAB.x - CAB.innerW / 2 + .5;
+    items.forEach(it => {
+      const c = getCase(it.g); keep.add(c); c.hidden = false; c.root.visible = true; c.row = it.row; c.unitIdx = curGroup;
+      placeCase(c, x0 + it.x + c.dim.d / 2, false, CAB.boards[it.row], CAB.front, CAB.rowH); navOrder.push(c);
+      if (c !== active && !c.detail && c.coverTex) c.dropCover();
+      settle(c);
+    });
+    shown = items.map(it => it.g);
+  } else if (isCases()) {
     buildBookcases();
     groups.forEach((gr, ui) => {
       if (Math.abs(ui - curGroup) > 1) return;
@@ -215,7 +246,7 @@ function drawRowLabels() {
 /* switching design always rebuilds the room and sends the camera back to the overview of the new one */
 let layoutChanged = false;
 function setLayout(name) {
-  prefs.layout = name === 'cases' ? 'cases' : 'wall'; savePrefs(); layoutChanged = true;
+  prefs.layout = ['rooms', 'wall', 'cases'].includes(name) ? name : 'rooms'; savePrefs(); layoutChanged = true; renderSysbar();
   if (mode !== 'shelf') { pendingRelayout = true; return; }
   relayout({ full: true, reset: true });
 }

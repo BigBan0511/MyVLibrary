@@ -36,7 +36,7 @@ function placeTip() {
 }
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), ms); }
 
-function setMode(m) { mode = m; renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
+function setMode(m) { mode = m; if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
 const btn = (k, label, a, primary) => `<button class="pbtn${primary ? ' primary' : ''}" type="button" data-act="${a}"><kbd>${k}</kbd>${label}</button>`;
 function tearHintText(c) { return c.tear > .05 ? T('Precinto {0} % · sigue tirando', Math.round(100 * c.tear / c.L)) : T('Arrastra la lengüeta roja para quitar el precinto'); }
 function renderPrompts() {
@@ -44,7 +44,7 @@ function renderPrompts() {
   if (mode === 'shelf') {
     const gr = groups[curGroup], np = gr ? gr.pages.length : 1;
     if (np > 1) h += `<div class="pager"><button class="pbtn icon" type="button" data-act="prevPage" aria-label="${T('Página anterior')}"${curPage === 0 ? ' disabled' : ''}>‹</button><span class="pg">${curPage + 1} / ${np}</span><button class="pbtn next" type="button" data-act="nextPage"${curPage >= np - 1 ? ' disabled' : ''}>${T('Siguiente')} <i aria-hidden="true">›</i></button></div>`;
-    h += coarse ? `<span class="hint">${T('Toca un lomo para sacar el juego')}</span>` : `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>`;
+    h += coarse ? `<span class="hint">${T('Toca un lomo para sacar el juego')}</span>` : isRooms() ? `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('sistemas')} · <kbd>Z</kbd><kbd>C</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>` : `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>`;
   }
   if (mode === 'inspect' && active) {
     if (active.wrap) {
@@ -53,8 +53,8 @@ function renderPrompts() {
     } else h += btn(T('Intro'), T('Abrir la caja'), 'open', true);
     h += btn('F', active.flipT ? T('Ver portada') : T('Ver contraportada'), 'flip') + btn('Esc', T('Devolver'), 'back');
   }
-  if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), active && active.g.real && !active.g.installed ? T('Meter {0} (instalar)', mediaNoun(active.g)) : T('Meter {0}', mediaNoun(active.g)), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
-  if (mode === 'playing') h = btn('Esc', PLAYNITE ? T('Sacar {0}', mediaNoun(active && active.g)) : T('Cerrar el juego'), 'quit', true);
+  if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), mediaT(active.g, active.g.real && !active.g.installed ? 'Meter el disco (instalar)' : 'Meter el disco'), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
+  if (mode === 'playing') h = btn('Esc', PLAYNITE ? mediaT(active.g, 'Sacar el disco') : T('Cerrar el juego'), 'quit', true);
   el.innerHTML = h;
 }
 $('#prompts').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) { sfx.init(); doAct(b.dataset.act); } });
@@ -65,6 +65,7 @@ function doAct(a) {
 
 /* ---------- header: brand count and the pills that choose what is on the shelf ---------- */
 function renderBrand() {
+  renderSysbar();
   const gr = groups[curGroup], n = gr ? gr.games.length : 0;
   $('#brandCount').textContent = T(GAMES.length === 1 ? '{0} de {1} juego' : '{0} de {1} juegos', n, GAMES.length);
 }
@@ -77,16 +78,16 @@ $('#pills').addEventListener('click', e => { const b = e.target.closest('[data-g
 
 /* switching shelf contents goes through a short dip to black, then the new cases settle in a wave */
 let swapBusy = false;
-async function swapShelf(fn, quiet, snap) {
+async function swapShelf(fn, quiet, snap, noFade) {
   if (swapBusy) return; swapBusy = true; busy = true; setHovered(null);
   try {
     if (!quiet) sfx.slide();
-    const f = $('#fade'); f.classList.add('on'); await new Promise(r => setTimeout(r, RM ? 20 : 200));
+    const f = $('#fade'); if (!noFade) { f.classList.add('on'); await new Promise(r => setTimeout(r, RM ? 20 : 200)); }
     fn(); layoutPage(); renderPills(); renderBrand(); renderPrompts();
     /* frame what is there now; after a change of design the camera jumps while the screen is dark */
     if (cam.view === 'shelf' || cam.view === 'browse') { setView(cam.view); if (snap) { cam.pos.copy(cam.tPos); cam.look.copy(cam.tLook); cam.snap = true; } }
     navOrder.forEach(c => { c.pullHold = .35; c.root.position.copy(c.home.pos); c.root.quaternion.copy(c.home.quat); });
-    requestAnimationFrame(() => f.classList.remove('on'));
+    if (!noFade) requestAnimationFrame(() => f.classList.remove('on'));
     navOrder.forEach((c, i) => setTimeout(() => { tween(.35, t => { c.pullHold = .35 * (1 - t); }, easeOut); }, i * 6 * SPEED));
     await wait(Math.min(700, navOrder.length * 6 + 380));
     navOrder.forEach(c => { c.pullHold = 0; });
@@ -109,6 +110,36 @@ function setPage(p, quiet) {
   return swapShelf(() => { curPage = p; }, quiet);
 }
 
+/* ---------- rooms by system: the switcher in the header, and walking to the next room ---------- */
+function renderSysbar() {
+  const el = $('#sysbar'), L = isRooms() ? systemsList() : [];
+  el.hidden = !L.length; if (!L.length) return;
+  const cur = L.find(s => s.key === curSysKey()) || L[0];
+  el.querySelector('b').textContent = cur.name;
+  el.querySelector('span').textContent = T(cur.n === 1 ? '{0} juego' : '{0} juegos', cur.n) + (L.length > 1 ? ` · ${L.indexOf(cur) + 1} / ${L.length}` : '');
+  el.querySelectorAll('[data-sys]').forEach(b => { b.disabled = L.length < 2; });
+}
+$('#sysbar').addEventListener('click', e => { const b = e.target.closest('[data-sys]'); if (b && !b.disabled) { sfx.init(); setSystem(+b.dataset.sys); } });
+async function setSystem(step) {
+  if (!isRooms() || busy || swapBusy || mode !== 'shelf') return;
+  const L = systemsList(); if (L.length < 2) return;
+  const i = Math.max(0, L.findIndex(s => s.key === curSysKey())), sys = L[(i + step + L.length) % L.length], key = sys.key;
+  const from = STAGE.name, to = stageFor(key);
+  prefs.sys = key; prefs.shelf = '__all'; savePrefs(); sfx.whoosh(); setHovered(null); kbNav = false;
+  const need = UGCS.keysFor(key).filter(k => UGCS.meta()[k] && !UGCS.models.has(k));
+  if (need.length) { toast(T('Preparando la consola…'), 2000); busy = true; await new Promise(r => setTimeout(r, 60)); await UGCS.load(need); busy = false; }
+  if (from !== to) {
+    /* another room: the camera walks over, then the shelf fills */
+    busy = true; applyStage(key); buildGroups(); curGroup = 0; curPage = 0;
+    setView('shelf'); renderSysbar(); renderPills(); renderBrand();
+    await wait(RM ? 50 : 700); busy = false;
+    await swapShelf(() => { }, true, false, true);
+  } else await swapShelf(() => { applyStage(key); buildGroups(); curGroup = 0; curPage = 0; setView('shelf'); }, true);
+  renderSysbar(); toast(sys.name, 1400);
+}
+/* re-dress the room after a model is chosen or removed; while a game is out it waits for the shelf */
+function refreshStage() { if (!isRooms()) return; if (mode === 'shelf' && !busy) applyStage(curSysKey()); else STAGE.dirty = true; }
+
 /* ---------- inspect card: status and categories ---------- */
 function renderInfo(force) {
   const el = $('#info'), tab = $('#infoTab'), show = active && (cam.view === 'shelf' || cam.view === 'browse') && !['shelf', 'loading', 'manual'].includes(mode);
@@ -116,7 +147,7 @@ function renderInfo(force) {
   placeCard();
   if (prefs.card === 'hide') { el.hidden = true; lastInfoKey = ''; tab.hidden = false; tab.innerHTML = `<span>${T('Ficha')}</span><b>${esc(active.g.t)}</b><i aria-hidden="true">▾</i>`; return; }
   tab.hidden = true;
-  const g = active.g, key = [g.id, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4), g.fmt, g.fmtUser || ''].join('|');
+  const g = active.g, key = [g.id, g.fmt, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
   const idle = g.last === null || g.last === undefined ? g.added : g.last;
   const dustTxt = T(g.wrapped ? 'Ninguno, está precintado' : g.dust > .6 ? 'Mucho' : g.dust > .25 ? 'Algo' : g.dust > .04 ? 'Poco' : 'Limpio');
@@ -126,7 +157,8 @@ function renderInfo(force) {
   el.innerHTML = `<div class="info-bar"><button type="button" class="info-more" data-more="1" aria-expanded="${infoOpen}">${infoOpen ? T('Menos') : T('Estado y categorías')}</button><button type="button" class="info-hide" data-hide="1" aria-label="${T('Ocultar la ficha')}" title="${T('Ocultar la ficha')} (I) · ${T('Arrastra para moverla')}">${T('Ocultar')} <i aria-hidden="true">▴</i></button></div><div class="eyebrow">${esc([g.genre, g.year, g.real ? g.plat : T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</div><h2>${esc(g.t)}</h2>
     <dl><dt>${T('Jugado')}</dt><dd>${fmtH(g.hours)}${g.sessions ? ' · ' + T(g.sessions === 1 ? '{0} vez' : '{0} veces', g.sessions) : ''}</dd><dt>${T('Última vez')}</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>${T('Logros')}</dt><dd>${T('{0} de {1}', g.ach[0], g.ach[1])}</dd>` : ''}<dt>${T('Polvo')}</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : ''}</dd></dl>
     <div class="frow"><label for="stSel">${T('Estado')}</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : `<option value="" selected>${T('Sin estado')}</option>`}${statuses.map(s => `<option value="${esc(s)}"${s === g.status ? ' selected' : ''}>${esc(TD(s))}</option>`).join('')}<option value="__new">+ ${T('Nuevo estado…')}</option></select></div>
-    <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="pill st-sin fmt-dot" aria-hidden="true"></span><select id="fmtSel"><option value="auto"${g.fmtUser ? '' : ' selected'}>${T('Automático: {0}', T(FMT_CHOICE[g.fmtAuto] || 'DVD'))}</option>${FMT_LIST.map(f => `<option value="${f}"${g.fmtUser === f ? ' selected' : ''}>${T(FMT_CHOICE[f])}</option>`).join('')}</select></div>
+    <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="fmt-ico" aria-hidden="true">${FMT_ICON[g.fmt] || ''}</span><select id="fmtSel"${fmtLocked(g) ? ' disabled' : ''}>${FMTS.map(f => `<option value="${f}"${f === g.fmt ? ' selected' : ''}>${esc(T(DIMS[f].name))}</option>`).join('')}</select></div>
+    ${fmtLocked(g) ? `<p class="fmt-lock">${T('El original de {0}. Se puede cambiar en Ajustes → Formato en consolas.', esc(g.platFull || g.plat))}</p>` : ''}
     ${newStatus ? `<form class="cat-new st-new"><input id="stNew" type="text" placeholder="${T('Nombre del estado nuevo')}" maxlength="40" autocomplete="off"><button type="submit">${T('Crear')}</button></form>` : ''}
     <div class="cats"><span class="lbl">${T('Categorías')}</span><div class="chips">${g.cats.length ? g.cats.map(c => `<span class="chip">${esc(TD(c))}</span>`).join('') : `<em>${T('Ninguna')}</em>`}<button type="button" class="chip add" data-edit="1">${infoEdit ? T('Listo') : '+ ' + T('Categorías')}</button></div></div>
     ${infoEdit ? `<div class="cat-edit">${prefs.cats.map(c => `<label><input type="checkbox" data-catbox="${esc(c)}"${g.cats.includes(c) ? ' checked' : ''}><span>${esc(TD(c))}</span></label>`).join('')}
@@ -139,7 +171,7 @@ function gameChanged(c, fields, regroup) {
 }
 $('#info').addEventListener('change', e => {
   if (!active) return; const c = active, g = c.g;
-  if (e.target.id === 'fmtSel') { setFormat(c, e.target.value); return; }
+  if (e.target.id === 'fmtSel') { setFormat(e.target.value); return; }
   if (e.target.id === 'stSel' && e.target.value === '__new') { newStatus = true; renderInfo(true); const i = $('#stNew'); if (i) i.focus(); return; }
   if (e.target.id === 'stSel') { const old = g.status; g.status = e.target.value; gameChanged(c, ['status'], prefs.group === 'status'); if (prefs.group === 'status' && old !== g.status && groups[curGroup].key !== '__all') toast(T('Al devolverlo irá al estante «{0}»', STATUS_SHELF[g.status] || g.status)); }
   const box = e.target.closest('[data-catbox]');
@@ -164,21 +196,33 @@ $('#info').addEventListener('submit', e => {
   const g = active.g; if (!g.cats.includes(name)) g.cats.push(name);
   gameChanged(active, ['cats'], prefs.group === 'cat'); toast(T('Categoría «{0}» añadida', name));
 });
-/* another format for this game: the box goes back, the shelf makes room, and the new box comes out */
-const whenIdle = async () => { while (busy || swapBusy) await new Promise(r => setTimeout(r, 40)); };
-async function setFormat(c, val) {
-  const g = c.g; g.fmtUser = DIMS[val] ? val : null; saveGame(g);
-  const nf = g.fmtUser || g.fmtAuto;
-  if (nf === g.fmt) { renderInfo(true); return; }
-  await whenIdle();
-  if (active !== c) return;
-  if (mode === 'open') await closeCase();
-  await whenIdle(); if (mode === 'inspect' && active === c) await putBack();
-  await whenIdle(); if (active) return;
-  g.fmt = nf; dropCases(g);
-  await relayout({ follow: { g } }); await whenIdle();
-  const n = navOrder.find(q => q.g === g); if (n) pick(n);
-  toast(T('Ahora es: {0}', T(FMT_CHOICE[nf])));
+/* ---------- format: the case in your hands shrinks away and the new one takes its place ---------- */
+const FMT_ICON = { dvd: '▮', jewel: '◫', bigjewel: '◧', big: '▣', floppy: '▤', cart: '▭' };
+function setFormat(fmt) {
+  if (!active || !DIMS[fmt] || busy || !(mode === 'inspect' || mode === 'open') || fmtLocked(active.g)) { renderInfo(true); return; }
+  if (active.g.fmt === fmt) return;
+  return guarded(async () => {
+    const c = active, g = c.g, wasOpen = mode === 'open';
+    setMode('busy'); stopTrailer();
+    if (wasOpen) await closeCase(true);
+    if (c.wrap) g.tear = c.tear;
+    sfx.whoosh(); c.vanish = true; c.fast = true; await wait(170);
+    g.fmt = fmt; g.fmtPick = fmt; saveGame(g);
+    const n = new Case(g); n.key = c.key; caseById.set(c.key, n);
+    n.root.position.copy(c.root.position); n.root.quaternion.copy(c.root.quaternion); n.root.scale.setScalar(.02);
+    n.mode = c.mode; n.flipT = n.flipA = c.flipT; n.leaving = true; n.row = c.row; n.unitIdx = c.unitIdx; n.fresh = false; n.match = c.match;
+    /* its place on the shelf: same spot for now; the shelf makes room when you put it back */
+    placeCase(n, c.home.x, c.faceOut, c.home.board, isCases() ? SH.front : SHELF.front);
+    const i = navOrder.indexOf(c); if (i >= 0) navOrder[i] = n;
+    if (focus === c) focus = n; if (hovered === c) hovered = n;
+    c.dispose(); cases = [...caseById.values()]; buildShelfPicks();
+    active = n; n.ensureDetail(); n.setShadow(true); n.placeExtras();
+    pendingRelayout = true;
+    sfx.handle(fmt); await wait(420);
+    if (wasOpen) { await swingOpen(n); setMode('open'); } else setMode('inspect');
+    startTrailer(n); renderInfo(true);
+    toast(T('Ahora es: {0}', T(DIMS[fmt].name)), 2200);
+  });
 }
 /* the card can be dragged by its top bar anywhere on screen; the place is remembered (double click: back home) */
 function placeCard() {
@@ -202,7 +246,7 @@ $('#infoTab').addEventListener('click', () => setCard('show'));
 
 /* ---------- search ---------- */
 const qEl = $('#q'), countEl = $('#count');
-function searchText(g) { return norm([g.t, g.genre, g.dev, g.pub, g.plat, g.status, ...(g.cats || [])].filter(Boolean).join(' ')); }
+function searchText(g) { return norm([g.t, g.genre, g.dev, g.pub, g.plat, g.status, T(DIMS[g.fmt].name), ...(g.cats || [])].filter(Boolean).join(' ')); }
 function applySearch(stay) {
   const q = norm(qEl.value.trim()), gr = groups[curGroup]; if (!gr) return;
   const hits = q ? gr.games.filter(g => searchText(g).includes(q)) : [];
@@ -215,7 +259,48 @@ qEl.addEventListener('keydown', e => { if (e.key === 'Enter') { const m = navOrd
 
 /* ---------- settings ---------- */
 const setBtn = $('#setBtn'), setPop = $('#settings');
-function renderSettings() { const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
+function renderUgcList() {
+  const el = $('#ugcList'); if (!el) return;
+  const rows = [...systemsList().map(s => ['sys:' + s.key, s.name, s.key === 'PC' ? T('PC genérico') : T('Consola genérica (ID-2)')]), ['scr:crt', T('Tele de tubo'), T('Genérica')], ['scr:flat', T('Tele plana'), T('Genérica')], ['scr:monitor', T('Monitor del PC'), T('Genérico')]];
+  /* EmuVR's own consoles, once its folder has been read: offered on every system, the ones that suit it first */
+  const bases = UGCS.bases(), sysOfKey = k => k.slice(4);
+  const baseSel = k => !bases.length || !k.startsWith('sys:') || k === 'sys:PC' ? '' : `<select data-ugc-base="${k}" aria-label="${T('Consola de EmuVR')}"><option value="">EmuVR…</option>${bases.slice().sort((a, b) => (b.sys === sysOfKey(k)) - (a.sys === sysOfKey(k))).map(b => `<option value="${esc(b.id)}"${UGCS.meta()[k] && UGCS.meta()[k].base === b.id ? ' selected' : ''}>${esc(T(b.name))}</option>`).join('')}</select>`;
+  const head = `<div class="ugc-item"><div class="ugc-what"><b>${T('Consolas de EmuVR')}</b><span${bases.length ? ' class="on"' : ''}>${bases.length ? T('{0} consolas leídas', bases.length) : T('Las que trae EmuVR, sin .ugc')}</span></div><div class="ugc-btns"><button type="button" data-ugc-emuvr>${bases.length ? T('Volver a leer') : T('Leer carpeta de EmuVR')}</button></div></div>`;
+  el.innerHTML = head + rows.map(([k, label, gen]) => { const m = UGCS.meta()[k]; return `<div class="ugc-item"><div class="ugc-what"><b>${esc(label)}</b><span${m ? ' class="on"' : ''}>${m ? esc(m.name) : gen}</span></div><div class="ugc-btns">${m ? `<button type="button" data-ugc-rot="${k}" title="${T('Girar 180°')}" aria-label="${T('Girar 180°')}">↻</button><button type="button" data-ugc-del="${k}" title="${T('Quitar')}" aria-label="${T('Quitar')}">✕</button>` : ''}${baseSel(k)}<button type="button" data-ugc-pick="${k}">${m ? T('Cambiar') : T('Elegir .ugc')}</button></div></div>`; }).join('');
+}
+let ugcPending = null;
+$('#ugcList').addEventListener('click', async e => {
+  const pick = e.target.closest('[data-ugc-pick]'), del = e.target.closest('[data-ugc-del]'), rot = e.target.closest('[data-ugc-rot]');
+  if (pick) { ugcPending = pick.dataset.ugcPick; const f = $('#ugcFile'); f.value = ''; f.click(); }
+  if (e.target.closest('[data-ugc-emuvr]')) { const f = $('#emuvrDir'); f.value = ''; f.click(); }
+  if (del) { try { await UGCS.remove(del.dataset.ugcDel); } catch (err) { console.error(err); } renderUgcList(); refreshStage(); sfx.tick(); }
+  if (rot) { const m = UGCS.meta()[rot.dataset.ugcRot]; if (m) { m.rot = !m.rot; savePrefs(); refreshStage(); sfx.tick(); } }
+});
+$('#ugcList').addEventListener('change', async e => {
+  const sel = e.target.closest('[data-ugc-base]'); if (!sel || !sel.value) return;
+  toast(T('Preparando la consola…'), 4000);
+  try { await UGCS.useBase(sel.dataset.ugcBase, sel.value); toast(T('{0} listo', UGCS.meta()[sel.dataset.ugcBase].name), 2600); refreshStage(); }
+  catch (err) { console.error(err); toast(T('No se ha podido leer {0}', sel.value), 5000); }
+  renderUgcList();
+});
+/* the EmuVR folder (or its EmuVR_Data): only sharedassets0.assets and its .resS are read */
+$('#emuvrDir').addEventListener('change', async e => {
+  const files = e.target.files; if (!files || !files.length) return;
+  toast(T('Leyendo las consolas de EmuVR…'), 30000); await new Promise(r => setTimeout(r, 60));
+  try {
+    const list = await UGCS.readBase(files, (i, n) => toast(T('Leyendo las consolas de EmuVR… {0}/{1}', i, n), 30000));
+    toast(T('{0} consolas de EmuVR listas: elígelas en cada sistema.', list.length), 4000); refreshStage();
+  } catch (err) { console.error(err); toast(T(err && err.message ? err.message : 'No se han podido leer los datos de EmuVR'), 6000); }
+  renderUgcList();
+});
+$('#ugcFile').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0], key = ugcPending; ugcPending = null; if (!file || !key) return;
+  toast(T('Leyendo {0}…', file.name), 8000); await new Promise(r => setTimeout(r, 60));
+  try { await UGCS.put(key, file); toast(T('{0} listo', UGCS.meta()[key].name), 2600); refreshStage(); }
+  catch (err) { console.error(err); toast(T(err && err.message ? err.message : 'No se ha podido leer el .ugc', err && err.arg), 5000); }
+  renderUgcList();
+});
+function renderSettings() { renderUgcList(); const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
 function renderRoomPick() {
   const el = $('#roomPick'); if (!el) return;
   el.innerHTML = ROOM_ORDER.map(k => { const R = ROOMS[k]; return `<button type="button" class="room" data-room="${k}" aria-pressed="${prefs.room === k}"><i style="background:linear-gradient(90deg,${R.sw[0]} 0 45%,${R.sw[1]} 45% 72%,${R.sw[2]} 72%)"></i><span>${T(R.name)}</span></button>`; }).join('');
@@ -242,6 +327,7 @@ setPop.addEventListener('click', e => {
   if (k === 'trailer') { if (active && (mode === 'inspect' || mode === 'open')) { stopTrailer(); startTrailer(active); } }
   if (k === 'layout') setLayout(prefs.layout);
   if (k === 'seal') renderPrompts();
+  if (k === 'fmtCon') { GAMES.forEach(resolveFmt); if (active) renderInfo(true); relayout({ full: true }); }
   if (k === 'sort') relayout({ full: true });
   if (k === 'group') { prefs.shelf = '__all'; savePrefs(); relayout({ full: true, reset: true }); }
 });
@@ -262,8 +348,6 @@ function pick(c) {
     active = c; setHovered(null); tipEl.hidden = true; c.hoverT = 0; infoEdit = false; prefs.card = prefs.cardStart;
     if (cam.view === 'browse') setView('shelf');
     setMode('busy');
-    /* the machine this game needs comes onto the table while you look at the box */
-    ensureDevice(mediaOf(c.g.fmt));
     if (c.g.real) await LIB.prepare(c.g, 1500);
     c.ensureDetail(); c.setShadow(true);
     /* the case slides out for as long as the recorded scrape lasts and comes free on its loudest moment */
@@ -331,61 +415,103 @@ function putBack() {
   return guarded(async () => {
     const c = active; setMode('busy');
     if (c.wrap) { c.g.tear = c.tear; saveGame(c.g); }
-    c.flipT = 0; c.mode = 'pulled'; await wait(560);
-    const h = clamp(sfx.slideIn(c.g.fmt), .2, .7);
-    c.mode = 'home'; c.pullHold = 1; c.leaving = true; c.fast = true;
-    await tweenReal(h, t => { c.pullHold = 1 - t; }, t => t * t);
-    c.pullHold = 0; await wait(90); c.fast = false; c.leaving = false; c.setShadow(false); c.placeExtras();
-    stopTrailer(); c.releaseDetail(); active = null; setMode('shelf');
+    await slideHome(c); setMode('shelf');
   }).then(() => { if (pendingRelayout) { pendingRelayout = false; relayout({ follow: back }); } });
+}
+/* the case goes in front of its place and slides in */
+async function slideHome(c) {
+  c.flipT = 0; c.mode = 'pulled'; await wait(560);
+  const h = clamp(sfx.slideIn(c.g.fmt), .2, .7);
+  c.mode = 'home'; c.pullHold = 1; c.leaving = true; c.fast = true;
+  await tweenReal(h, t => { c.pullHold = 1 - t; }, t => t * t);
+  c.pullHold = 0; await wait(90); c.fast = false; c.leaving = false; c.setShadow(false); c.placeExtras();
+  stopTrailer(); c.releaseDetail(); active = null;
+}
+/* once the medium is in the machine the case closes and is laid down beside it */
+async function layDown(c) {
+  c.mode = 'rest'; await waitReal(.15);
+  const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0;
 }
 const _p0 = new V3(), _p1 = new V3(), _p2 = new V3(), _q0 = new Q4(), _q2 = new Q4(), _qz = new Q4(), _qt = new Q4(), ZAX = new V3(0, 0, 1);
 const QFLAT = new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0));
-/* the media leaves the case upwards, in front of it, so it never passes through the plastic */
-function discAbove(c, out) { const { h, discR } = c.dim; return out.set(c.discHome.x, h / 2 + discR + 1.4, c.discHome.z + (isCard(c.g.fmt) ? c.dim.d + 1.5 : 3.2)); }
-/* where the flight to the machine ends: discs and floppies lie flat in front of the slot, a cartridge stands over it */
-function slotApproach(kind, R, outPos, outQuat) {
-  if (kind === 'cart') { outPos.set(SLOT.x, SLOT.y + R + 3, SLOT.z); outQuat.copy(QUP); }
-  else { outPos.set(SLOT.x, SLOT.y, SLOT.z + R + .6); outQuat.copy(QFLAT); }
+/* the medium leaves the case upwards, in front of it, so it never passes through the plastic */
+function discAbove(c, out) { return out.set(c.discHome.x, c.dim.h / 2 + mediaHalfH(c) + 1.4, c.discHome.z + 3.2); }
+const QUP = new Q4();
+/* each medium's way into whatever machine is in the room: where it is offered (entry), where it rests
+   inside, where it pops out to and how it is turned. The machine says what kind of opening it is. */
+function portOf(c) { const P = DEV.cur.port(c.dim.media, c); P.m = c.dim.media; return P; }
+/* the flaps of a cartridge slot fold down as the cartridge's foot passes the mouth */
+function flapsFor(d, P) { setCartFlaps(clamp(((P.top ?? 0) + .4 - (d.position.y - MSIZE.cart.h / 2)) / 1.4, 0, 1)); }
+function trayTo(open, sec = .74) { const h = pcTray.userData.home, z0 = pcTray.position.z, z1 = h.z + (open ? pcTray.userData.out : 0); sfx.tray(); return tweenReal(sec, t => { pcTray.position.z = lerp(z0, z1, t); }, easeIO); }
+/* before the medium flies over: open what has to be open */
+function prepareIn(P) { if (P.kind === 'tray') trayTo(true); if (P.kind === 'socket' && P.prepare) P.prepare(); }
+async function pushIn(d, P) {
+  if (P.kind === 'floppy') {
+    sfx.floppyIn();
+    await tweenReal(.24, t => { d.position.z = lerp(P.entry.z, P.inside.z, t); }, t => t * t);
+    d.visible = false; blinkFloppy(2.4); await waitReal(.25); return;
+  }
+  if (P.kind === 'cart') {
+    sfx.cartIn();
+    await tweenReal(.32, t => { d.position.y = lerp(P.entry.y, P.inside.y, t); flapsFor(d, P); }, t => t * t);
+    d.position.copy(P.inside); setCartFlaps(1); await waitReal(.38); return;
+  }
+  if (P.kind === 'tray') {
+    await tweenReal(.32, t => { d.position.lerpVectors(P.entry, P.inside, t); }, t => t * t); sfx.thud();
+    await waitReal(.25); pcTray.attach(d); await trayTo(false); d.visible = false; await waitReal(.2); return;
+  }
+  if (P.kind === 'socket') {
+    await tweenReal(.42, t => { d.position.lerpVectors(P.entry, P.inside, t); }, easeOut);
+    if (P.m === 'cart') sfx.cartIn(); else sfx.discIn();
+    if (P.seat) await P.seat(d);
+    await waitReal(.2); return;
+  }
+  sfx.slotIn();
+  const z0 = d.position.z, z1 = z0 - 3.4, z2 = P.inside.z;
+  await tweenReal(.28, t => { d.position.z = lerp(z0, z1, t); }, easeOut);
+  await tweenReal(.52, t => { d.position.z = lerp(z1, z2, t); }, easeIO);
+  d.visible = false; await waitReal(.05);
 }
-/* where the media rests while the game runs */
-function slotInside(kind, R, out) { return kind === 'cart' ? out.set(SLOT.x, SLOT.y - R * .12, SLOT.z) : kind === 'floppy' ? out.set(SLOT.x, SLOT.y, SLOT.z - R - .5) : out.set(SLOT.x, SLOT.y, SLOT.z - R - 1.2); }
+async function popOut(d, P) {
+  if (P.kind === 'floppy') {
+    await waitReal(.25); sfx.floppyOut(); await waitReal(.07);
+    d.position.copy(P.inside); d.visible = true;
+    await tweenReal(.16, t => { d.position.z = lerp(P.inside.z, P.out.z, t); }, easeOut); return;
+  }
+  if (P.kind === 'cart') {
+    await waitReal(.2); sfx.cartOut(); await waitReal(.2);
+    await tweenReal(.42, t => { d.position.y = lerp(P.inside.y, P.out.y, t); flapsFor(d, P); }, easeIO); return;
+  }
+  if (P.kind === 'tray') {
+    await waitReal(.2); d.visible = true; await trayTo(true); scene.attach(d); return;
+  }
+  if (P.kind === 'socket') {
+    await waitReal(.15); if (P.unseat) await P.unseat(d);
+    if (P.m === 'cart') sfx.cartOut();
+    const from = d.position.clone(); await tweenReal(.35, t => { d.position.lerpVectors(from, P.out, t); }, easeOut); return;
+  }
+  await waitReal(.15); sfx.slotOut(); await waitReal(1.02);
+  d.visible = true; const zIn = d.position.z;
+  await tweenReal(.5, t => { d.position.z = lerp(zIn, P.out.z, t); }, easeIO);
+}
+/* once the medium has left the machine: close what was opened for it */
+function afterOut(P) { if (P.kind === 'tray') setTimeout(() => trayTo(false), 350); if (P.kind === 'socket' && P.after) setTimeout(() => P.after(), 500); }
 function insertDisc() {
   if (!active || mode !== 'open') return;
   return guarded(async () => {
-    const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR, kind = mediaOf(c.g.fmt);
+    const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), P = portOf(c);
     setMode('busy'); hoverPart = null; c.discLabelMat.emissive.set('#000000'); stopTrailer();
-    const ready = ensureDevice(kind);
-    await waitReal((kind === 'disc' ? sfx.discOut() : sfx.handle(c.g.fmt)) - .005);
+    await waitReal(sfx.mediaOut(c.g.fmt) - .005);
     await tween(.28, t => { d.position.z = home.z + 1.4 * t; d.rotation.x = -.06 * t; });
     await tween(.6, t => { d.position.y = lerp(home.y, above.y, t); d.position.z = lerp(home.z + 1.4, above.z, t); });
-    c.mode = 'parked'; setView('console'); await wait(750);
-    const dev = await ready; slotWorld(dev);
+    c.mode = 'parked'; setView('console'); prepareIn(P); await wait(750);
     scene.attach(d); _p0.copy(d.position); _q0.copy(d.quaternion); const s0 = d.scale.x;
-    slotApproach(kind, R, _p2, _q2); _p1.copy(_p0).lerp(_p2, .45); _p1.y = Math.max(_p0.y, _p2.y) + 18;
-    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, 1, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); if (kind === 'disc') { _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); } else d.quaternion.copy(_qt); });
-    d.scale.setScalar(1); d.quaternion.copy(_q2); d.position.copy(_p2);
-    const end = slotInside(kind, R, new V3());
-    if (kind === 'disc') {
-      sfx.slotIn();
-      const z0 = d.position.z, z1 = z0 - 3.4;
-      await tweenReal(.28, t => { d.position.z = lerp(z0, z1, t); }, easeOut);
-      await tweenReal(.52, t => { d.position.z = lerp(z1, end.z, t); }, easeIO);
-      d.visible = false;
-    } else if (kind === 'floppy') {
-      /* pushed in by hand; the latch takes it the last centimetre and the eject button comes out */
-      sfx.floppyIn(); const z0 = d.position.z;
-      await tweenReal(.24, t => { d.position.z = lerp(z0, end.z + .8, t); }, easeIO);
-      await tweenReal(.06, t => { d.position.z = lerp(end.z + .8, end.z, t); });
-      d.visible = false; dev.eject(true);
-      (async () => { for (const [on, ms] of [[1, 300], [0, 130], [1, 200], [0, 240], [1, 420], [0, 0]]) { dev.activity(!!on); if (ms) await waitReal(ms / 1000); } })();
-    } else {
-      /* a cartridge goes down into the slot, seats, and the power switch goes on */
-      sfx.cartIn(); const y0 = d.position.y;
-      await tweenReal(.32, t => { d.position.y = lerp(y0, end.y, t); }, easeIO);
-      await waitReal(.4); dev.power(true);
-    }
-    await waitReal(.05); setLed(true); await waitReal(.17);
+    layDown(c);
+    _p2.copy(P.entry); _p1.copy(_p0).lerp(_p2, .45); _p1.y = Math.max(_p0.y, _p2.y) + 18;
+    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, P.s || 1, t)); _qt.copy(_q0).slerp(P.q, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
+    d.scale.setScalar(P.s || 1); d.quaternion.copy(P.q); d.position.copy(_p2);
+    await pushIn(d, P);
+    setLed(true); await waitReal(.17);
     sfx.tvOn(); tvSet('boot', c);
     if (PLAYNITE) {
       /* the real thing: Playnite launches the game; the TV waits until it is actually running */
@@ -402,66 +528,62 @@ function insertDisc() {
     setMode('playing');
   });
 }
-/* the shelf was (re)opened while a game is running: its media is already in the machine */
+/* the shelf was (re)opened while a game is running: its disc is already in the console */
 async function restorePlaying(id, seconds) {
   const g = GAMES.find(q => q.id === id); if (!g || active) return;
+  /* rooms by system: the game is played in its own system's room */
+  const moved = isRooms() && sysOf(g) !== curSysKey(); if (moved) { prefs.sys = sysOf(g); prefs.shelf = '__all'; buildGroups(); curGroup = 0; curPage = 0; }
   const gi = groups.findIndex(gr => gr.games.includes(g)), p = gi >= 0 ? pageOf(g, gi) : -1;
-  if (gi >= 0 && (gi !== curGroup || p !== curPage)) { curGroup = gi; curPage = Math.max(0, p); layoutPage(); renderPills(); renderBrand(); }
+  if (moved || (gi >= 0 && (gi !== curGroup || p !== curPage))) { if (gi >= 0) { curGroup = gi; curPage = Math.max(0, p); } layoutPage(); renderPills(); renderBrand(); }
   const c = navOrder.find(q => q.g === g) || getCase(g); if (!c) return;
   if (g.real) await LIB.prepare(g, 1200);
-  const kind = mediaOf(g.fmt), dev = await ensureDevice(kind, true); slotWorld(dev);
-  active = c; c.ensureDetail(); c.setShadow(true); c.openA = 1; c.mode = 'parked'; c.leaving = true; c.placeExtras();
-  const d = c.disc, R = c.dim.discR; scene.attach(d); slotInside(kind, R, d.position); d.quaternion.copy(kind === 'cart' ? QUP : QFLAT); d.scale.setScalar(1); d.visible = kind === 'cart';
-  if (kind === 'floppy') dev.eject(true); if (kind === 'cart') dev.power(true);
+  active = c; c.ensureDetail(); c.setShadow(true); c.openA = 0; c.mode = 'rest'; c.leaving = true; c.placeExtras();
+  { const tp = c.targetPose(); c.root.position.copy(tp.pos); c.root.quaternion.copy(tp.quat); c.root.scale.setScalar(1); }
+  const d = c.disc, P = portOf(c); scene.attach(d); d.position.copy(P.inside); d.quaternion.copy(P.q); d.scale.setScalar(P.s || 1); d.visible = P.kind === 'cart' || P.kind === 'socket'; if (P.kind === 'cart') setCartFlaps(1);
+  if (P.kind === 'tray') { d.position.z -= pcTray.userData.out; pcTray.attach(d); }
+  if (P.kind === 'socket' && P.restore) P.restore(d);
   setLed(true); tvSet('play', c); playStart = performance.now() - (seconds || 0) * 1000;
   PN_STATE.running = id; PN_STATE.waiting = false; $('#playTitle').textContent = g.t; renderPlayBanner();
   setView('console'); setMode('playing');
 }
 function renderPlayBanner() {
-  const n = mediaNoun(active && active.g);
-  $('#playNote').textContent = PLAYNITE ? (PN_STATE.waiting ? T('Playnite está abriendo el juego. Si no arranca, saca {0} con Esc.', n) : PN_STATE.selfTrack ? T('Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y {0} sale cuando lo cierres.', n) : T('Playnite cuenta el tiempo. Al cerrar el juego, {0} vuelve solo a su caja.', n)) : T('En esta demo cada segundo cuenta como un minuto de partida.');
+  const g = active ? active.g : { fmt: 'dvd' };
+  $('#playNote').textContent = mediaT(g, PLAYNITE ? (PN_STATE.waiting ? 'Playnite está abriendo el juego. Si no arranca, saca el disco con Esc.' : PN_STATE.selfTrack ? 'Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y el disco sale cuando lo cierres.' : 'Playnite cuenta el tiempo. Al cerrar el juego, el disco vuelve solo a su caja.') : 'En esta demo cada segundo cuenta como un minuto de partida.');
   $('#playEyebrow').textContent = T(PLAYNITE && PN_STATE.waiting ? 'Arrancando' : 'En marcha');
 }
-/* takes the media out and puts it back in its case. Inside Playnite it runs when the game closes (o.auto),
-   or when you pull it out yourself while the game keeps running */
+/* ejects the disc and puts it back in its case. Inside Playnite it runs when the game closes (o.auto),
+   or when you pull the disc yourself while the game keeps running */
 function closeGame(o = {}) {
   if (!active || mode !== 'playing') return;
+  const back = active;
   return guarded(async () => {
-    const c = active, d = c.disc, g = c.g, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR, kind = mediaOf(g.fmt), dev = DEV[devKind];
+    const c = active, d = c.disc, g = c.g, home = c.discHome, P = portOf(c), rest = c.mode === 'rest';
+    /* into a case lying open on the table the medium drops from straight above */
+    const above = rest ? new V3(home.x, home.y, home.z + 7) : discAbove(c, new V3());
     const mins = Math.max(1, Math.floor((performance.now() - playStart) / 1000));
     /* pulled out by hand while only the shelf was keeping track: stop counting from here */
     const released = PLAYNITE && o.keepRunning && PN_STATE.selfTrack;
-    if (released) { LIB.send('release', { id: g.id }); o = Object.assign({}, o, { keepRunning: false, msg: T('{0} El tiempo hasta ahora se suma a {1} en Playnite.', T(MEDIA_OUT[kind]), g.t) }); }
+    if (released) { LIB.send('release', { id: g.id }); o = Object.assign({}, o, { keepRunning: false, msg: mediaT(g, 'Disco fuera. El tiempo hasta ahora se suma a {0} en Playnite.', g.t) }); }
     PN_STATE.waiting = false; PN_STATE.selfTrack = false; if (!o.keepRunning) PN_STATE.running = null;
-    setMode('busy'); tvSet('standby'); setLed(false); sfx.tvOff(); slotWorld(dev);
-    if (kind === 'disc') {
-      await waitReal(.15); sfx.slotOut(); await waitReal(1.02);
-      d.visible = true; const zIn = d.position.z, zOut = SLOT.z + R - 3.6;
-      await tweenReal(.5, t => { d.position.z = lerp(zIn, zOut, t); }, easeIO);
-    } else if (kind === 'floppy') {
-      /* the eject button goes in and the disk jumps half out */
-      await waitReal(.3); sfx.floppyOut(); dev.eject(false);
-      d.visible = true; const zIn = d.position.z, zOut = SLOT.z + R * .55;
-      await tweenReal(.14, t => { d.position.z = lerp(zIn, zOut, t); }, easeOut);
-      await wait(250);
-    } else {
-      await waitReal(.25); sfx.cartOut(); await dev.power(false); await waitReal(.15);
-      const yIn = d.position.y; await tweenReal(.42, t => { d.position.y = lerp(yIn, SLOT.y + R + 2, t); }, easeIO);
-    }
-    await wait(320);
+    setMode('busy'); tvSet('standby'); setLed(false); sfx.tvOff();
+    /* the case beside the machine opens while the medium comes out */
+    const opened = rest ? (async () => { await waitReal(.3); await swingOpen(c); })() : null;
+    await popOut(d, P);
+    afterOut(P); await wait(320); if (opened) await opened;
     _p0.copy(d.position); _q0.copy(d.quaternion);
     const tmp = new THREE.Object3D(); c.inner.add(tmp); tmp.position.copy(above); tmp.updateMatrixWorld(true);
     tmp.getWorldPosition(_p2); tmp.getWorldQuaternion(_q2); c.inner.remove(tmp);
-    _p1.copy(_p0).lerp(_p2, .55); _p1.y = Math.max(_p0.y, _p2.y) + 22; const sT = c.root.scale.x;
-    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(1, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); if (kind === 'disc') { _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); } else d.quaternion.copy(_qt); });
+    _p1.copy(_p0).lerp(_p2, .55); _p1.y = Math.max(_p0.y, _p2.y) + 22; const sT = c.root.scale.x, s0 = d.scale.x;
+    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); if (P.kind === 'cart') flapsFor(d, P); });
+    if (P.kind === 'cart') setCartFlaps(0);
     c.inner.attach(d); d.position.copy(above); d.quaternion.identity(); d.scale.set(1, 1, 1);
-    if (kind === 'disc') sfx.discIn({ hitAt: (.55 + .22) * SPEED }); else setTimeout(() => sfx.handle(g.fmt), (.55 + .22) * 1000 * SPEED);
+    sfx.mediaIn(g.fmt, { hitAt: (.55 + .22) * SPEED });
     await tween(.55, t => { d.position.y = lerp(above.y, home.y, t); d.position.z = lerp(above.z, home.z + 1.4, t); });
     await tween(.22, t => { d.position.z = home.z + 1.4 * (1 - t); }); d.position.copy(home);
     let msg, moved = false;
     if (PLAYNITE) {
       const s = o.seconds || 0;
-      msg = o.msg || (o.keepRunning ? T('El juego sigue abierto: Playnite seguirá contando el tiempo.') : s >= 60 ? T('+{0} min en {1}. Playnite ya lo ha apuntado.', Math.round(s / 60), g.t) : s > 0 ? T('Partida corta en {0}.', g.t) : T(MEDIA_OUT[kind]));
+      msg = o.msg || (o.keepRunning ? T('El juego sigue abierto: Playnite seguirá contando el tiempo.') : s >= 60 ? T('+{0} min en {1}. Playnite ya lo ha apuntado.', Math.round(s / 60), g.t) : s > 0 ? T('Partida corta en {0}.', g.t) : mediaT(g, 'Disco fuera.'));
       if (s > 0 || o.auto) { g.dust = 0; c.setDust(0); saveGame(g); }
     } else {
       g.hours += mins / 60; g.sessions += 1; g.last = 0;
@@ -469,11 +591,14 @@ function closeGame(o = {}) {
       c.setDust(0); g.dust0 = 0; saveGame(g);
       msg = moved ? T('+{0} min. Ahora está en «{1}».', mins, g.status) : T('+{0} min en {1}. Tus horas ya están en la caja.', mins, g.t);
     }
-    c.dirty = true; c.ensureDetail(); c.refreshSpine(); if (moved) pendingRelayout = true; focus = c;
-    c.mode = 'inspect'; setView('shelf'); await wait(700);
+    c.dirty = true; c.refreshSpine(); if (moved) pendingRelayout = true;
     toast(msg);
-    setMode('open'); startTrailer(c);
-  });
+    /* it closes and goes back to its place */
+    await waitReal(.25);
+    const h = clamp(sfx.caseClose(g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0;
+    setView('shelf'); await waitReal(.2);
+    await slideHome(c); focus = c; setMode('shelf');
+  }).then(() => { if (pendingRelayout) { pendingRelayout = false; relayout({ follow: back }); } });
 }
 
 /* ---------- re-arranging the shelf after a change ---------- */
@@ -521,6 +646,21 @@ async function relayout(opts = {}) {
 /* ---------- keyboard / pad focus along the shelf ---------- */
 function moveFocus(dir) {
   if (!navOrder.length) return; kbNav = true;
+  if (inCabinet()) {
+    /* the TV cabinet: two rows; left and right run along a row and turn the page at the ends, up and down change row */
+    const look = c => { focus = c; setHovered(c); cam.browseX = c.home.x; cam.browseRow = c.row; setView('browse'); };
+    if (!focus || !navOrder.includes(focus)) { look(hovered && navOrder.includes(hovered) ? hovered : navOrder[0]); return; }
+    const np = groups[curGroup].pages.length;
+    if (dir === 'left' || dir === 'right') {
+      const j = navOrder.indexOf(focus) + (dir === 'right' ? 1 : -1);
+      if (j >= navOrder.length && np > 1) { setPage((curPage + 1) % np, true).then(() => look(navOrder[0])); return; }
+      if (j < 0 && np > 1) { setPage((curPage - 1 + np) % np, true).then(() => look(navOrder[navOrder.length - 1])); return; }
+      look(navOrder[clamp(j, 0, navOrder.length - 1)]); return;
+    }
+    const cand = navOrder.filter(c => c.row === focus.row + (dir === 'down' ? 1 : -1));
+    if (cand.length) look(cand.reduce((b, c) => Math.abs(c.home.x - focus.home.x) < Math.abs(b.home.x - focus.home.x) ? c : b));
+    return;
+  }
   if (isCases()) {
     if (!focus || !navOrder.includes(focus)) focus = hovered && navOrder.includes(hovered) ? hovered : navOrder[0];
     else if (dir === 'left' || dir === 'right') {

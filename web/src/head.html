@@ -97,6 +97,31 @@ button,select,input,textarea{font:inherit;color:inherit}
 .frow .pill{width:24px;padding:0;justify-content:center;border:0}
 .frow select{flex:1;min-width:0;height:34px;background:rgba(255,255,255,.06);border:1px solid var(--panel-line);border-radius:6px;padding:0 8px;font-weight:600}
 .frow select option{background:#221c2c}
+.seg[data-pref="group"] button{flex:1 1 auto}
+.sysbar{display:flex;align-items:center;gap:6px;flex:none;pointer-events:auto}
+.sysbar.away{opacity:0;pointer-events:none}
+.sysbar{transition:opacity .25s}
+.sys-nav{width:32px;height:32px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(20,20,20,.55);color:#f1ede6;font:600 20px/1 var(--f-body);cursor:pointer;display:grid;place-items:center;padding:0 0 2px}
+.sys-nav:hover:not(:disabled){border-color:var(--amber);color:var(--amber)}
+.sys-nav:disabled{opacity:.3;cursor:default}
+.sysname{display:grid;justify-items:center;min-width:150px;max-width:240px;padding:3px 12px;border-radius:10px;background:rgba(20,20,20,.55);border:1px solid var(--amber)}
+.sysname b{font:800 19px/1.05 var(--f-display);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sysname span{font:600 10px var(--f-mono);letter-spacing:.06em;color:var(--ink-dim);white-space:nowrap}
+.ugc-list{display:grid;gap:4px}
+.ugc-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border:1px solid var(--panel-line);border-radius:7px;background:rgba(255,255,255,.03)}
+.ugc-what{display:grid;min-width:0}
+.ugc-what b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ugc-what span{font:600 11px var(--f-mono);color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ugc-what span.on{color:var(--amber)}
+.ugc-btns{display:flex;gap:4px;flex:none}
+.ugc-btns button{height:28px;padding:0 9px;border-radius:6px;border:1px solid var(--panel-line);background:rgba(255,255,255,.05);font-size:12px;font-weight:700;cursor:pointer}
+.ugc-btns button:hover{border-color:var(--amber);color:var(--amber)}
+.ugc-btns select{height:28px;max-width:132px;padding:0 6px;border-radius:6px;border:1px solid var(--panel-line);background:rgba(255,255,255,.05);color:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.ugc-btns select:hover{border-color:var(--amber)}
+.ugc-btns select option{background:#1b1d22;color:#e8e6e1}
+.fmt-lock{margin:-2px 0 6px;font-size:11.5px;color:var(--ink-dim);line-height:1.35}
+.frow select:disabled{opacity:.65;cursor:not-allowed}
+.frow .fmt-ico{width:24px;text-align:center;font-size:15px;color:var(--amber);line-height:1}
 .cats{margin-top:12px;display:grid;gap:8px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{height:28px;padding:0 10px;border-radius:999px;border:1px solid var(--panel-line);background:rgba(255,255,255,.05);font-size:13px;font-weight:600;cursor:pointer}
@@ -312,6 +337,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 
 <header class="hud-top">
   <div class="brand"><b>MyVLibrary</b><span id="brandCount"></span></div>
+  <div class="sysbar" id="sysbar" hidden><button type="button" class="sys-nav" data-sys="-1" aria-label="Sistema anterior">‹</button><div class="sysname"><b></b><span></span></div><button type="button" class="sys-nav" data-sys="1" aria-label="Sistema siguiente">›</button></div>
   <div class="tools">
     <nav class="pills" id="pills" aria-label="Estantes"></nav>
     <div class="field">
@@ -326,17 +352,21 @@ button,select,input,textarea{font:inherit;color:inherit}
 </header>
 
 <div class="pop" id="settings" hidden role="dialog" aria-label="Ajustes">
-  <div class="set-row"><span>Diseño</span><div class="seg" data-pref="layout"><button type="button" data-v="wall">Balda de pared</button><button type="button" data-v="cases">Estanterías</button></div></div>
+  <div class="set-row"><span>Diseño</span><div class="seg" data-pref="layout"><button type="button" data-v="rooms">Salas por sistema</button><button type="button" data-v="wall">Balda de pared</button><button type="button" data-v="cases">Estanterías</button></div></div>
   <div class="set-row"><span>Estantes</span><div class="seg" data-pref="group"><button type="button" data-v="status">Estado</button><button type="button" data-v="cat">Categoría</button><button type="button" data-v="plat">Plataforma</button><button type="button" data-v="fmt">Formato</button><button type="button" data-v="all">Todo</button></div></div>
   <div class="set-row"><span>Orden</span><div class="seg" data-pref="sort"><button type="button" data-v="alpha">A–Z</button><button type="button" data-v="hours">Horas</button><button type="button" data-v="recent">Recientes</button><button type="button" data-v="added">Añadidos</button><button type="button" data-v="year">Año</button></div></div>
   <div class="set-row"><span>Ambiente</span><div class="rooms" id="roomPick"></div></div>
   <div class="set-row"><span>Luz</span><div class="seg" data-pref="light"><button type="button" data-v="noche">Noche</button><button type="button" data-v="tarde">Tarde</button><button type="button" data-v="dia">Día</button></div></div>
+  <div class="set-row"><span>Formato en consolas</span><div class="seg" data-pref="fmtCon"><button type="button" data-v="lock">El original</button><button type="button" data-v="free">Libre</button></div><p class="set-note">Con «El original», cada juego de consola va en la caja y el medio de su sistema (PlayStation en caja de CD grande, PS2 en caja DVD, Super Nintendo en cartucho…). Los de PC se pueden cambiar siempre.</p></div>
   <div class="set-row"><span>Precinto</span><div class="seg" data-pref="seal"><button type="button" data-v="ask">Preguntar</button><button type="button" data-v="manual">A mano</button><button type="button" data-v="auto">Quitar solo</button></div></div>
   <div class="set-row demo-only"><span>Al terminar una partida</span><div class="seg" data-pref="autoStatus"><button type="button" data-v="off">No cambiar nada</button><button type="button" data-v="on">Marcar «Jugando»</button></div></div>
   <div class="set-row"><span>Sonido</span><div class="seg" data-pref="sound"><button type="button" data-v="on">Sí</button><button type="button" data-v="off">No</button></div></div>
   <div class="set-row"><span>Volumen de los efectos <b id="volVal" class="vol-val"></b></span><input id="volRange" class="vol" type="range" min="0" max="100" step="5"></div>
   <div class="set-row"><span>Tráiler</span><div class="seg" data-pref="trailer"><button type="button" data-v="on">Con sonido</button><button type="button" data-v="mute">Sin sonido</button><button type="button" data-v="off">No</button></div></div>
   <div class="set-row"><span>Ficha al sacar un juego</span><div class="seg" data-pref="cardStart"><button type="button" data-v="hide">Plegada</button><button type="button" data-v="show">Abierta</button></div></div>
+  <div class="set-row"><span>Consolas y pantallas de EmuVR (.ugc)</span><div class="ugc-list" id="ugcList"></div><p class="set-note">En las salas por sistema, un .ugc de EmuVR sustituye a la consola genérica de ese sistema, a una tele o al monitor. Las consolas que trae EmuVR se leen de su carpeta. Todo se guarda solo en este equipo.</p></div>
+  <input type="file" id="ugcFile" accept=".ugc" hidden>
+  <input type="file" id="emuvrDir" webkitdirectory multiple hidden>
   <p class="set-note">Los juegos que nunca has abierto llegan precintados: con «A mano» el precinto solo se quita tirando de la lengüeta. Los estados y categorías solo cambian cuando tú los cambias.</p>
   <p class="set-ver">MyVLibrary <!--VERSION--></p>
 </div>

@@ -21,7 +21,7 @@ function trHtml(html) {
 const domOrig = new WeakMap(), attrOrig = new WeakMap();
 function applyDomLang() {
   const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  const skip = n => n.parentElement && n.parentElement.closest('#info,#prompts,#tip,#toast,#pills,#book,#brandCount,#playTitle,#playTime,#count,script,style');
+  const skip = n => n.parentElement && n.parentElement.closest('#info,#prompts,#tip,#toast,#pills,#sysbar,#ugcList,#book,#brandCount,#playTitle,#playTime,#count,script,style');
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
     if (skip(n)) continue;
     if (!domOrig.has(n)) domOrig.set(n, n.nodeValue);

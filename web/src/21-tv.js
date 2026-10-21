@@ -41,7 +41,7 @@ function drawTV(now) {
     x.fillStyle = '#000000'; x.fillRect(0, 0, W, H);
     for (let i = 0; i < 4; i++) { const R = ((t * 150) + i * 60) % 240; x.strokeStyle = `rgba(255,181,71,${Math.max(0, 1 - R / 240)})`; x.lineWidth = 3; x.beginPath(); x.arc(W / 2, H / 2 - 12, R, 0, 7); x.stroke(); }
     x.globalAlpha = clamp((t - .35) / .5, 0, 1); x.fillStyle = '#f4ecdf'; x.font = `800 60px ${F.saira}`; x.fillText('MYVLIBRARY', W / 2, H / 2 - 12);
-    x.font = `700 16px ${F.mono}`; x.fillStyle = '#ffb547'; x.fillText('ID-2 · ' + T('LEYENDO DISCO') + '.'.repeat(1 + (Math.floor(t * 3) % 3)), W / 2, H / 2 + 42); x.globalAlpha = 1;
+    x.font = `700 16px ${F.mono}`; x.fillStyle = '#ffb547'; x.fillText(deviceLabel() + ' · ' + (tv.g ? mediaT(tv.g, 'LEYENDO DISCO') : T('LEYENDO DISCO')) + '.'.repeat(1 + (Math.floor(t * 3) % 3)), W / 2, H / 2 + 42); x.globalAlpha = 1;
   } else if (tv.state === 'wait' && tv.g) {
     x.fillStyle = '#000000'; x.fillRect(0, 0, W, H);
     x.globalAlpha = .35; if (tv.wide) x.drawImage(tv.wide, -(Math.sin(t * .2) * .5 + .5) * (1024 - W), 0); x.globalAlpha = 1;
@@ -84,7 +84,12 @@ function updateTvLight(now) {
   if ((tv.state === 'title' || tv.state === 'play' || tv.state === 'wait') && tv.g) { col = tv.g.pal[2]; I = .6 + Math.sin(now * .013) * .06 + (Math.random() - .5) * .05; }
   tvLight.color.lerp(new THREE.Color(col), .08); tvLight.intensity += (I - tvLight.intensity) * .08;
 }
-function setLed(on) { const d = DEV[devKind]; if (d) d.led(on); }
+function setLed(on) { DEV.led(on); }
+/* the floppy drive's light flickers while it reads */
+function blinkFloppy(sec) {
+  const t0 = performance.now(), mat = (DEV.cur && DEV.cur.floppyLed) || floppyLedMat; clearInterval(blinkFloppy.h);
+  blinkFloppy.h = setInterval(() => { const on = performance.now() - t0 < sec * 1000; mat.color.set(on && Math.random() < .65 ? '#5dff7e' : '#1d3a22'); if (!on) clearInterval(blinkFloppy.h); }, 70);
+}
 
 /* ---------- trailer: on the TV and on the back of the case while the game is in your hands ---------- */
 const trailer = { video: null, c: null, ready: false, lastBack: 0 };

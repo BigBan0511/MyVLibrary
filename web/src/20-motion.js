@@ -12,6 +12,8 @@ function bez(a, b, c, t, out) { const u = 1 - t; return out.set(u * u * a.x + 2 
 const cam = { pos: new V3(), look: new V3(), tPos: new V3(), tLook: new V3(), view: 'shelf', par: { x: 0, y: 0 }, browseX: 0 };
 function viewPose(name, outPos, outLook) {
   const narrow = camera.aspect < .95; let box, dir;
+  const sb = typeof stageBox === 'function' ? stageBox(name) : null;
+  if (sb) { sb.dir.normalize(); outLook.set(sb.box.cx, sb.box.cy, sb.box.cz ?? 0); outPos.copy(outLook).addScaledVector(sb.dir, fitDist(sb.box.w, sb.box.h)); return; }
   if (isCases() && (name === 'shelf' || name === 'browse')) {
     /* the earlier design: the camera stands in front of one bookcase */
     const u = units[curGroup], H = u ? u.H : 80;
@@ -22,7 +24,8 @@ function viewPose(name, outPos, outLook) {
     const x = clamp(cam.browseX, SHELF.x0 + 30, SHELF.x1 - 30);
     box = { cx: x, cy: SHELF.board + 11, w: narrow ? 46 : 82, h: 40 }; dir = new V3(0, .06, 1);
   } else if (name === 'console') {
-    box = narrow ? { cx: CON.x - 14, cy: TABLE.top + 22, w: 86, h: 110 } : { cx: (TV.x + CON.x) / 2 + 8, cy: TABLE.top + 26, w: 150, h: 70 }; dir = new V3(-.06, .2, 1);
+    /* the TV, the console and the case resting beside it */
+    box = narrow ? { cx: CON.x + 8, cy: TABLE.top + 22, w: 104, h: 120 } : { cx: (TV.x + CON.x) / 2 + 14, cy: TABLE.top + 26, w: 168, h: 74 }; dir = new V3(-.06, .2, 1);
   } else {
     /* the reference shot: shelf at the top, table and its things below, a little from above */
     box = narrow ? { cx: SHELF.cx, cy: 108, w: 200, h: 130 } : { cx: SHELF.cx, cy: 108, w: 232, h: 122 }; dir = new V3(0, .14, 1);
@@ -38,10 +41,11 @@ function updateCamera(dt) {
   camera.position.copy(cam.pos); camera.position.x += cam.par.x; camera.position.y += cam.par.y; camera.lookAt(cam.look);
   /* with the bookcases the ceiling light follows you along the room; over the wall shelf it stays put */
   const k = cam.snap ? 1 : 1 - Math.exp(-2.5 * dt / SPEED); cam.snap = false;
-  if (isCases()) { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(_KOFF); key.position.lerp(_kp, k); }
+  if (isCases() || STAGE.name === 'tv') { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(_KOFF); key.position.lerp(_kp, k); }
   else { key.target.position.lerp(KEY_AIM, k); key.position.lerp(KEY_POS, k); }
   key.target.updateMatrixWorld();
-  if (typeof shelfFill !== 'undefined') shelfFill.forEach((l, i) => { _kl.set(isCases() ? cam.look.x + (i ? 22 : -22) : SHELF.cx + (i ? 55 : -60), isCases() ? cam.look.y + 6 : SHELF.board + 26, isCases() ? 70 : SHELF.front + 75); l.position.lerp(_kl, k); });
+  const follow = isCases() || STAGE.name === 'tv';
+  if (typeof shelfFill !== 'undefined') shelfFill.forEach((l, i) => { _kl.set(follow ? cam.look.x + (i ? 22 : -22) : SHELF.cx + (i ? 55 : -60), follow ? cam.look.y + 6 : SHELF.board + 26, follow ? 70 : SHELF.front + 75); l.position.lerp(_kl, k); });
 }
 const _kl = new V3(), _kp = new V3(), _KOFF = new V3(66, 222, 236);
 function updateRowLights() { }

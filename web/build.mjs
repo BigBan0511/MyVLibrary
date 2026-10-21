@@ -29,7 +29,8 @@ const LATIN = 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U
 if (target === 'demo') {
   const fonts = `<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;500;600;700;800&family=Fraunces:ital,wght@0,700;1,700&family=JetBrains+Mono:wght@500;700&family=Permanent+Marker&family=Press+Start+2P&family=Saira+Extra+Condensed:wght@600;800&display=swap">`;
   const out = join(here, 'dist-demo'); mkdirSync(out, { recursive: true });
-  const html = head.replace('<!--FONTS-->', fonts) + '\n<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\n<script>\n' + app + '</script>\n';
+  /* the charset must be declared: opened from disk, the page would otherwise be read as Windows-1252 and the script breaks */
+  const html = '<!doctype html>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n' + head.replace('<!--FONTS-->', fonts) + '\n<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\n<script>\n' + app + '</script>\n';
   writeFileSync(join(out, 'index.html'), html);
   console.log(`demo -> dist-demo/index.html (${(html.length / 1024).toFixed(0)} KB)`);
 } else {
