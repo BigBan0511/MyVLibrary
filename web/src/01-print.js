@@ -26,15 +26,34 @@ function titleText(g) { return g.font === 'fraunces' ? g.t : g.t.toUpperCase(); 
 function imgW(i) { return i.naturalWidth || i.videoWidth || i.width; }
 function imgH(i) { return i.naturalHeight || i.videoHeight || i.height; }
 function coverFit(x, img, X, Y, W, H, fx = .5, fy = .5) { const iw = imgW(img), ih = imgH(img); if (!iw || !ih) return; const sc = Math.max(W / iw, H / ih); x.drawImage(img, X + (W - iw * sc) * fx, Y + (H - ih * sc) * fy, iw * sc, ih * sc); }
-function fmtLabel(g) { return g.real ? (g.fmt === 'jewel' ? `${g.plat} · CD` : g.fmt === 'big' ? `${g.plat} · ${T('CAJA')}` : `${g.plat} · DVD`) : DIMS[g.fmt].label; }
+function fmtLabel(g) {
+  if (!g.real) return T(DIMS[g.fmt].label);
+  return `${g.plat} · ` + ({ jewel: 'CD', big: T('CAJA'), floppy: '3½"', cart: T('CARTUCHO') }[g.fmt] || 'DVD');
+}
+/* boxes whose spine is wide enough for a second line and a bigger platform band */
+const wideSpine = g => DIMS[g.fmt].d / DIMS[g.fmt].h > .15;
 function placeholderArt(x, W, H, g) {
   x.fillStyle = lg(x, 0, 0, W * .3, H, [[0, mix(g.pal[1], '#ffffff', .08)], [1, g.pal[0]]]); x.fillRect(0, 0, W, H);
   x.globalAlpha = .18; x.strokeStyle = g.pal[3]; x.lineWidth = Math.max(1, W * .004); for (let i = 0; i < 9; i++) { x.beginPath(); x.arc(W * .5, H * .62, W * (.12 + i * .07), 0, 7); x.stroke(); } x.globalAlpha = 1;
   let s = W * .14; x.font = titleFont(g, s); const t = titleText(g); while (x.measureText(t).width > W * .84 && s > 10) { s *= .94; x.font = titleFont(g, s); }
   x.fillStyle = g.pal[4]; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(t, W / 2, H * .3);
 }
-function coverSize(g) { return g.fmt === 'jewel' ? [512, 452] : g.fmt === 'big' ? [512, 592] : [512, 720]; }
-function spineSize(g) { if (g.real) return g.fmt === 'big' ? [224, 1036] : g.fmt === 'jewel' ? [80, 704] : [72, 976]; return g.fmt === 'big' ? [224, 1036] : g.fmt === 'jewel' ? [72, 900] : [64, 868]; }
+function coverSize(g) { const { w, h } = DIMS[g.fmt], W = w > h ? 640 : 512; return [W, Math.round(W * h / w)]; }
+function spineSize(g) {
+  const { d, h } = DIMS[g.fmt];
+  if (wideSpine(g)) return [Math.round(1036 * d / h), 1036];
+  if (g.real) return g.fmt === 'jewel' ? [80, 704] : [72, 976];
+  return g.fmt === 'jewel' ? [72, 900] : [64, 868];
+}
+/* a picture whose shape is far from the box's (a tall cover on a wide cartridge box): whole, over a blurred copy */
+function coverOrContain(x, img, W, H) {
+  const ia = imgW(img) / Math.max(1, imgH(img)), ba = W / H;
+  if (Math.abs(Math.log(ia / ba)) < .3) { coverFit(x, img, 0, 0, W, H); return; }
+  if ('filter' in x) x.filter = 'blur(14px) brightness(.62) saturate(1.2)';
+  coverFit(x, img, -W * .05, -H * .05, W * 1.1, H * 1.1); x.filter = 'none';
+  const sc = Math.min(W / imgW(img), H / imgH(img)), dw = imgW(img) * sc, dh = imgH(img) * sc;
+  x.save(); x.shadowColor = 'rgba(0,0,0,.5)'; x.shadowBlur = W * .03; x.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh); x.restore();
+}
 const AGE_COL = { 3: '#3aa655', 7: '#3aa655', 12: '#e3a02f', 16: '#e3a02f', 18: '#d83a3a' };
 
 function ageBadge(x, X, Y, s, age) {
@@ -103,7 +122,7 @@ function drawTitle(x, g, W, H, top) {
 function drawCover(g) {
   const [W, H] = coverSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), r = rng(hash(g.id) + 3);
   if (g.real) {
-    const src = g.cover || g.coverSmall; if (src) coverFit(x, src, 0, 0, W, H); else placeholderArt(x, W, H, g);
+    const src = g.cover || g.coverSmall; if (src) coverOrContain(x, src, W, H); else placeholderArt(x, W, H, g);
     /* lit like printed paper behind plastic, not like a screen */
     x.save(); x.globalCompositeOperation = 'soft-light'; x.fillStyle = lg(x, 0, 0, W * .8, H, [[0, 'rgba(255,238,215,.4)'], [.55, 'rgba(128,128,128,0)'], [1, 'rgba(0,0,0,.4)']]); x.fillRect(0, 0, W, H); x.restore();
     return finishCover(x, g, W, H, r, true);
@@ -115,7 +134,7 @@ function drawCover(g) {
 }
 function finishCover(x, g, W, H, r, real) {
   const c = x.canvas;
-  const band = g.fmt === 'jewel' ? H * .07 : g.fmt === 'big' ? H * .06 : H * .052;
+  const band = g.fmt === 'cart' ? H * .085 : g.fmt === 'jewel' ? H * .07 : isCard(g.fmt) ? H * .06 : H * .052;
   x.fillStyle = 'rgba(10,10,14,.88)'; x.fillRect(0, 0, W, band);
   x.fillStyle = g.pal[2]; x.fillRect(0, band, W, 3);
   x.fillStyle = '#ffffff'; x.textBaseline = 'middle'; x.textAlign = 'left'; x.font = `800 ${Math.round(band * .56)}px ${F.saira}`; setLS(x, 1.5);
@@ -194,7 +213,7 @@ function drawBack(g, coverCanvas) {
   x.fillStyle = base; x.fillRect(0, 0, W, H);
   x.globalAlpha = .2; x.drawImage(coverCanvas, 0, 0); x.globalAlpha = 1;
   x.fillStyle = lg(x, 0, 0, 0, H, [[0, hexA(base, .6)], [1, hexA(base, .95)]]); x.fillRect(0, 0, W, H);
-  const pad = W * .07, compact = g.fmt === 'jewel'; let y = pad * .8;
+  const pad = W * .07, compact = g.fmt === 'jewel' || g.fmt === 'cart'; let y = pad * .8;
   x.textAlign = 'left'; x.textBaseline = 'top'; x.fillStyle = ink;
   let ts = W * .075; x.font = titleFont(g, ts); while (x.measureText(titleText(g)).width > W - 2 * pad && ts > 14) { ts *= .94; x.font = titleFont(g, ts); }
   x.fillText(titleText(g), pad, y); y += ts * 1.08;
@@ -260,10 +279,10 @@ function drawRealSpine(g) {
   const [W, H] = spineSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal, r = rng(hash(g.id) + 11);
   const { base, ink, light } = spineColors(g);
   x.fillStyle = lg(x, 0, 0, W, 0, [[0, mix(base, '#000000', .22)], [.18, base], [.82, base], [1, mix(base, '#000000', .22)]]); x.fillRect(0, 0, W, H);
-  const bandH = Math.round(W * (g.fmt === 'big' ? .26 : .78));
+  const wide = wideSpine(g), bandH = Math.round(W * (wide ? .26 : .78));
   x.fillStyle = light ? '#18181c' : '#0b0b0d'; x.fillRect(0, 0, W, bandH);
   x.fillStyle = '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  let ls = W * (g.fmt === 'big' ? .2 : .36); const lab = (g.plat || 'PC').toUpperCase(); x.font = `800 ${Math.round(ls)}px ${F.saira}`;
+  let ls = W * (wide ? .2 : .36); const lab = (g.plat || 'PC').toUpperCase(); x.font = `800 ${Math.round(ls)}px ${F.saira}`;
   while (x.measureText(lab).width > W * .84 && ls > 6) { ls *= .92; x.font = `800 ${Math.round(ls)}px ${F.saira}`; }
   x.fillText(lab, W / 2, bandH * .54);
   x.fillStyle = p[2]; x.fillRect(0, bandH, W, Math.max(2, W * .04));
@@ -277,11 +296,11 @@ function drawRealSpine(g) {
     /* Extra Metadata Loader's clear logo, laid along the spine like on a shop copy */
     const lw = imgW(g.logo), lh = imgH(g.logo), sc = Math.min(maxLenL / lw, (W * .78) / lh);
     x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = W * .08; x.drawImage(g.logo, -lw * sc / 2, -lh * sc / 2, lw * sc, lh * sc); x.shadowBlur = 0; x.restore();
-    x.fillStyle = hexA(ink, .75); x.font = `700 ${Math.round(W * (g.fmt === 'big' ? .1 : .24))}px ${F.mono}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillStyle = hexA(ink, .75); x.font = `700 ${Math.round(W * (wide ? .1 : .24))}px ${F.mono}`; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText(g.year ? String(g.year) : initials(g.dev || g.t), W / 2, H - W * .45);
     return c;
   }
-  const text = g.t.toUpperCase(), maxLen = (bottom - top) * .92, maxH = W * (g.fmt === 'big' ? .34 : .66);
+  const text = g.t.toUpperCase(), maxLen = (bottom - top) * .92, maxH = W * (wide ? .34 : .66);
   let size = maxH; x.font = `800 ${Math.round(size)}px ${F.saira}`;
   while (x.measureText(text).width > maxLen && size > 7) { size *= .95; x.font = `800 ${Math.round(size)}px ${F.saira}`; }
   if (x.measureText(text).width > maxLen && text.includes(' ') && g.fmt !== 'jewel') {
@@ -293,7 +312,7 @@ function drawRealSpine(g) {
     x.fillStyle = ink; x.textBaseline = 'middle'; x.fillText(best.a, 0, -size * .5); x.fillText(best.b, 0, size * .52);
   } else { x.fillStyle = ink; x.textBaseline = 'middle'; x.fillText(text, 0, size * .04); }
   x.restore();
-  x.fillStyle = hexA(ink, .75); x.font = `700 ${Math.round(W * (g.fmt === 'big' ? .1 : .24))}px ${F.mono}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillStyle = hexA(ink, .75); x.font = `700 ${Math.round(W * (wide ? .1 : .24))}px ${F.mono}`; x.textAlign = 'center'; x.textBaseline = 'middle';
   x.fillText(g.year ? String(g.year) : initials(g.dev || g.t), W / 2, H - W * .45);
   if (g.hours >= 40) wear(x, W, H, r, clamp(g.hours / 100, .4, 1));
   return c;
@@ -301,28 +320,28 @@ function drawRealSpine(g) {
 function drawSpine(g) {
   if (g.real) return drawRealSpine(g);
   const [W, H] = spineSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal, r = rng(hash(g.id) + 11);
-  const base = g.spine || p[0], ink = g.scol || p[4];
+  const base = g.spine || p[0], ink = g.scol || p[4], wide = wideSpine(g);
   x.fillStyle = lg(x, 0, 0, W, 0, [[0, mix(base, '#000000', .3)], [.5, base], [1, mix(base, '#000000', .3)]]); x.fillRect(0, 0, W, H);
-  if (g.fmt === 'big') { x.globalAlpha = .35; x.save(); x.translate(W, 0); x.rotate(Math.PI / 2); const a = mkCanvas(H, W), ax = a.getContext('2d'); drawArt(ax, H, W, g, 5); x.drawImage(a, 0, 0); x.restore(); x.globalAlpha = 1; x.fillStyle = hexA(base, .55); x.fillRect(0, 0, W, H); }
-  const bandH = g.fmt === 'big' ? H * .1 : H * .08;
+  if (wide) { x.globalAlpha = .35; x.save(); x.translate(W, 0); x.rotate(Math.PI / 2); const a = mkCanvas(H, W), ax = a.getContext('2d'); drawArt(ax, H, W, g, 5); x.drawImage(a, 0, 0); x.restore(); x.globalAlpha = 1; x.fillStyle = hexA(base, .55); x.fillRect(0, 0, W, H); }
+  const bandH = wide ? H * .1 : H * .08;
   const light = g.fmt === 'jewel';
   x.fillStyle = light ? '#ece8df' : '#0e0e12'; x.fillRect(0, 0, W, bandH);
   x.fillStyle = p[2]; x.fillRect(0, bandH, W, Math.max(3, H * .006));
   x.fillStyle = light ? '#16161a' : '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.font = `800 ${Math.round(g.fmt === 'big' ? W * .2 : W * .38)}px ${F.saira}`; x.fillText(DIMS[g.fmt].short, W / 2, bandH * .52);
+  x.font = `800 ${Math.round(wide ? W * .2 : W * .38)}px ${F.saira}`; x.fillText(DIMS[g.fmt].short, W / 2, bandH * .52);
   x.save(); x.translate(W / 2, H * .55); x.rotate(-Math.PI / 2);
-  const text = titleText(g), maxLen = H * .66, maxH = W * (g.fmt === 'big' ? .36 : g.font === 'press' ? .3 : .64);
+  const text = titleText(g), maxLen = H * .66, maxH = W * (wide ? .36 : g.font === 'press' ? .3 : .64);
   let size = maxH; x.font = titleFont(g, size);
   while (x.measureText(text).width > maxLen && size > 6) { size *= .95; x.font = titleFont(g, size); }
   x.fillStyle = ink; x.textBaseline = 'middle';
-  if (g.font === 'bungee' || g.font === 'press') { x.strokeStyle = 'rgba(0,0,0,.45)'; x.lineWidth = size * .12; x.lineJoin = 'round'; x.strokeText(text, 0, g.fmt === 'big' ? -W * .1 : 0); }
-  x.fillText(text, 0, g.fmt === 'big' ? -W * .1 : 0);
-  if (g.fmt === 'big') { x.font = `700 ${Math.round(W * .1)}px ${F.fig}`; x.globalAlpha = .9; x.fillText(g.tag.toUpperCase(), 0, W * .2); x.globalAlpha = 1; }
+  if (g.font === 'bungee' || g.font === 'press') { x.strokeStyle = 'rgba(0,0,0,.45)'; x.lineWidth = size * .12; x.lineJoin = 'round'; x.strokeText(text, 0, wide ? -W * .1 : 0); }
+  x.fillText(text, 0, wide ? -W * .1 : 0);
+  if (wide) { x.font = `700 ${Math.round(W * .1)}px ${F.fig}`; x.globalAlpha = .9; x.fillText(g.tag.toUpperCase(), 0, W * .2); x.globalAlpha = 1; }
   x.restore();
   const by = H * .935;
   x.strokeStyle = hexA(ink, .8); x.lineWidth = Math.max(2, W * .04); x.beginPath(); x.arc(W / 2, by - W * .45, W * .2, 0, 7); x.stroke();
   x.fillStyle = hexA(ink, .8); x.beginPath(); x.arc(W / 2, by - W * .45, W * .05, 0, 7); x.fill();
-  x.font = `700 ${Math.round(W * (g.fmt === 'big' ? .12 : .25))}px ${F.mono}`; x.fillText(initials(g.dev), W / 2, by + W * .05);
+  x.font = `700 ${Math.round(W * (wide ? .12 : .25))}px ${F.mono}`; x.fillText(initials(g.dev), W / 2, by + W * .05);
   if (g.hours >= 40) wear(x, W, H, r, clamp(g.hours / 100, .4, 1));
   addGrain(x, W, H, r, 12);
   return c;
@@ -345,6 +364,46 @@ function drawDisc(g, coverCanvas) {
   x.fillStyle = rg(x, R, R, S * .06, S * .14, [[0, 'rgba(225,230,238,.95)'], [.6, 'rgba(190,198,210,.9)'], [1, 'rgba(160,170,184,.0)']]); x.beginPath(); x.arc(R, R, S * .14, 0, 7); x.fill();
   x.strokeStyle = 'rgba(255,255,255,.6)'; x.lineWidth = 1.5; [.08, .1, .12].forEach(k => { x.beginPath(); x.arc(R, R, S * k, 0, 7); x.stroke(); });
   x.restore();
+  return c;
+}
+/* the label of whatever goes into the machine */
+function drawMedia(g, coverCanvas) { const k = mediaOf(g.fmt); return k === 'floppy' ? drawFloppyLabel(g, coverCanvas) : k === 'cart' ? drawCartLabel(g, coverCanvas) : drawDisc(g, coverCanvas); }
+function mediaArt(g, coverCanvas, W, H, x, seed) {
+  if (g.real) { if (coverCanvas) coverOrContain(x, g.cover || g.coverSmall || coverCanvas, W, H); else placeholderArt(x, W, H, g); return; }
+  const a = mkCanvas(W, H), ax = a.getContext('2d'); drawArt(ax, W, H, g, seed); gradeArt(ax, W, H, rng(hash(g.id) + seed)); x.drawImage(a, 0, 0);
+}
+/* a floppy's paper label: a coloured head with the title, the art in a square, the disk number */
+function drawFloppyLabel(g, coverCanvas) {
+  const W = 512, H = 387, c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal, r = rng(hash(g.id) + 21);
+  x.fillStyle = '#f3efe6'; x.fillRect(0, 0, W, H);
+  x.fillStyle = 'rgba(80,70,60,.08)'; for (let yy = H * .3; yy < H; yy += H * .085) x.fillRect(W * .44, yy, W * .52, 2);
+  const head = H * .22; x.fillStyle = mix(p[0], p[2], .25); x.fillRect(0, 0, W, head); x.fillStyle = p[2]; x.fillRect(0, head, W, 4);
+  x.fillStyle = '#ffffff'; x.textBaseline = 'middle'; x.textAlign = 'left';
+  let ts = head * .62; x.font = `800 ${Math.round(ts)}px ${F.saira}`; const tt = g.t.toUpperCase(); while (x.measureText(tt).width > W * .9 && ts > 10) { ts *= .94; x.font = `800 ${Math.round(ts)}px ${F.saira}`; }
+  x.fillText(tt, W * .05, head * .54);
+  const sq = H * .56, sx = W * .05, sy = head + H * .08;
+  x.save(); x.beginPath(); x.rect(sx, sy, sq, sq); x.clip(); x.translate(sx, sy); mediaArt(g, coverCanvas, sq, sq, x, 3); x.restore();
+  x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 2; x.strokeRect(sx, sy, sq, sq);
+  x.fillStyle = '#1d1b19'; x.font = `800 ${Math.round(H * .1)}px ${F.saira}`; x.fillText(T('DISCO 1 DE 3'), W * .44, sy + H * .07);
+  x.font = `600 ${Math.round(H * .06)}px ${F.fig}`; x.fillStyle = '#4a4540';
+  x.fillText([g.year, g.dev].filter(Boolean).join(' · ').slice(0, 30), W * .44, sy + H * .2);
+  x.font = `700 ${Math.round(H * .052)}px ${F.mono}`; x.fillText('3½" HD · 1.44 MB', W * .44, sy + H * .31);
+  x.fillStyle = '#7a736a'; x.font = `600 ${Math.round(H * .045)}px ${F.fig}`; x.fillText(T('Prohibida la copia sin permiso.'), W * .44, sy + H * .45);
+  addGrain(x, W, H, r, 8);
+  return c;
+}
+/* a cartridge label: the art edge to edge, a dark band on top, the title over a fade at the bottom */
+function drawCartLabel(g, coverCanvas) {
+  const W = 512, H = 316, c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal;
+  mediaArt(g, coverCanvas, W, H, x, 4);
+  const band = H * .15; x.fillStyle = 'rgba(12,12,16,.9)'; x.fillRect(0, 0, W, band); x.fillStyle = p[2]; x.fillRect(0, band, W, 3);
+  x.fillStyle = '#ffffff'; x.textBaseline = 'middle'; x.textAlign = 'left'; x.font = `800 ${Math.round(band * .55)}px ${F.saira}`; setLS(x, 1.5); x.fillText(fmtLabel(g).toUpperCase(), W * .04, band * .54);
+  x.textAlign = 'right'; x.font = `700 ${Math.round(band * .36)}px ${F.mono}`; x.fillText('MYVLIBRARY', W * .96, band * .54); setLS(x, 0);
+  if (!g.real) {
+    x.fillStyle = lg(x, 0, H * .55, 0, H, [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,.7)']]); x.fillRect(0, H * .55, W, H * .45);
+    let ts = H * .17; x.font = titleFont(g, ts); while (x.measureText(titleText(g)).width > W * .9 && ts > 10) { ts *= .94; x.font = titleFont(g, ts); }
+    x.textAlign = 'center'; x.fillStyle = g.pal[4]; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 10; x.fillText(titleText(g), W / 2, H * .84); x.shadowBlur = 0;
+  }
   return c;
 }
 function drawManualCover(g, coverCanvas) {
@@ -458,12 +517,14 @@ function makeWindowCanvas(kind) {
 function makeTrayCanvas(fmt) {
   const d = DIMS[fmt], W = 512, H = Math.round(512 * d.h / d.w), c = mkCanvas(W, H), x = c.getContext('2d');
   const cx = W * (.5 + d.discX / d.w), cy = H / 2, R = d.discR / d.w * W;
-  if (fmt === 'big') {
+  if (isCard(fmt)) {
     x.fillStyle = '#d9c9a8'; x.fillRect(0, 0, W, H);
     x.strokeStyle = 'rgba(90,70,40,.18)'; for (let i = 0; i < 40; i++) { x.beginPath(); x.moveTo(0, i * H / 40); x.lineTo(W, i * H / 40 + 6); x.stroke(); }
-    x.fillStyle = '#5a4528'; x.font = `800 26px ${F.saira}`; x.textAlign = 'center'; x.fillText(T('GRACIAS POR JUGAR'), W / 2, H * .07);
-    x.font = `600 15px ${F.fig}`; x.fillText(T('Guarda el disco aquí cuando no lo uses.'), W / 2, H * .935);
-    x.fillStyle = 'rgba(60,40,20,.25)'; x.beginPath(); x.arc(cx, cy, R * 1.04, 0, 7); x.fill();
+    x.fillStyle = '#5a4528'; x.font = `800 ${Math.round(W * .05)}px ${F.saira}`; x.textAlign = 'center'; x.fillText(T('GRACIAS POR JUGAR'), W / 2, H * .08);
+    x.font = `600 ${Math.round(W * .03)}px ${F.fig}`; x.fillText(T({ big: 'Guarda el disco aquí cuando no lo uses.', floppy: 'Guarda los disquetes aquí, lejos de imanes.', cart: 'Guarda el cartucho aquí, con el conector hacia abajo.' }[fmt]), W / 2, H * .94);
+    x.fillStyle = 'rgba(60,40,20,.25)';
+    if (d.media === 'disc') { x.beginPath(); x.arc(cx, cy, R * 1.04, 0, 7); x.fill(); }
+    else { const mw = (d.media === 'cart' ? CART.w : FLOPPY.w) / d.w * W * 1.08, mh = (d.media === 'cart' ? CART.h : FLOPPY.h) / d.h * H * 1.08; rr(x, cx - mw / 2, cy - mh / 2 - (d.media === 'cart' ? .4 / d.h * H : 0), mw, mh, W * .02); x.fill(); }
   } else {
     const dark = fmt === 'dvd';
     x.fillStyle = dark ? '#18191d' : '#9aa3ad'; x.fillRect(0, 0, W, H);
@@ -477,7 +538,7 @@ function makeTrayCanvas(fmt) {
 }
 function makeLidCanvas(fmt) {
   const d = DIMS[fmt], W = 512, H = Math.round(512 * d.h / d.w), c = mkCanvas(W, H), x = c.getContext('2d');
-  if (fmt === 'big') { x.fillStyle = '#e4d6b8'; x.fillRect(0, 0, W, H); x.fillStyle = 'rgba(90,70,40,.12)'; for (let i = 0; i < 30; i++) x.fillRect(0, i * H / 30, W, 2); }
+  if (isCard(fmt)) { x.fillStyle = '#e4d6b8'; x.fillRect(0, 0, W, H); x.fillStyle = 'rgba(90,70,40,.12)'; for (let i = 0; i < 30; i++) x.fillRect(0, i * H / 30, W, 2); }
   else { const dark = fmt === 'dvd'; x.fillStyle = dark ? '#1b1c21' : '#a7afb9'; x.fillRect(0, 0, W, H); x.fillStyle = dark ? '#26282e' : '#c3cad2'; [[.06, .1], [.06, .82]].forEach(([u, v]) => { rr(x, W * u, H * v, W * .05, H * .08, 6); x.fill(); }); x.strokeStyle = dark ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.3)'; x.lineWidth = 3; rr(x, 14, 14, W - 28, H - 28, 18); x.stroke(); }
   return c;
 }

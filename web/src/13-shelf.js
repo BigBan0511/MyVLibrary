@@ -27,7 +27,7 @@ function groupLabel(k) {
   if (k === '__none') return T({ status: 'Sin estado', cat: 'Sin categoría', plat: 'Sin plataforma' }[prefs.group] || 'Otros');
   if (prefs.group === 'status') return TD(STATUS_SHELF[k] || k);
   if (prefs.group === 'cat') return TD(k);
-  if (prefs.group === 'fmt') return T({ dvd: 'Cajas DVD', jewel: 'Cajas de CD', big: 'Cajas grandes' }[k]);
+  if (prefs.group === 'fmt') return T({ dvd: 'Cajas DVD', jewel: 'Cajas de CD', big: 'Cajas grandes', floppy: 'Disquetes', cart: 'Cartuchos' }[k]);
   return k;
 }
 function groupRank(k, n) {
@@ -68,6 +68,8 @@ function pageOf(g, gi = curGroup) { const gr = groups[gi]; if (!gr) return -1; r
 /* ---------- cases ---------- */
 function caseKey(g, ui) { return isCases() ? g.id + '@' + ui : g.id; }
 function casesOf(g) { const out = []; for (const c of caseById.values()) if (c.g === g && !c.disposed) out.push(c); return out; }
+/* a game changed format: its boxes go, and the next layout builds new ones */
+function dropCases(g) { for (const [k, c] of [...caseById]) if (c.g === g && c !== active) { c.dispose(); caseById.delete(k); } navOrder = navOrder.filter(c => !c.disposed); cases = [...caseById.values()]; }
 function getCase(g, ui = curGroup) {
   const k = caseKey(g, ui); let c = caseById.get(k);
   if (!c || c.disposed) { c = new Case(g); c.fresh = true; c.key = k; caseById.set(k, c); }

@@ -53,8 +53,8 @@ function renderPrompts() {
     } else h += btn(T('Intro'), T('Abrir la caja'), 'open', true);
     h += btn('F', active.flipT ? T('Ver portada') : T('Ver contraportada'), 'flip') + btn('Esc', T('Devolver'), 'back');
   }
-  if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), active && active.g.real && !active.g.installed ? T('Meter el disco (instalar)') : T('Meter el disco'), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
-  if (mode === 'playing') h = btn('Esc', PLAYNITE ? T('Sacar el disco') : T('Cerrar el juego'), 'quit', true);
+  if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), active && active.g.real && !active.g.installed ? T('Meter {0} (instalar)', mediaNoun(active.g)) : T('Meter {0}', mediaNoun(active.g)), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
+  if (mode === 'playing') h = btn('Esc', PLAYNITE ? T('Sacar {0}', mediaNoun(active && active.g)) : T('Cerrar el juego'), 'quit', true);
   el.innerHTML = h;
 }
 $('#prompts').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) { sfx.init(); doAct(b.dataset.act); } });
@@ -116,7 +116,7 @@ function renderInfo(force) {
   placeCard();
   if (prefs.card === 'hide') { el.hidden = true; lastInfoKey = ''; tab.hidden = false; tab.innerHTML = `<span>${T('Ficha')}</span><b>${esc(active.g.t)}</b><i aria-hidden="true">▾</i>`; return; }
   tab.hidden = true;
-  const g = active.g, key = [g.id, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
+  const g = active.g, key = [g.id, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4), g.fmt, g.fmtUser || ''].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
   const idle = g.last === null || g.last === undefined ? g.added : g.last;
   const dustTxt = T(g.wrapped ? 'Ninguno, está precintado' : g.dust > .6 ? 'Mucho' : g.dust > .25 ? 'Algo' : g.dust > .04 ? 'Poco' : 'Limpio');
@@ -126,6 +126,7 @@ function renderInfo(force) {
   el.innerHTML = `<div class="info-bar"><button type="button" class="info-more" data-more="1" aria-expanded="${infoOpen}">${infoOpen ? T('Menos') : T('Estado y categorías')}</button><button type="button" class="info-hide" data-hide="1" aria-label="${T('Ocultar la ficha')}" title="${T('Ocultar la ficha')} (I) · ${T('Arrastra para moverla')}">${T('Ocultar')} <i aria-hidden="true">▴</i></button></div><div class="eyebrow">${esc([g.genre, g.year, g.real ? g.plat : T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</div><h2>${esc(g.t)}</h2>
     <dl><dt>${T('Jugado')}</dt><dd>${fmtH(g.hours)}${g.sessions ? ' · ' + T(g.sessions === 1 ? '{0} vez' : '{0} veces', g.sessions) : ''}</dd><dt>${T('Última vez')}</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>${T('Logros')}</dt><dd>${T('{0} de {1}', g.ach[0], g.ach[1])}</dd>` : ''}<dt>${T('Polvo')}</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : ''}</dd></dl>
     <div class="frow"><label for="stSel">${T('Estado')}</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : `<option value="" selected>${T('Sin estado')}</option>`}${statuses.map(s => `<option value="${esc(s)}"${s === g.status ? ' selected' : ''}>${esc(TD(s))}</option>`).join('')}<option value="__new">+ ${T('Nuevo estado…')}</option></select></div>
+    <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="pill st-sin fmt-dot" aria-hidden="true"></span><select id="fmtSel"><option value="auto"${g.fmtUser ? '' : ' selected'}>${T('Automático: {0}', T(FMT_CHOICE[g.fmtAuto] || 'DVD'))}</option>${FMT_LIST.map(f => `<option value="${f}"${g.fmtUser === f ? ' selected' : ''}>${T(FMT_CHOICE[f])}</option>`).join('')}</select></div>
     ${newStatus ? `<form class="cat-new st-new"><input id="stNew" type="text" placeholder="${T('Nombre del estado nuevo')}" maxlength="40" autocomplete="off"><button type="submit">${T('Crear')}</button></form>` : ''}
     <div class="cats"><span class="lbl">${T('Categorías')}</span><div class="chips">${g.cats.length ? g.cats.map(c => `<span class="chip">${esc(TD(c))}</span>`).join('') : `<em>${T('Ninguna')}</em>`}<button type="button" class="chip add" data-edit="1">${infoEdit ? T('Listo') : '+ ' + T('Categorías')}</button></div></div>
     ${infoEdit ? `<div class="cat-edit">${prefs.cats.map(c => `<label><input type="checkbox" data-catbox="${esc(c)}"${g.cats.includes(c) ? ' checked' : ''}><span>${esc(TD(c))}</span></label>`).join('')}
@@ -138,6 +139,7 @@ function gameChanged(c, fields, regroup) {
 }
 $('#info').addEventListener('change', e => {
   if (!active) return; const c = active, g = c.g;
+  if (e.target.id === 'fmtSel') { setFormat(c, e.target.value); return; }
   if (e.target.id === 'stSel' && e.target.value === '__new') { newStatus = true; renderInfo(true); const i = $('#stNew'); if (i) i.focus(); return; }
   if (e.target.id === 'stSel') { const old = g.status; g.status = e.target.value; gameChanged(c, ['status'], prefs.group === 'status'); if (prefs.group === 'status' && old !== g.status && groups[curGroup].key !== '__all') toast(T('Al devolverlo irá al estante «{0}»', STATUS_SHELF[g.status] || g.status)); }
   const box = e.target.closest('[data-catbox]');
@@ -162,6 +164,22 @@ $('#info').addEventListener('submit', e => {
   const g = active.g; if (!g.cats.includes(name)) g.cats.push(name);
   gameChanged(active, ['cats'], prefs.group === 'cat'); toast(T('Categoría «{0}» añadida', name));
 });
+/* another format for this game: the box goes back, the shelf makes room, and the new box comes out */
+const whenIdle = async () => { while (busy || swapBusy) await new Promise(r => setTimeout(r, 40)); };
+async function setFormat(c, val) {
+  const g = c.g; g.fmtUser = DIMS[val] ? val : null; saveGame(g);
+  const nf = g.fmtUser || g.fmtAuto;
+  if (nf === g.fmt) { renderInfo(true); return; }
+  await whenIdle();
+  if (active !== c) return;
+  if (mode === 'open') await closeCase();
+  await whenIdle(); if (mode === 'inspect' && active === c) await putBack();
+  await whenIdle(); if (active) return;
+  g.fmt = nf; dropCases(g);
+  await relayout({ follow: { g } }); await whenIdle();
+  const n = navOrder.find(q => q.g === g); if (n) pick(n);
+  toast(T('Ahora es: {0}', T(FMT_CHOICE[nf])));
+}
 /* the card can be dragged by its top bar anywhere on screen; the place is remembered (double click: back home) */
 function placeCard() {
   const el = $('#info'), tab = $('#infoTab'), p = prefs.cardPos;
@@ -244,6 +262,8 @@ function pick(c) {
     active = c; setHovered(null); tipEl.hidden = true; c.hoverT = 0; infoEdit = false; prefs.card = prefs.cardStart;
     if (cam.view === 'browse') setView('shelf');
     setMode('busy');
+    /* the machine this game needs comes onto the table while you look at the box */
+    ensureDevice(mediaOf(c.g.fmt));
     if (c.g.real) await LIB.prepare(c.g, 1500);
     c.ensureDetail(); c.setShadow(true);
     /* the case slides out for as long as the recorded scrape lasts and comes free on its loudest moment */
@@ -321,26 +341,51 @@ function putBack() {
 }
 const _p0 = new V3(), _p1 = new V3(), _p2 = new V3(), _q0 = new Q4(), _q2 = new Q4(), _qz = new Q4(), _qt = new Q4(), ZAX = new V3(0, 0, 1);
 const QFLAT = new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0));
-/* the disc leaves the case upwards, in front of it, so it never passes through the plastic */
-function discAbove(c, out) { const { h, discR } = c.dim; return out.set(c.discHome.x, h / 2 + discR + 1.4, c.discHome.z + 3.2); }
+/* the media leaves the case upwards, in front of it, so it never passes through the plastic */
+function discAbove(c, out) { const { h, discR } = c.dim; return out.set(c.discHome.x, h / 2 + discR + 1.4, c.discHome.z + (isCard(c.g.fmt) ? c.dim.d + 1.5 : 3.2)); }
+/* where the flight to the machine ends: discs and floppies lie flat in front of the slot, a cartridge stands over it */
+function slotApproach(kind, R, outPos, outQuat) {
+  if (kind === 'cart') { outPos.set(SLOT.x, SLOT.y + R + 3, SLOT.z); outQuat.copy(QUP); }
+  else { outPos.set(SLOT.x, SLOT.y, SLOT.z + R + .6); outQuat.copy(QFLAT); }
+}
+/* where the media rests while the game runs */
+function slotInside(kind, R, out) { return kind === 'cart' ? out.set(SLOT.x, SLOT.y - R * .12, SLOT.z) : kind === 'floppy' ? out.set(SLOT.x, SLOT.y, SLOT.z - R - .5) : out.set(SLOT.x, SLOT.y, SLOT.z - R - 1.2); }
 function insertDisc() {
   if (!active || mode !== 'open') return;
   return guarded(async () => {
-    const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR;
+    const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR, kind = mediaOf(c.g.fmt);
     setMode('busy'); hoverPart = null; c.discLabelMat.emissive.set('#000000'); stopTrailer();
-    await waitReal(sfx.discOut() - .005);
+    const ready = ensureDevice(kind);
+    await waitReal((kind === 'disc' ? sfx.discOut() : sfx.handle(c.g.fmt)) - .005);
     await tween(.28, t => { d.position.z = home.z + 1.4 * t; d.rotation.x = -.06 * t; });
     await tween(.6, t => { d.position.y = lerp(home.y, above.y, t); d.position.z = lerp(home.z + 1.4, above.z, t); });
     c.mode = 'parked'; setView('console'); await wait(750);
+    const dev = await ready; slotWorld(dev);
     scene.attach(d); _p0.copy(d.position); _q0.copy(d.quaternion); const s0 = d.scale.x;
-    _p2.set(SLOT.x, SLOT.y, SLOT.z + R + .6); _p1.copy(_p0).lerp(_p2, .45); _p1.y = Math.max(_p0.y, _p2.y) + 18;
-    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, 1, t)); _qt.copy(_q0).slerp(QFLAT, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
-    d.scale.setScalar(1); d.quaternion.copy(QFLAT); d.position.copy(_p2);
-    sfx.slotIn();
-    const z0 = d.position.z, z1 = z0 - 3.4, z2 = SLOT.z - R - 1.2;
-    await tweenReal(.28, t => { d.position.z = lerp(z0, z1, t); }, easeOut);
-    await tweenReal(.52, t => { d.position.z = lerp(z1, z2, t); }, easeIO);
-    d.visible = false; await waitReal(.05); setLed(true); await waitReal(.17);
+    slotApproach(kind, R, _p2, _q2); _p1.copy(_p0).lerp(_p2, .45); _p1.y = Math.max(_p0.y, _p2.y) + 18;
+    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, 1, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); if (kind === 'disc') { _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); } else d.quaternion.copy(_qt); });
+    d.scale.setScalar(1); d.quaternion.copy(_q2); d.position.copy(_p2);
+    const end = slotInside(kind, R, new V3());
+    if (kind === 'disc') {
+      sfx.slotIn();
+      const z0 = d.position.z, z1 = z0 - 3.4;
+      await tweenReal(.28, t => { d.position.z = lerp(z0, z1, t); }, easeOut);
+      await tweenReal(.52, t => { d.position.z = lerp(z1, end.z, t); }, easeIO);
+      d.visible = false;
+    } else if (kind === 'floppy') {
+      /* pushed in by hand; the latch takes it the last centimetre and the eject button comes out */
+      sfx.floppyIn(); const z0 = d.position.z;
+      await tweenReal(.24, t => { d.position.z = lerp(z0, end.z + .8, t); }, easeIO);
+      await tweenReal(.06, t => { d.position.z = lerp(end.z + .8, end.z, t); });
+      d.visible = false; dev.eject(true);
+      (async () => { for (const [on, ms] of [[1, 300], [0, 130], [1, 200], [0, 240], [1, 420], [0, 0]]) { dev.activity(!!on); if (ms) await waitReal(ms / 1000); } })();
+    } else {
+      /* a cartridge goes down into the slot, seats, and the power switch goes on */
+      sfx.cartIn(); const y0 = d.position.y;
+      await tweenReal(.32, t => { d.position.y = lerp(y0, end.y, t); }, easeIO);
+      await waitReal(.4); dev.power(true);
+    }
+    await waitReal(.05); setLed(true); await waitReal(.17);
     sfx.tvOn(); tvSet('boot', c);
     if (PLAYNITE) {
       /* the real thing: Playnite launches the game; the TV waits until it is actually running */
@@ -357,52 +402,66 @@ function insertDisc() {
     setMode('playing');
   });
 }
-/* the shelf was (re)opened while a game is running: its disc is already in the console */
+/* the shelf was (re)opened while a game is running: its media is already in the machine */
 async function restorePlaying(id, seconds) {
   const g = GAMES.find(q => q.id === id); if (!g || active) return;
   const gi = groups.findIndex(gr => gr.games.includes(g)), p = gi >= 0 ? pageOf(g, gi) : -1;
   if (gi >= 0 && (gi !== curGroup || p !== curPage)) { curGroup = gi; curPage = Math.max(0, p); layoutPage(); renderPills(); renderBrand(); }
   const c = navOrder.find(q => q.g === g) || getCase(g); if (!c) return;
   if (g.real) await LIB.prepare(g, 1200);
+  const kind = mediaOf(g.fmt), dev = await ensureDevice(kind, true); slotWorld(dev);
   active = c; c.ensureDetail(); c.setShadow(true); c.openA = 1; c.mode = 'parked'; c.leaving = true; c.placeExtras();
-  const d = c.disc, R = c.dim.discR; scene.attach(d); d.position.set(SLOT.x, SLOT.y, SLOT.z - R - 1.2); d.quaternion.copy(QFLAT); d.scale.setScalar(1); d.visible = false;
+  const d = c.disc, R = c.dim.discR; scene.attach(d); slotInside(kind, R, d.position); d.quaternion.copy(kind === 'cart' ? QUP : QFLAT); d.scale.setScalar(1); d.visible = kind === 'cart';
+  if (kind === 'floppy') dev.eject(true); if (kind === 'cart') dev.power(true);
   setLed(true); tvSet('play', c); playStart = performance.now() - (seconds || 0) * 1000;
   PN_STATE.running = id; PN_STATE.waiting = false; $('#playTitle').textContent = g.t; renderPlayBanner();
   setView('console'); setMode('playing');
 }
 function renderPlayBanner() {
-  $('#playNote').textContent = T(PLAYNITE ? (PN_STATE.waiting ? 'Playnite está abriendo el juego. Si no arranca, saca el disco con Esc.' : PN_STATE.selfTrack ? 'Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y el disco sale cuando lo cierres.' : 'Playnite cuenta el tiempo. Al cerrar el juego, el disco vuelve solo a su caja.') : 'En esta demo cada segundo cuenta como un minuto de partida.');
+  const n = mediaNoun(active && active.g);
+  $('#playNote').textContent = PLAYNITE ? (PN_STATE.waiting ? T('Playnite está abriendo el juego. Si no arranca, saca {0} con Esc.', n) : PN_STATE.selfTrack ? T('Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y {0} sale cuando lo cierres.', n) : T('Playnite cuenta el tiempo. Al cerrar el juego, {0} vuelve solo a su caja.', n)) : T('En esta demo cada segundo cuenta como un minuto de partida.');
   $('#playEyebrow').textContent = T(PLAYNITE && PN_STATE.waiting ? 'Arrancando' : 'En marcha');
 }
-/* ejects the disc and puts it back in its case. Inside Playnite it runs when the game closes (o.auto),
-   or when you pull the disc yourself while the game keeps running */
+/* takes the media out and puts it back in its case. Inside Playnite it runs when the game closes (o.auto),
+   or when you pull it out yourself while the game keeps running */
 function closeGame(o = {}) {
   if (!active || mode !== 'playing') return;
   return guarded(async () => {
-    const c = active, d = c.disc, g = c.g, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR;
+    const c = active, d = c.disc, g = c.g, home = c.discHome, above = discAbove(c, new V3()), R = c.dim.discR, kind = mediaOf(g.fmt), dev = DEV[devKind];
     const mins = Math.max(1, Math.floor((performance.now() - playStart) / 1000));
     /* pulled out by hand while only the shelf was keeping track: stop counting from here */
     const released = PLAYNITE && o.keepRunning && PN_STATE.selfTrack;
-    if (released) { LIB.send('release', { id: g.id }); o = Object.assign({}, o, { keepRunning: false, msg: T('Disco fuera. El tiempo hasta ahora se suma a {0} en Playnite.', g.t) }); }
+    if (released) { LIB.send('release', { id: g.id }); o = Object.assign({}, o, { keepRunning: false, msg: T('{0} El tiempo hasta ahora se suma a {1} en Playnite.', T(MEDIA_OUT[kind]), g.t) }); }
     PN_STATE.waiting = false; PN_STATE.selfTrack = false; if (!o.keepRunning) PN_STATE.running = null;
-    setMode('busy'); tvSet('standby'); setLed(false); sfx.tvOff();
-    await waitReal(.15); sfx.slotOut(); await waitReal(1.02);
-    d.visible = true; const zIn = d.position.z, zOut = SLOT.z + R - 3.6;
-    await tweenReal(.5, t => { d.position.z = lerp(zIn, zOut, t); }, easeIO);
+    setMode('busy'); tvSet('standby'); setLed(false); sfx.tvOff(); slotWorld(dev);
+    if (kind === 'disc') {
+      await waitReal(.15); sfx.slotOut(); await waitReal(1.02);
+      d.visible = true; const zIn = d.position.z, zOut = SLOT.z + R - 3.6;
+      await tweenReal(.5, t => { d.position.z = lerp(zIn, zOut, t); }, easeIO);
+    } else if (kind === 'floppy') {
+      /* the eject button goes in and the disk jumps half out */
+      await waitReal(.3); sfx.floppyOut(); dev.eject(false);
+      d.visible = true; const zIn = d.position.z, zOut = SLOT.z + R * .55;
+      await tweenReal(.14, t => { d.position.z = lerp(zIn, zOut, t); }, easeOut);
+      await wait(250);
+    } else {
+      await waitReal(.25); sfx.cartOut(); await dev.power(false); await waitReal(.15);
+      const yIn = d.position.y; await tweenReal(.42, t => { d.position.y = lerp(yIn, SLOT.y + R + 2, t); }, easeIO);
+    }
     await wait(320);
     _p0.copy(d.position); _q0.copy(d.quaternion);
     const tmp = new THREE.Object3D(); c.inner.add(tmp); tmp.position.copy(above); tmp.updateMatrixWorld(true);
     tmp.getWorldPosition(_p2); tmp.getWorldQuaternion(_q2); c.inner.remove(tmp);
     _p1.copy(_p0).lerp(_p2, .55); _p1.y = Math.max(_p0.y, _p2.y) + 22; const sT = c.root.scale.x;
-    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(1, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
+    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(1, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); if (kind === 'disc') { _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); } else d.quaternion.copy(_qt); });
     c.inner.attach(d); d.position.copy(above); d.quaternion.identity(); d.scale.set(1, 1, 1);
-    sfx.discIn({ hitAt: (.55 + .22) * SPEED });
+    if (kind === 'disc') sfx.discIn({ hitAt: (.55 + .22) * SPEED }); else setTimeout(() => sfx.handle(g.fmt), (.55 + .22) * 1000 * SPEED);
     await tween(.55, t => { d.position.y = lerp(above.y, home.y, t); d.position.z = lerp(above.z, home.z + 1.4, t); });
     await tween(.22, t => { d.position.z = home.z + 1.4 * (1 - t); }); d.position.copy(home);
     let msg, moved = false;
     if (PLAYNITE) {
       const s = o.seconds || 0;
-      msg = o.msg || (o.keepRunning ? T('El juego sigue abierto: Playnite seguirá contando el tiempo.') : s >= 60 ? T('+{0} min en {1}. Playnite ya lo ha apuntado.', Math.round(s / 60), g.t) : s > 0 ? T('Partida corta en {0}.', g.t) : T('Disco fuera.'));
+      msg = o.msg || (o.keepRunning ? T('El juego sigue abierto: Playnite seguirá contando el tiempo.') : s >= 60 ? T('+{0} min en {1}. Playnite ya lo ha apuntado.', Math.round(s / 60), g.t) : s > 0 ? T('Partida corta en {0}.', g.t) : T(MEDIA_OUT[kind]));
       if (s > 0 || o.auto) { g.dust = 0; c.setDust(0); saveGame(g); }
     } else {
       g.hours += mins / 60; g.sessions += 1; g.last = 0;

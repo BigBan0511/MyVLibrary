@@ -44,6 +44,17 @@ DICT.en = {
   'Año': 'Year', 'Formato': 'Format', 'Jugadores': 'Players', 'Sí ': 'Yes', 'Mando recomendado': 'Controller recommended', 'Teclado y ratón': 'Keyboard and mouse', 'Sesiones ': 'Sessions',
   'Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y el disco sale cuando lo cierres.': 'Playnite thinks it has closed, but it is still open: the shelf keeps the time and the disc comes out when you close it.',
   'Disco fuera. El tiempo hasta ahora se suma a {0} en Playnite.': 'Disc out. The time so far is added to {0} in Playnite.',
+  'Automático: {0}': 'Automatic: {0}', 'DVD': 'DVD', 'CD en caja grande': 'CD in a big case', 'CD en caja de cartón': 'CD in a cardboard box', 'Disquetes en caja de cartón': 'Floppy disks in a cardboard box', 'Cartucho': 'Cartridge',
+  'Caja con disquetes': 'Box with floppy disks', 'CARTUCHO': 'CARTRIDGE', 'PC · 3½" HD': 'PC · 3½" HD', 'Disquetes': 'Floppy disks', 'Cartuchos': 'Cartridges', 'Ahora es: {0}': 'Now it is: {0}',
+  'DISCO 1 DE 3': 'DISK 1 OF 3', 'Prohibida la copia sin permiso.': 'Do not copy without permission.',
+  'Guarda los disquetes aquí, lejos de imanes.': 'Keep the disks here, away from magnets.', 'Guarda el cartucho aquí, con el conector hacia abajo.': 'Keep the cartridge here, connector down.',
+  'el disco': 'the disc', 'el disquete': 'the floppy disk', 'el cartucho': 'the cartridge', 'Disquete fuera.': 'Floppy disk out.', 'Cartucho fuera.': 'Cartridge out.',
+  'Meter {0}': 'Insert {0}', 'Meter {0} (instalar)': 'Insert {0} (install)', 'Sacar {0}': 'Take out {0}',
+  'Playnite está abriendo el juego. Si no arranca, saca {0} con Esc.': 'Playnite is opening the game. If it does not start, take out {0} with Esc.',
+  'Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y {0} sale cuando lo cierres.': 'Playnite thinks it has closed, but it is still open: the shelf keeps the time and {0} comes out when you close it.',
+  'Playnite cuenta el tiempo. Al cerrar el juego, {0} vuelve solo a su caja.': 'Playnite counts the time. When you close the game, {0} goes back to its case.',
+  '{0} El tiempo hasta ahora se suma a {1} en Playnite.': '{0} The time so far is added to {1} in Playnite.',
+  'Al cerrar el juego, {0} vuelve solo a su caja': 'When you close the game, {0} goes back to its case', 'Esc para sacar {0}': 'Esc to take out {0}'
 };
 /* the page itself was translated before the dictionary existed */
 if (document.body) applyDomLang();
