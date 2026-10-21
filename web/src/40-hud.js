@@ -262,14 +262,36 @@ const setBtn = $('#setBtn'), setPop = $('#settings');
 function renderUgcList() {
   const el = $('#ugcList'); if (!el) return;
   const rows = [...systemsList().map(s => ['sys:' + s.key, s.name, s.key === 'PC' ? T('PC genérico') : T('Consola genérica (ID-2)')]), ['scr:crt', T('Tele de tubo'), T('Genérica')], ['scr:flat', T('Tele plana'), T('Genérica')], ['scr:monitor', T('Monitor del PC'), T('Genérico')]];
-  el.innerHTML = rows.map(([k, label, gen]) => { const m = UGCS.meta()[k]; return `<div class="ugc-item"><div class="ugc-what"><b>${esc(label)}</b><span${m ? ' class="on"' : ''}>${m ? esc(m.name) : gen}</span></div><div class="ugc-btns">${m ? `<button type="button" data-ugc-rot="${k}" title="${T('Girar 180°')}" aria-label="${T('Girar 180°')}">↻</button><button type="button" data-ugc-del="${k}" title="${T('Quitar')}" aria-label="${T('Quitar')}">✕</button>` : ''}<button type="button" data-ugc-pick="${k}">${m ? T('Cambiar') : T('Elegir .ugc')}</button></div></div>`; }).join('');
+  /* EmuVR's own consoles, once its folder has been read: offered on every system, the ones that suit it first */
+  const bases = UGCS.bases(), sysOfKey = k => k.slice(4);
+  const baseSel = k => !bases.length || !k.startsWith('sys:') || k === 'sys:PC' ? '' : `<select data-ugc-base="${k}" aria-label="${T('Consola de EmuVR')}"><option value="">EmuVR…</option>${bases.slice().sort((a, b) => (b.sys === sysOfKey(k)) - (a.sys === sysOfKey(k))).map(b => `<option value="${esc(b.id)}"${UGCS.meta()[k] && UGCS.meta()[k].base === b.id ? ' selected' : ''}>${esc(T(b.name))}</option>`).join('')}</select>`;
+  const head = `<div class="ugc-item"><div class="ugc-what"><b>${T('Consolas de EmuVR')}</b><span${bases.length ? ' class="on"' : ''}>${bases.length ? T('{0} consolas leídas', bases.length) : T('Las que trae EmuVR, sin .ugc')}</span></div><div class="ugc-btns"><button type="button" data-ugc-emuvr>${bases.length ? T('Volver a leer') : T('Leer carpeta de EmuVR')}</button></div></div>`;
+  el.innerHTML = head + rows.map(([k, label, gen]) => { const m = UGCS.meta()[k]; return `<div class="ugc-item"><div class="ugc-what"><b>${esc(label)}</b><span${m ? ' class="on"' : ''}>${m ? esc(m.name) : gen}</span></div><div class="ugc-btns">${m ? `<button type="button" data-ugc-rot="${k}" title="${T('Girar 180°')}" aria-label="${T('Girar 180°')}">↻</button><button type="button" data-ugc-del="${k}" title="${T('Quitar')}" aria-label="${T('Quitar')}">✕</button>` : ''}${baseSel(k)}<button type="button" data-ugc-pick="${k}">${m ? T('Cambiar') : T('Elegir .ugc')}</button></div></div>`; }).join('');
 }
 let ugcPending = null;
 $('#ugcList').addEventListener('click', async e => {
   const pick = e.target.closest('[data-ugc-pick]'), del = e.target.closest('[data-ugc-del]'), rot = e.target.closest('[data-ugc-rot]');
   if (pick) { ugcPending = pick.dataset.ugcPick; const f = $('#ugcFile'); f.value = ''; f.click(); }
+  if (e.target.closest('[data-ugc-emuvr]')) { const f = $('#emuvrDir'); f.value = ''; f.click(); }
   if (del) { try { await UGCS.remove(del.dataset.ugcDel); } catch (err) { console.error(err); } renderUgcList(); refreshStage(); sfx.tick(); }
   if (rot) { const m = UGCS.meta()[rot.dataset.ugcRot]; if (m) { m.rot = !m.rot; savePrefs(); refreshStage(); sfx.tick(); } }
+});
+$('#ugcList').addEventListener('change', async e => {
+  const sel = e.target.closest('[data-ugc-base]'); if (!sel || !sel.value) return;
+  toast(T('Preparando la consola…'), 4000);
+  try { await UGCS.useBase(sel.dataset.ugcBase, sel.value); toast(T('{0} listo', UGCS.meta()[sel.dataset.ugcBase].name), 2600); refreshStage(); }
+  catch (err) { console.error(err); toast(T('No se ha podido leer {0}', sel.value), 5000); }
+  renderUgcList();
+});
+/* the EmuVR folder (or its EmuVR_Data): only sharedassets0.assets and its .resS are read */
+$('#emuvrDir').addEventListener('change', async e => {
+  const files = e.target.files; if (!files || !files.length) return;
+  toast(T('Leyendo las consolas de EmuVR…'), 30000); await new Promise(r => setTimeout(r, 60));
+  try {
+    const list = await UGCS.readBase(files, (i, n) => toast(T('Leyendo las consolas de EmuVR… {0}/{1}', i, n), 30000));
+    toast(T('{0} consolas de EmuVR listas: elígelas en cada sistema.', list.length), 4000); refreshStage();
+  } catch (err) { console.error(err); toast(T(err && err.message ? err.message : 'No se han podido leer los datos de EmuVR'), 6000); }
+  renderUgcList();
 });
 $('#ugcFile').addEventListener('change', async e => {
   const file = e.target.files && e.target.files[0], key = ugcPending; ugcPending = null; if (!file || !key) return;
@@ -486,8 +508,8 @@ function insertDisc() {
     scene.attach(d); _p0.copy(d.position); _q0.copy(d.quaternion); const s0 = d.scale.x;
     layDown(c);
     _p2.copy(P.entry); _p1.copy(_p0).lerp(_p2, .45); _p1.y = Math.max(_p0.y, _p2.y) + 18;
-    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, 1, t)); _qt.copy(_q0).slerp(P.q, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
-    d.scale.setScalar(1); d.quaternion.copy(P.q); d.position.copy(_p2);
+    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, P.s || 1, t)); _qt.copy(_q0).slerp(P.q, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
+    d.scale.setScalar(P.s || 1); d.quaternion.copy(P.q); d.position.copy(_p2);
     await pushIn(d, P);
     setLed(true); await waitReal(.17);
     sfx.tvOn(); tvSet('boot', c);
@@ -517,7 +539,7 @@ async function restorePlaying(id, seconds) {
   if (g.real) await LIB.prepare(g, 1200);
   active = c; c.ensureDetail(); c.setShadow(true); c.openA = 0; c.mode = 'rest'; c.leaving = true; c.placeExtras();
   { const tp = c.targetPose(); c.root.position.copy(tp.pos); c.root.quaternion.copy(tp.quat); c.root.scale.setScalar(1); }
-  const d = c.disc, P = portOf(c); scene.attach(d); d.position.copy(P.inside); d.quaternion.copy(P.q); d.scale.setScalar(1); d.visible = P.kind === 'cart' || P.kind === 'socket'; if (P.kind === 'cart') setCartFlaps(1);
+  const d = c.disc, P = portOf(c); scene.attach(d); d.position.copy(P.inside); d.quaternion.copy(P.q); d.scale.setScalar(P.s || 1); d.visible = P.kind === 'cart' || P.kind === 'socket'; if (P.kind === 'cart') setCartFlaps(1);
   if (P.kind === 'tray') { d.position.z -= pcTray.userData.out; pcTray.attach(d); }
   if (P.kind === 'socket' && P.restore) P.restore(d);
   setLed(true); tvSet('play', c); playStart = performance.now() - (seconds || 0) * 1000;
@@ -551,8 +573,8 @@ function closeGame(o = {}) {
     _p0.copy(d.position); _q0.copy(d.quaternion);
     const tmp = new THREE.Object3D(); c.inner.add(tmp); tmp.position.copy(above); tmp.updateMatrixWorld(true);
     tmp.getWorldPosition(_p2); tmp.getWorldQuaternion(_q2); c.inner.remove(tmp);
-    _p1.copy(_p0).lerp(_p2, .55); _p1.y = Math.max(_p0.y, _p2.y) + 22; const sT = c.root.scale.x;
-    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(1, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); if (P.kind === 'cart') flapsFor(d, P); });
+    _p1.copy(_p0).lerp(_p2, .55); _p1.y = Math.max(_p0.y, _p2.y) + 22; const sT = c.root.scale.x, s0 = d.scale.x;
+    await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); if (P.kind === 'cart') flapsFor(d, P); });
     if (P.kind === 'cart') setCartFlaps(0);
     c.inner.attach(d); d.position.copy(above); d.quaternion.identity(); d.scale.set(1, 1, 1);
     sfx.mediaIn(g.fmt, { hitAt: (.55 + .22) * SPEED });

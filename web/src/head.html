@@ -116,6 +116,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 .ugc-btns{display:flex;gap:4px;flex:none}
 .ugc-btns button{height:28px;padding:0 9px;border-radius:6px;border:1px solid var(--panel-line);background:rgba(255,255,255,.05);font-size:12px;font-weight:700;cursor:pointer}
 .ugc-btns button:hover{border-color:var(--amber);color:var(--amber)}
+.ugc-btns select{height:28px;max-width:132px;padding:0 6px;border-radius:6px;border:1px solid var(--panel-line);background:rgba(255,255,255,.05);color:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.ugc-btns select:hover{border-color:var(--amber)}
+.ugc-btns select option{background:#1b1d22;color:#e8e6e1}
 .fmt-lock{margin:-2px 0 6px;font-size:11.5px;color:var(--ink-dim);line-height:1.35}
 .frow select:disabled{opacity:.65;cursor:not-allowed}
 .frow .fmt-ico{width:24px;text-align:center;font-size:15px;color:var(--amber);line-height:1}
@@ -361,8 +364,9 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="set-row"><span>Volumen de los efectos <b id="volVal" class="vol-val"></b></span><input id="volRange" class="vol" type="range" min="0" max="100" step="5"></div>
   <div class="set-row"><span>Tráiler</span><div class="seg" data-pref="trailer"><button type="button" data-v="on">Con sonido</button><button type="button" data-v="mute">Sin sonido</button><button type="button" data-v="off">No</button></div></div>
   <div class="set-row"><span>Ficha al sacar un juego</span><div class="seg" data-pref="cardStart"><button type="button" data-v="hide">Plegada</button><button type="button" data-v="show">Abierta</button></div></div>
-  <div class="set-row"><span>Consolas y pantallas de EmuVR (.ugc)</span><div class="ugc-list" id="ugcList"></div><p class="set-note">En las salas por sistema, un .ugc de EmuVR sustituye a la consola genérica de ese sistema, a una tele o al monitor. Se guarda solo en este equipo.</p></div>
+  <div class="set-row"><span>Consolas y pantallas de EmuVR (.ugc)</span><div class="ugc-list" id="ugcList"></div><p class="set-note">En las salas por sistema, un .ugc de EmuVR sustituye a la consola genérica de ese sistema, a una tele o al monitor. Las consolas que trae EmuVR se leen de su carpeta. Todo se guarda solo en este equipo.</p></div>
   <input type="file" id="ugcFile" accept=".ugc" hidden>
+  <input type="file" id="emuvrDir" webkitdirectory multiple hidden>
   <p class="set-note">Los juegos que nunca has abierto llegan precintados: con «A mano» el precinto solo se quita tirando de la lengüeta. Los estados y categorías solo cambian cuando tú los cambias.</p>
   <p class="set-ver">MyVLibrary <!--VERSION--></p>
 </div>

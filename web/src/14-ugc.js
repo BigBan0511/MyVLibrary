@@ -8,7 +8,9 @@
    where the medium goes; on a TV, screen_mesh is where the picture
    goes) and the console's own animations (opening, closing, taking the
    medium in, giving it back, powering on), which EmuVR keeps as Mecanim
-   clips listed by its GameSystemState script.
+   clips listed by its GameSystemState script. The same reading serves
+   EmuVR's own consoles (see EMUVR), which only change where the objects
+   come from.
    Nothing leaves your computer: the files are kept in this browser.
    ===================================================================== */
 const UGC = (() => {
@@ -83,7 +85,8 @@ const UGC = (() => {
     if (version >= 21) { const d = r.i32(); r.p += d * 4; }
     return flat[0];
   }
-  function readSerialized(u8) {
+  /* trees: when the file does not carry its own (a game's data, not a bundle), they are lent from outside */
+  function readSerialized(u8, trees) {
     const h = new Rd(u8, false); h.u32(); h.u32(); const version = h.u32(); const dataOffset = h.u32();
     if (version < 14 || version > 22) throw Object.assign(new Error('Versión de Unity no soportada ({0}).'), { arg: version });
     const little = h.u8() === 0; h.p += 3;
@@ -91,13 +94,13 @@ const UGC = (() => {
     if (version >= 22) { metaSize = h.u32(); fileSize = Number(h.i64()); dataOff = Number(h.i64()); h.i64(); }
     const r = new Rd(u8, little); r.p = h.p;
     r.cstr(); r.i32(); const typeTree = r.bool();
-    const types = [];
+    const types = [], hex = b => Array.from(b, x => (x < 16 ? '0' : '') + x.toString(16)).join('');
     for (let n = r.i32(), k = 0; k < n; k++) {
       const t = { cls: r.i32() }; if (version >= 16) r.bool(); if (version >= 17) r.i16();
-      if ((version < 16 && t.cls < 0) || (version >= 16 && t.cls === 114)) r.p += 16;
-      r.p += 16; if (typeTree) t.tree = readTree(r, version); types.push(t);
+      if ((version < 16 && t.cls < 0) || (version >= 16 && t.cls === 114)) t.script = hex(r.bytes(16));
+      r.p += 16; if (typeTree) t.tree = readTree(r, version); else if (trees) t.tree = trees(t); types.push(t);
     }
-    if (!typeTree) throw new Error('El .ugc no trae la descripción de sus tipos.');
+    if (!typeTree && !trees) throw new Error('El .ugc no trae la descripción de sus tipos.');
     const objects = new Map();
     for (let n = r.i32(), k = 0; k < n; k++) {
       r.align(4); const id = r.i64().toString(), start = version >= 22 ? Number(r.i64()) : r.u32(), size = r.u32(), ti = r.i32();
@@ -131,7 +134,7 @@ const UGC = (() => {
   /* an array element of an aligned type: read as usual, the array aligns once at its end */
   function readFields(nd, r) { return readValue(nd._na || (nd._na = Object.assign({}, nd, { meta: 0 })), r); }
   function readObject(sf, id) {
-    const ob = sf.objects.get(String(id)); if (!ob) return null;
+    const ob = sf.objects.get(String(id)); if (!ob || !ob.type.tree) return null;
     if (!ob.data) { const r = new Rd(sf.u8.subarray(ob.start, ob.start + ob.size), sf.little); ob.data = readValue(ob.type.tree, r); ob.data.__cls = ob.type.cls; }
     return ob.data;
   }
@@ -200,21 +203,67 @@ const UGC = (() => {
     }
     return out;
   }
-  function texture(files, t, maxSize) {
-    const fmt = t.m_TextureFormat, bpp = { 1: 1, 3: 3, 4: 4, 5: 4, 14: 4 }[fmt], block = { 10: 8, 12: 16 }[fmt];
+  /* BC7 (what EmuVR's own textures use): eight modes, each block split into one to three subsets */
+  const BC7M = [[3, 4, 0, 0, 4, 0, 1, 0, 3, 0], [2, 6, 0, 0, 6, 0, 0, 1, 3, 0], [3, 6, 0, 0, 5, 0, 0, 0, 2, 0], [2, 6, 0, 0, 7, 0, 1, 0, 2, 0],
+    [1, 0, 2, 1, 5, 6, 0, 0, 2, 3], [1, 0, 2, 0, 7, 8, 0, 0, 2, 2], [1, 0, 0, 0, 7, 7, 1, 0, 4, 0], [2, 6, 0, 0, 5, 5, 1, 0, 2, 0]];  /* subsets, partition, rotation and index-selection bits, colour and alpha bits, p-bits per endpoint or shared, index bits */
+  const BC7W = [0, 0, [0, 21, 43, 64], [0, 9, 18, 27, 37, 46, 55, 64], [0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64]];
+  const BC7P2 = [0xcccc, 0x8888, 0xeeee, 0xecc8, 0xc880, 0xfeec, 0xfec8, 0xec80, 0xc800, 0xffec, 0xfe80, 0xe800, 0xffe8, 0xff00, 0xfff0, 0xf000, 0xf710, 0x008e, 0x7100, 0x08ce, 0x008c, 0x7310, 0x3100, 0x8cce, 0x088c, 0x3110, 0x6666, 0x366c, 0x17e8, 0x0ff0, 0x718e, 0x399c, 0xaaaa, 0xf0f0, 0x5a5a, 0x33cc, 0x3c3c, 0x55aa, 0x9696, 0xa55a, 0x73ce, 0x13c8, 0x324c, 0x3bdc, 0x6996, 0xc33c, 0x9966, 0x0660, 0x0272, 0x04e4, 0x4e40, 0x2720, 0xc936, 0x936c, 0x39c6, 0x639c, 0x9336, 0x9cc6, 0x817e, 0xe718, 0xccf0, 0x0fcc, 0x7744, 0xee22];
+  const BC7P3 = [0xaa685050, 0x6a5a5040, 0x5a5a4200, 0x5450a0a8, 0xa5a50000, 0xa0a05050, 0x5555a0a0, 0x5a5a5050, 0xaa550000, 0xaa555500, 0xaaaa5500, 0x90909090, 0x94949494, 0xa4a4a4a4, 0xa9a59450, 0x2a0a4250, 0xa5945040, 0x0a425054, 0xa5a5a500, 0x55a0a0a0, 0xa8a85454, 0x6a6a4040, 0xa4a45000, 0x1a1a0500, 0x0050a4a4, 0xaaa59090, 0x14696914, 0x69691400, 0xa08585a0, 0xaa821414, 0x50a4a450, 0x6a5a0200, 0xa9a58000, 0x5090a0a8, 0xa8a09050, 0x24242424, 0x00aa5500, 0x24924924, 0x24499224, 0x50a50a50, 0x500aa550, 0xaaaa4444, 0x66660000, 0xa5a0a5a0, 0x50a050a0, 0x69286928, 0x44aaaa44, 0x66666600, 0xaa444444, 0x54a854a8, 0x95809580, 0x96969600, 0xa85454a8, 0x80959580, 0xaa141414, 0x96960000, 0xaaaa1414, 0xa05050a0, 0xa0a5a5a0, 0x96000000, 0x40804080, 0xa9a8a9a8, 0xaaaaaa44, 0x2a4a5254];
+  const BC7A2 = 'fffffffffffffffff282288f28228822ff6828ff28222ff66268ff22fffff22f', BC7A3 = '3f38f8f38f3ff3f88f8f6f6f6f5f3f383f388ff33f386fa8538f866a8f5ffaf88ff33f5a6aa889faf63ff85ff3f6f6f83ff35f5f5f8f5faf5faf8fdff3cf3f38';
+  function bc7(src, w, h) {
+    const out = new Uint8Array(w * h * 4), bw = Math.max(1, (w + 3) >> 2), bh = Math.max(1, (h + 3) >> 2), E = [0, 1, 2, 3, 4, 5].map(() => [0, 0, 0, 0]), P = [], I1 = new Uint8Array(16), I2 = new Uint8Array(16), px = [0, 0, 0, 0];
+    let base = 0, pos = 0;
+    const bits = n => { let v = 0; for (let i = 0; i < n; i++, pos++) v |= ((src[base + (pos >> 3)] >> (pos & 7)) & 1) << i; return v; };
+    for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) {
+      base = (by * bw + bx) * 16; pos = 0;
+      let mode = 0; while (mode < 8 && !bits(1)) mode++;
+      if (mode === 8) continue;
+      const [ns, pb, rb, isb, cb, ab, epb, spb, ib, ib2] = BC7M[mode], part = bits(pb), rot = bits(rb), sel = bits(isb);
+      for (let c = 0; c < 3; c++) for (let i = 0; i < ns * 2; i++) E[i][c] = bits(cb);
+      for (let i = 0; i < ns * 2; i++) E[i][3] = ab ? bits(ab) : 255;
+      P.length = 0;
+      if (epb) for (let i = 0; i < ns * 2; i++) P.push(bits(1));
+      if (spb) for (let s = 0; s < ns; s++) { const p = bits(1); P.push(p, p); }
+      for (let i = 0; i < ns * 2; i++) for (let c = 0; c < 4; c++) {
+        if (c === 3 && !ab) continue;
+        let n = c === 3 ? ab : cb, v = E[i][c]; if (P.length) { v = (v << 1) | P[i]; n++; }
+        E[i][c] = ((v << (8 - n)) | (v >> (2 * n - 8))) & 255;
+      }
+      const sub = i => ns === 1 ? 0 : ns === 2 ? (BC7P2[part] >> i) & 1 : (BC7P3[part] >>> (2 * i)) & 3;
+      const anchor = s => s === 0 ? 0 : ns === 2 ? parseInt(BC7A2[part], 16) : parseInt(BC7A3[part * 2 + s - 1], 16);
+      for (let i = 0; i < 16; i++) I1[i] = bits(i === anchor(sub(i)) ? ib - 1 : ib);
+      if (ib2) for (let i = 0; i < 16; i++) I2[i] = bits(i === 0 ? ib2 - 1 : ib2);
+      for (let i = 0; i < 16; i++) {
+        const x = bx * 4 + (i & 3), y = by * 4 + (i >> 2); if (x >= w || y >= h) continue;
+        const s = sub(i), e0 = E[s * 2], e1 = E[s * 2 + 1];
+        const [ci, wc, ai, wa] = !ib2 ? [I1[i], BC7W[ib], I1[i], BC7W[ib]] : sel ? [I2[i], BC7W[ib2], I1[i], BC7W[ib]] : [I1[i], BC7W[ib], I2[i], BC7W[ib2]];
+        for (let c = 0; c < 4; c++) { const k = c === 3 ? wa[ai] : wc[ci]; px[c] = ((64 - k) * e0[c] + k * e1[c] + 32) >> 6; }
+        if (rot) { const t = px[3]; px[3] = px[rot - 1]; px[rot - 1] = t; }
+        const o = (y * w + x) * 4; out[o] = px[0]; out[o + 1] = px[1]; out[o + 2] = px[2]; out[o + 3] = px[3];
+      }
+    }
+    return out;
+  }
+  /* the mip level that fits, still compressed (a copy: it can be kept on its own); res reads the texture's data when it lives outside */
+  function texture(res, t, maxSize) {
+    const fmt = t.m_TextureFormat, bpp = { 1: 1, 3: 3, 4: 4, 5: 4, 14: 4 }[fmt], block = { 10: 8, 12: 16, 25: 16 }[fmt];
     if (!bpp && !block) return null;
     let data = t['image data'];
-    if ((!data || !data.length) && t.m_StreamData && t.m_StreamData.size) {
-      const name = String(t.m_StreamData.path).split('/').pop(), res = files.get(name) || [...files.entries()].find(([k]) => k.endsWith('.resS'))?.[1];
-      if (!res) return null; data = res.subarray(Number(t.m_StreamData.offset), Number(t.m_StreamData.offset) + t.m_StreamData.size);
-    }
+    if ((!data || !data.length) && t.m_StreamData && t.m_StreamData.size) { data = res(t.m_StreamData); if (!data) return null; }
     let w = t.m_Width, h = t.m_Height, off = 0;
     const levelSize = (w, h) => block ? Math.max(1, (w + 3) >> 2) * Math.max(1, (h + 3) >> 2) * block : w * h * bpp;
     for (let mip = 0; mip < (t.m_MipCount || 1) - 1 && Math.max(w, h) > maxSize; mip++) { off += levelSize(w, h); w = Math.max(1, w >> 1); h = Math.max(1, h >> 1); }
-    const src = data.subarray(off, off + levelSize(w, h));
+    const src = data.slice(off, off + levelSize(w, h));
     if (src.length < levelSize(w, h)) return null;
+    return { w, h, fmt, src, name: t.m_Name };
+  }
+  /* decoded to RGBA the first time a material needs it */
+  function pixels(img) {
+    if (img.rgba) return img;
+    const { w, h, fmt, src } = img, block = fmt === 10 || fmt === 12 || fmt === 25;
     let rgba;
-    if (block) rgba = dxt(src, w, h, fmt === 12);
+    if (fmt === 25) rgba = bc7(src, w, h);
+    else if (block) rgba = dxt(src, w, h, fmt === 12);
     else {
       rgba = new Uint8Array(w * h * 4);
       for (let i = 0; i < w * h; i++) {
@@ -225,7 +274,8 @@ const UGC = (() => {
         else { rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = 255; rgba[i * 4 + 3] = src[i]; }
       }
     }
-    return { w, h, rgba, name: t.m_Name };
+    Object.defineProperty(img, 'rgba', { value: rgba, configurable: true });   /* not kept when the model is stored */
+    return img;
   }
 
   /* ---------- animations: Unity's muscle clips (streamed, dense and constant curves) ---------- */
@@ -268,7 +318,9 @@ const UGC = (() => {
     walk(top, '');
     const clips = {};
     for (const k of ['open', 'close', 'insert', 'remove', 'on', 'off']) {
-      const c = A[k]; if (!c) continue; c.binds.forEach(b => { b.node = hashes.get(b.path) || null; }); if (c.binds.some(b => b.node)) clips[k] = c;
+      if (!A[k]) continue;
+      const c = Object.assign({}, A[k], { binds: A[k].binds.map(b => Object.assign({}, b, { node: hashes.get(b.path) || null })) });   /* the parsed clip stays plain data */
+      if (c.binds.some(b => b.node)) clips[k] = c;
     }
     /* Unity's Euler angles turn Z, then X, then Y: three.js calls that order YXZ */
     function apply(c, t) {
@@ -283,63 +335,82 @@ const UGC = (() => {
         } else if (b.type === 1 && b.attr === ISACTIVE) o.visible = v(0) > .5;
       }
     }
-    return { clips, apply, spindle: byGo.get(A.spindle) || null };
+    return { clips, apply, spindle: byGo.get(A.spindle) || null, axis: A.axis, needsMedia: A.needsMedia, hideClosed: A.hideClosed };
   }
 
   /* ---------- read everything a model needs ---------- */
-  function parse(buf, opts = {}) {
-    const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf), files = readBundle(u8);
-    const cab = [...files.entries()].find(([k]) => !/\.(resS|resource)$/.test(k));
-    if (!cab) throw new Error('El .ugc no contiene ningún objeto.');
-    const sf = readSerialized(cab[1]), get = id => readObject(sf, id), byCls = c => [...sf.objects.values()].filter(o => o.type.cls === c);
-    const tfs = new Map(byCls(4).map(o => [o.id, get(o.id)]));
+  /* S is where the objects come from: a .ugc, or EmuVR's own data (see EMUVR). It gives the objects by id
+     (only those of its own file: pointers to other files are left out), the ids of a class, the name of the
+     script behind a MonoBehaviour and the bytes a texture keeps outside. */
+  const pid = p => p && !p.m_FileID && p.m_PathID && p.m_PathID !== '0' ? p.m_PathID : null;
+  function assemble(S, opts = {}) {
+    const get = id => { try { return id ? S.get(id) : null; } catch (e) { return null; } };
+    const tfs = new Map(S.ids(4).map(id => [id, get(id)]).filter(e => e[1]));
     const comps = new Map();
-    for (const c of [33, 23, 108]) byCls(c).forEach(o => { const d = get(o.id), go = d.m_GameObject.m_PathID; if (!comps.has(go)) comps.set(go, {}); comps.get(go)[c] = d; });
+    for (const c of [33, 23, 108]) S.ids(c).forEach(id => { const d = get(id); if (!d) return; const go = d.m_GameObject.m_PathID; if (!comps.has(go)) comps.set(go, {}); comps.get(go)[c] = d; });
+    /* the scripts EmuVR attaches: Socket marks where the medium goes, GameSystemState says which clip opens,
+       closes, takes the medium in..., UGCInfo and GameSystem say what the model is */
+    const mono = new Map();
+    for (const id of S.ids(114)) { const d = get(id), k = d && S.script(id, d); if (!k) continue; if (!mono.has(k)) mono.set(k, []); mono.get(k).push(d); }
     const texCache = new Map(), maxSize = opts.maxTex || 1024;
-    const tex = id => { if (!id || id === '0') return null; if (!texCache.has(id)) { const t = get(id); texCache.set(id, t ? texture(files, t, maxSize) : null); } return texCache.get(id); };
+    const tex = id => { if (!id) return null; if (!texCache.has(id)) { const t = get(id); let img = null; try { img = t ? texture(S.res, t, maxSize) : null; } catch (e) { console.warn('UGC texture', e); } texCache.set(id, img); } return texCache.get(id); };
     const matCache = new Map();
     const material = id => {
       if (matCache.has(id)) return matCache.get(id);
       const m = get(id); if (!m) return null;
-      const sh = m.m_Shader && m.m_Shader.m_PathID !== '0' ? get(m.m_Shader.m_PathID) : null;
+      const sh = get(pid(m.m_Shader));
       const props = m.m_SavedProperties, texs = {}, fl = {}, col = {};
-      props.m_TexEnvs.forEach(([k, v]) => { if (v.m_Texture.m_PathID !== '0') texs[k] = v.m_Texture.m_PathID; });
+      props.m_TexEnvs.forEach(([k, v]) => { const t = pid(v.m_Texture); if (t) texs[k] = t; });
       props.m_Floats.forEach(([k, v]) => { fl[k] = v; }); props.m_Colors.forEach(([k, v]) => { col[k] = v; });
       const out = { name: m.m_Name, shader: (sh && sh.m_ParsedForm && sh.m_ParsedForm.m_Name) || '', keywords: m.m_ShaderKeywords || '', fl, col, tex: {} };
       for (const k of ['_MainTex', '_BumpMap', '_SpecGlossMap', '_MetallicGlossMap', '_EmissionMap']) if (texs[k]) out.tex[k] = tex(texs[k]);
+      if (!out.tex._BumpMap && texs._NormalMap) out.tex._BumpMap = tex(texs._NormalMap);   /* EmuVR's own shaders call it so */
       matCache.set(id, out); return out;
     };
+    const sockets = new Map((mono.get('Socket') || []).map(d => [d.m_GameObject.m_PathID, { female: !!d.isFemale, type: d.typeData || '', free: [d.freeRotationX, d.freeRotationY, d.freeRotationZ].map(Boolean) }]));
     const node = t => {
       const go = get(t.m_GameObject.m_PathID), cs = comps.get(t.m_GameObject.m_PathID) || {};
       const n = { name: go ? go.m_Name : '', go: t.m_GameObject.m_PathID, active: go ? go.m_IsActive !== false : true, p: t.m_LocalPosition, q: t.m_LocalRotation, s: t.m_LocalScale, kids: [] };
-      if (cs[33] && cs[33].m_Mesh.m_PathID !== '0') {
-        const me = get(cs[33].m_Mesh.m_PathID);
-        if (me) { n.mesh = meshData(me, sf.little); n.meshName = me.m_Name; n.mats = (cs[23] ? cs[23].m_Materials : []).map(p => p.m_PathID !== '0' ? material(p.m_PathID) : null); n.visible = !cs[23] || !!cs[23].m_Enabled; }
-      }
+      const me = cs[33] && get(pid(cs[33].m_Mesh));
+      if (me) { n.mesh = meshData(me, S.little); n.meshName = me.m_Name; n.mats = (cs[23] ? cs[23].m_Materials : []).map(p => pid(p) ? material(pid(p)) : null); n.visible = !cs[23] || !!cs[23].m_Enabled; }
       if (cs[108]) n.light = { color: cs[108].m_Color, intensity: cs[108].m_Intensity, range: cs[108].m_Range };
-      n.kids = (t.m_Children || []).map(ch => tfs.get(ch.m_PathID)).filter(Boolean).map(node);
+      if (sockets.has(n.go)) n.sock = sockets.get(n.go);
+      n.kids = (t.m_Children || []).map(ch => tfs.get(pid(ch))).filter(Boolean).map(node);
       return n;
     };
-    const roots = [...tfs.values()].filter(t => !t.m_Father || t.m_Father.m_PathID === '0').map(node);
-    /* the scripts EmuVR attaches: GameSystemState says which clip opens, closes, takes the medium in... */
-    const scripts = new Map(byCls(115).map(o => { try { return [o.id, get(o.id).m_ClassName]; } catch (e) { return [o.id, '']; } }));
+    const top = opts.root ? [tfs.get(opts.root)].filter(Boolean) : [...tfs.values()].filter(t => !pid(t.m_Father));
+    const roots = top.map(node), inside = new Set(); { const w = n => { inside.add(n.go); n.kids.forEach(w); }; roots.forEach(w); }
+    const mine = k => (mono.get(k) || []).filter(d => inside.has(d.m_GameObject.m_PathID));
     let anim = null;
-    for (const o of byCls(114)) {
-      let d; try { d = get(o.id); } catch (e) { continue; }
-      if (!d || !d.m_Script || scripts.get(d.m_Script.m_PathID) !== 'GameSystemState') continue;
-      const clip = p => { if (!p || p.m_PathID === '0') return null; try { return clipData(get(p.m_PathID)); } catch (e) { console.warn('UGC clip', e); return null; } };
-      anim = { root: d.m_GameObject.m_PathID, open: clip(d.openAnimation), close: clip(d.closeAnimation), insert: clip(d.insertAnimation), remove: clip(d.removeAnimation), on: clip(d.onAnimation), off: clip(d.offAnimation), spindle: d.discSpindle ? d.discSpindle.m_PathID : null };
-      break;
+    const d = mine('GameSystemState')[0];
+    if (d) {
+      const clip = p => { const c = get(pid(p)); if (!c || c.__cls !== 74) return null; try { return clipData(c); } catch (e) { console.warn('UGC clip', e); return null; } };
+      anim = { root: d.m_GameObject.m_PathID, open: clip(d.openAnimation), close: clip(d.closeAnimation), insert: clip(d.insertAnimation), remove: clip(d.removeAnimation), on: clip(d.onAnimation), off: clip(d.offAnimation),
+        spindle: pid(d.discSpindle), axis: d.spindleAxis || null, needsMedia: !!d.needsMediaToClose, hideClosed: !!d.hideMediaWhileClosed };
     }
-    return { roots, anim };
+    const info = mine('UGCInfo')[0], sys = mine('GameSystem')[0];
+    return { roots, anim, info: { name: info ? info.name : opts.name || '', type: info ? info.type : sys ? 'system' : '', system: sys ? sys.systemName : '' } };
+  }
+  function parse(buf, opts = {}) {
+    const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf), files = readBundle(u8);
+    const cab = [...files.entries()].find(([k]) => !/\.(resS|resource)$/.test(k));
+    if (!cab) throw new Error('El .ugc no contiene ningún objeto.');
+    const sf = readSerialized(cab[1]), all = [...sf.objects.values()], scripts = new Map();
+    const S = {
+      little: sf.little, get: id => readObject(sf, id), ids: c => all.filter(o => o.type.cls === c).map(o => o.id),
+      script(id, d) { const s = pid(d.m_Script); if (!s) return ''; if (!scripts.has(s)) { let n = ''; try { n = readObject(sf, s).m_ClassName; } catch (e) { } scripts.set(s, n); } return scripts.get(s); },
+      res(sd) { const name = String(sd.path).split('/').pop(), r = files.get(name) || [...files.entries()].find(([k]) => k.endsWith('.resS'))?.[1]; return r ? r.subarray(Number(sd.offset), Number(sd.offset) + sd.size) : null; }
+    };
+    return assemble(S, opts);
   }
 
   /* ---------- three.js objects ---------- */
   function dataTex(img, srgb) {
+    img = pixels(img);
     const t = new THREE.DataTexture(img.rgba, img.w, img.h, THREE.RGBAFormat); t.flipY = false; t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.anisotropy = maxAniso; if (srgb) t.encoding = THREE.sRGBEncoding; t.needsUpdate = true; return t;
   }
-  function remap(img, fn) { const o = new Uint8Array(img.rgba.length), s = img.rgba; for (let i = 0; i < s.length; i += 4) fn(s, o, i); return { w: img.w, h: img.h, rgba: o }; }
+  function remap(img, fn) { img = pixels(img); const o = new Uint8Array(img.rgba.length), s = img.rgba; for (let i = 0; i < s.length; i += 4) fn(s, o, i); return { w: img.w, h: img.h, rgba: o }; }
   function makeMaterial(m, made) {
     if (!m) return new THREE.MeshStandardMaterial({ color: '#888888', roughness: .6 });
     if (made.has(m)) return made.get(m);
@@ -349,7 +420,7 @@ const UGC = (() => {
     if (T._MainTex) mat.map = dataTex(T._MainTex, true);
     if (T._BumpMap) {
       /* Unity packs normal maps as DXT5nm (X in alpha, Y in green): rebuild an ordinary one */
-      const s = T._BumpMap.rgba; let rs = 0; for (let i = 0; i < s.length; i += 400) rs += s[i]; const packed = rs / (s.length / 400) > 240;
+      const s = pixels(T._BumpMap).rgba; let rs = 0; for (let i = 0; i < s.length; i += 400) rs += s[i]; const packed = rs / (s.length / 400) > 240;
       mat.normalMap = dataTex(remap(T._BumpMap, (s, o, i) => { const x = (packed ? s[i + 3] * s[i] / 255 : s[i]) / 127.5 - 1, y = s[i + 1] / 127.5 - 1, z = Math.sqrt(Math.max(0, 1 - x * x - y * y)); o[i] = (x + 1) * 127.5; o[i + 1] = (y + 1) * 127.5; o[i + 2] = (z + 1) * 127.5; o[i + 3] = 255; }));
       mat.normalScale.set(fl._BumpScale ?? 1, fl._BumpScale ?? 1);
     }
@@ -378,6 +449,8 @@ const UGC = (() => {
   /* the model in centimetres, facing the room (+Z), standing on y = 0; anchors in userData */
   function build(parsed) {
     const made = new Map(), anchors = {}, lids = [], meshes = [], byGo = new Map();
+    /* the medium's place is the female Socket EmuVR attaches; older or hand-made models only name it */
+    let scripted = false; { const w = n => { if (n.sock && n.sock.female) scripted = true; n.kids.forEach(w); }; parsed.roots.forEach(w); }
     const mk = n => {
       const o = new THREE.Group(); o.name = n.name; o.visible = n.active; o.userData.unity = true; byGo.set(n.go, o);
       o.position.set(n.p.x, n.p.y, n.p.z); o.quaternion.set(n.q.x, n.q.y, n.q.z, n.q.w); o.scale.set(n.s.x, n.s.y, n.s.z);
@@ -388,7 +461,7 @@ const UGC = (() => {
         /* TVs and monitors: the game is shown on the child called screen_mesh (or whatever wears the kit's Screen material) */
         if (/screen_mesh/i.test(n.name) || (!anchors.screen && (n.mats || []).some(mt => mt && /^screen$/i.test(mt.name || '')))) anchors.screen = m;
       }
-      if (/socket_media/i.test(n.name) || (!anchors.socket && /socket/i.test(n.name) && !n.mesh)) anchors.socket = o;
+      if (scripted ? n.sock && n.sock.female && (!anchors.socket || /socket_media/i.test(n.name)) : /socket_media/i.test(n.name) || (!anchors.socket && /socket/i.test(n.name) && !/_av|cable|plug|controller/i.test(n.name) && !n.mesh)) { anchors.socket = o; anchors.sock = n.sock || null; }
       if (n.light) anchors.light = { obj: o, color: n.light.color };
       n.kids.forEach(k => o.add(mk(k)));
       return o;
@@ -401,7 +474,7 @@ const UGC = (() => {
     if (!box.isEmpty()) { model.position.y -= box.min.y; model.position.x -= (box.min.x + box.max.x) / 2; model.position.z -= (box.min.z + box.max.z) / 2; }
     root.updateMatrixWorld(true); box.setFromObject(model);
     const anim = parsed.anim ? makeAnim(parsed.anim, byGo.get(parsed.anim.root) || model.children[0], byGo) : null;
-    root.userData = { anchors, lids, size: box.getSize(new V3()), materials: [...made.values()], anim: anim && Object.keys(anim.clips).length ? anim : null };
+    root.userData = { anchors, lids, meshes, info: parsed.info || {}, size: box.getSize(new V3()), materials: [...made.values()], anim: anim && Object.keys(anim.clips).length ? anim : null };
     return root;
   }
   function dispose(root) {
@@ -409,5 +482,5 @@ const UGC = (() => {
     root.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
     (root.userData.materials || []).forEach(m => { ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap'].forEach(k => { if (m[k]) m[k].dispose(); }); unM(m); });
   }
-  return { parse, build, dispose, readBundle };
+  return { parse, assemble, build, dispose, readBundle, readSerialized, readObject, pid };
 })();
