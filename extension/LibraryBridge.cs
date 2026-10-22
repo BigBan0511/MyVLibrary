@@ -27,19 +27,25 @@ namespace MyVLibrary
         public string url { get; set; }
         public string name { get; set; }
         public List<string> fields { get; set; }
+        /* the video room */
+        public string season { get; set; }
+        public long? start { get; set; }
     }
 
     public class MediaFile
     {
         public byte[] Bytes;
         public string ContentType;
+        /* a song is served in pieces: 206 and its own headers */
+        public int Status = 200;
+        public string Headers;
     }
 
     /// <summary>
     /// Everything between Playnite and the shelf: the library as JSON, edits coming back,
     /// game launches, and resized covers.
     /// </summary>
-    public class LibraryBridge
+    public partial class LibraryBridge
     {
         private static readonly ILogger logger = LogManager.GetLogger();
         private readonly MyVLibraryPlugin plugin;
@@ -483,6 +489,14 @@ namespace MyVLibrary
             message["running"] = running.Select(r => new Dictionary<string, object> { ["id"] = r.Key.ToString(), ["seconds"] = (int)(DateTime.Now - r.Value).TotalSeconds }).ToList();
             message["hostPad"] = host.Kind == ShelfHost.HostKind.Fullscreen;
             message["games"] = Db.Games.Where(g => showHidden || !g.Hidden).Select(Record).ToList();
+            /* films and series: the kept list now, Jellyfin's fresh one when it answers */
+            var video = CachedVideo();
+            if (video != null) message["video"] = video;
+            RefreshVideo(false);
+            /* the record shop: the same, from Navidrome */
+            var music = CachedMusic();
+            if (music != null) message["music"] = music;
+            RefreshMusic(false);
             if (host.FocusGame.HasValue)
             {
                 message["focusId"] = host.FocusGame.Value.ToString();
@@ -543,6 +557,21 @@ namespace MyVLibrary
                         break;
                     case "createCategory":
                         if (!string.IsNullOrWhiteSpace(m.name)) Db.Categories.Add(m.name.Trim());
+                        break;
+                    case "jfSeasons":
+                        VideoSeasons(host, m.id);
+                        break;
+                    case "jfEpisodes":
+                        VideoEpisodes(host, m.id, m.season);
+                        break;
+                    case "jfPlay":
+                        VideoPlay(m.id, m.start ?? 0);
+                        break;
+                    case "jfStop":
+                        VideoStop();
+                        break;
+                    case "ndScrobble":
+                        MusicScrobble(m.id);
                         break;
                 }
             }
@@ -748,20 +777,31 @@ namespace MyVLibrary
         // ---------- covers and backgrounds ----------
 
         /// <summary>https://media.myvlibrary/{cover|bg|icon}/{gameId}?w=512 → a JPEG no wider than w, cached on disk.</summary>
-        public MediaFile LoadMedia(string url)
+        public MediaFile LoadMedia(string url, string range = null)
         {
             try
             {
                 var uri = new Uri(url);
                 var parts = uri.AbsolutePath.Trim('/').Split('/');
-                if (parts.Length != 2 || !Guid.TryParse(parts[1], out var id)) return null;
-                var kind = parts[0];
                 var width = 512;
+                string ver = null;
                 foreach (var pair in uri.Query.TrimStart('?').Split('&'))
                 {
                     var kv = pair.Split('=');
                     if (kv.Length == 2 && kv[0] == "w" && int.TryParse(kv[1], out var w)) width = Math.Max(32, Math.Min(2048, w));
+                    if (kv.Length == 2 && kv[0] == "v") ver = Uri.UnescapeDataString(kv[1]);
                 }
+                /* a film's or series' picture from Jellyfin */
+                if (parts.Length == 3 && parts[0] == "jf") return LoadJellyfinImage(parts[1], parts[2], width, ver);
+                /* music from Navidrome: a cover, or a song's sound */
+                if (parts.Length == 3 && parts[0] == "nd" && parts[1] == "cover") return LoadNavidromeCover(Uri.UnescapeDataString(parts[2]), width);
+                if (parts.Length == 3 && parts[0] == "nd" && parts[1] == "stream")
+                {
+                    var f = uri.Query.TrimStart('?').Split('&').Select(p => p.Split('=')).Where(kv => kv.Length == 2 && kv[0] == "f").Select(kv => Uri.UnescapeDataString(kv[1])).FirstOrDefault();
+                    return LoadNavidromeAudio(Uri.UnescapeDataString(parts[2]), f, range);
+                }
+                if (parts.Length != 2 || !Guid.TryParse(parts[1], out var id)) return null;
+                var kind = parts[0];
 
                 var g = Db.Games.Get(id);
                 if (g == null) return null;

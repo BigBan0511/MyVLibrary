@@ -49,9 +49,10 @@ const LIB = {
   pending: new Map(), pendingFetch: new Map(), fetched: new Map(), imgs: new Map(), queue: [], loading: 0, statusIds: {}, catIds: {}, booted: null, bootRes: null, hostPad: false, paused: false,
   send(type, data = {}) { const m = Object.assign({ type }, data); try { if (HOST) HOST.postMessage(m); else if (MOCK) MOCKHOST.receive(m); } catch (e) { console.error(e); } },
   boot() { this.booted = new Promise(res => { this.bootRes = res; }); this.send('ready', { version: 1 }); return this.booted; },
-  coverUrl(g, w) { return MOCK ? `mock:cover:${g.id}:${w}` : `${MEDIA}cover/${g.id}?w=${w}&v=${encodeURIComponent(g.ver || '')}`; },
-  logoUrl(g) { return MOCK ? `mock:logo:${g.id}:0` : `https://extra.myvlibrary/${g.id}/Logo.png`; },
-  bgUrl(g, w) { return MOCK ? `mock:bg:${g.id}:${w}` : `${MEDIA}bg/${g.id}?w=${w}&v=${encodeURIComponent(g.ver || '')}`; },
+  /* films and series: their pictures come from Jellyfin, through the extension */
+  coverUrl(g, w) { if (g.music) return MOCK ? `mock:cover:${g.coverId}:${w}` : `${MEDIA}nd/cover/${encodeURIComponent(g.coverId)}?w=${w}`; if (g.video) return MOCK ? `mock:cover:${g.jf}:${w}` : `${MEDIA}jf/${g.jf}/Primary?w=${w}&v=${encodeURIComponent(g.ver || '')}`; return MOCK ? `mock:cover:${g.id}:${w}` : `${MEDIA}cover/${g.id}?w=${w}&v=${encodeURIComponent(g.ver || '')}`; },
+  logoUrl(g) { if (g.video) return MOCK ? `mock:logo:${g.jf}:0` : `${MEDIA}jf/${g.jf}/Logo?w=640&v=${encodeURIComponent(g.ver || '')}`; return MOCK ? `mock:logo:${g.id}:0` : `https://extra.myvlibrary/${g.id}/Logo.png`; },
+  bgUrl(g, w) { if (g.video) return MOCK ? `mock:bg:${g.jf}:${w}` : `${MEDIA}jf/${g.jf}/Backdrop?w=${w}&v=${encodeURIComponent(g.ver || '')}`; return MOCK ? `mock:bg:${g.id}:${w}` : `${MEDIA}bg/${g.id}?w=${w}&v=${encodeURIComponent(g.ver || '')}`; },
   img(url) {
     if (this.imgs.has(url)) return this.imgs.get(url);
     const p = MOCK && url.startsWith('mock:') ? Promise.resolve(MOCKHOST.image(url)) : new Promise(res => { const i = new Image(); i.crossOrigin = 'anonymous'; i.decoding = 'async'; i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
@@ -81,13 +82,13 @@ const LIB = {
     return (g.bigLoading = this.img(this.coverUrl(g, 720)).then(i => { if (i) { g.cover = i; if (!g.palFromCover) { const p = paletteOf(i); if (p) { g.pal = p; g.palFromCover = true; } } } g.bigLoading = null; this.refresh(g, false); }));
   },
   /* pointing at a game is a good moment to start loading what its case will need */
-  prefetch(g) { if (!PLAYNITE || !g || !g.real) return; this.bigCover(g); if (!g.detailLoaded && !g.detailLoading) this.detail(g); },
+  prefetch(g) { if (!PLAYNITE || !g || !g.real) return; this.bigCover(g); if (!g.video && !g.music && !g.detailLoaded && !g.detailLoading) this.detail(g); },
   /* everything the case needs in your hands: the big cover, the background, the description.
      Picking waits a moment for it; whatever arrives later still gets painted on */
   prepare(g, timeout = 1500) {
     const jobs = [this.bigCover(g)];
     if (g.hasBg && !g.bg) jobs.push(this.img(this.bgUrl(g, 1280)).then(i => { if (i) g.bg = i; }));
-    if (!g.detailLoaded) jobs.push(g.detailLoading || this.detail(g));
+    if (!g.detailLoaded && !g.video && !g.music) jobs.push(g.detailLoading || this.detail(g));
     const all = Promise.all(jobs).then(() => { this.refresh(g, true); this.media(g); });
     return Promise.race([all, new Promise(r => setTimeout(r, timeout))]).then(() => this.refresh(g, true));
   },
@@ -114,6 +115,73 @@ const LIB = {
     this.fetched.set(url, p); return p;
   },
   start(g) { this.send('start', { id: g.id }); },
+  /* a series' seasons and a season's episodes, asked for when the series is picked */
+  jfAsk(type, key, data) {
+    return new Promise(res => {
+      const done = v => { if (this.pending.get(key) === done) this.pending.delete(key); res(v); };
+      this.pending.set(key, done); this.send(type, data);
+      setTimeout(() => { if (this.pending.get(key) === done) { this.pending.delete(key); toast(T('Jellyfin no ha contestado.')); res(null); } }, 15000);
+    });
+  },
+  jfSeasons(g) { return this.jfAsk('jfSeasons', 'S:' + g.jf, { id: g.jf }); },
+  jfEpisodes(g, s) { return this.jfAsk('jfEpisodes', 'E:' + s.id, { id: g.jf, season: s.id }); },
+  /* a film or series from Jellyfin, as the shelf keeps it */
+  fromVideo(r, old) {
+    const now = Date.now(), days = iso => { if (!iso) return null; const t = Date.parse(iso); return isNaN(t) ? null : Math.max(0, Math.floor((now - t) / 864e5)); };
+    const g = old || { id: 'jf:' + r.id, jf: r.id, video: true, real: true, cats: [], ach: [0, 0], hours: 0, font: 'saira', tag: '', tpos: 'top', artOpt: {}, tear: 0 };
+    Object.assign(g, {
+      kind: r.type === 'Series' ? 'series' : 'movie', t: r.name || T('Sin título'), sort: r.sort || r.name || '', year: r.year || null, lib: r.lib || T('Vídeo'), libOrder: r.libOrder ?? 99,
+      genre: (r.genres || []).slice(0, 2).join(' / '), genres: r.genres || [], sum: r.overview || '', runtime: r.runtime || 0, played: !!r.played, pos: r.pos || 0,
+      last: days(r.lastPlayed), added: days(r.added), dev: (r.studios || []).slice(0, 2).join(', '), pub: '', ageRating: r.rating || '', community: r.community || null,
+      episodes: r.episodes ?? null, hasCover: !!r.hasCover, hasBg: !!r.hasBg, hasLogo: !!r.hasLogo, sessions: r.played ? 1 : 0, installed: true
+    });
+    g.status = g.kind === 'series' ? (r.played ? VSTAT.watched : r.unplayed === 0 ? VSTAT.watched : r.unplayed != null && r.episodes && r.unplayed < r.episodes ? VSTAT.partial : VSTAT.none) : videoStatus(g);
+    if (old && old.ver !== r.ver) { g.cover = g.coverSmall = g.bg = null; g.palFromCover = false; }
+    g.ver = r.ver || ''; if (!g.pal) g.pal = defaultPal(g.id);
+    if (!old) {
+      g.wrapped = g.kind === 'movie' ? !g.played && !g.pos && g.last === null : g.status === VSTAT.none && g.last === null;
+      g.dust = g.wrapped ? 0 : dustFor(g.last !== null ? g.last : (g.added ?? 0));
+      restoreUi(g); if (g.wrapped) g.dust = 0; g.dust0 = g.dust;
+    }
+    resolveFmt(g);
+    return g;
+  },
+  setVideos(m) {
+    const old = new Map(GAMES.filter(g => g.video).map(g => [g.id, g]));
+    for (let i = GAMES.length - 1; i >= 0; i--) if (GAMES[i].video && !(active && active.g === GAMES[i])) GAMES.splice(i, 1);
+    (m.items || []).forEach(r => { const o = old.get('jf:' + r.id); if (o && active && active.g === o) this.fromVideo(r, o); else GAMES.push(this.fromVideo(r, o)); });
+    this.player = m.player || '';
+    renderSysbar(); if (mode === 'shelf' && !busy) relayout(); else pendingRelayout = true;
+  },
+  /* music from Navidrome: a song's sound comes through the extension, which keeps it on disk while it plays */
+  trackUrl(t) { return `${MEDIA}nd/stream/${encodeURIComponent(t.id)}?f=${encodeURIComponent(t.suffix || '')}`; },
+  musicItem(old, pre, id, kind, t, year, extra) {
+    const gid = `nd:${pre}:${id}`, g = old.get(gid) || { id: gid, music: true, real: true, cats: [], ach: [0, 0], hours: 0, sessions: 0, status: '', font: 'saira', tag: '', tpos: 'top', artOpt: {}, tear: 0, wrapped: false, notes: '' };
+    Object.assign(g, { kind, nd: id, t: t || T('Sin título'), sort: t || '', year: year || null, sec: { album: 'Álbumes', artist: 'Artistas', song: 'Canciones', playlist: 'Listas' }[kind], last: null, added: null, installed: true }, extra);
+    g.secOrder = MSEC.indexOf(g.sec); g.hasCover = !!g.coverId; if (!g.pal) g.pal = defaultPal(gid);
+    if (g.dust == null) { g.dust = 0; restoreUi(g); g.dust0 = g.dust; }
+    resolveMusicFmt(g); return g;
+  },
+  musicItems(m, old) {
+    const out = [], albums = new Map(), TR = new Map(), withSongs = new Set();
+    (m.albums || []).forEach(a => { const g = this.musicItem(old, 'al', a.id, 'album', a.name, a.year, { artist: a.artist || '', artistId: a.artistId || '', genre: a.genre || '', coverId: a.coverArt || '', tracks: [], dur: a.duration || 0, dev: a.artist || '' }); albums.set(a.id, g); out.push(g); });
+    (m.songs || []).forEach(s => {
+      const al = albums.get(s.albumId), tr = { id: s.id, t: s.title || T('Sin título'), artist: s.artist || '', artistId: s.artistId || '', album: s.album || '', albumId: s.albumId || '', year: s.year || (al && al.year) || null, n: s.track || null, disc: s.disc || 1, dur: s.duration || 0, suffix: s.suffix || '', real: true, g: al };
+      TR.set(s.id, tr); if (al) al.tracks.push(tr); withSongs.add(tr.artistId);
+      out.push(this.musicItem(old, 'so', s.id, 'song', tr.t, tr.year, { artist: tr.artist, album: tr.album, genre: s.genre || '', coverId: s.coverArt || (al && al.coverId) || '', track: tr, sort: tr.t + ' ' + tr.artist, dev: tr.artist }));
+    });
+    albums.forEach(g => { g.tracks.sort((a, b) => (a.disc - b.disc) || (a.n || 0) - (b.n || 0)); if (!g.dur) g.dur = sumDur(g.tracks); });
+    (m.artists || []).forEach(a => { if (withSongs.has(a.id)) out.push(this.musicItem(old, 'ar', a.id, 'artist', a.name, null, { coverId: a.coverArt || '', dev: a.name })); });
+    (m.playlists || []).forEach(p => { const tracks = (p.entries || []).map(id => TR.get(id)).filter(Boolean); if (tracks.length) out.push(this.musicItem(old, 'pl', p.id, 'playlist', p.name, null, { coverId: p.coverArt || '', tracks, dur: sumDur(tracks), dev: p.owner || '' })); });
+    return out;
+  },
+  /* the record shop exists only when Navidrome is linked and has something in it */
+  setMusic(m, quiet) {
+    const old = new Map(GAMES.filter(g => g.music).map(g => [g.id, g])), keep = new Set([active && active.g, MUSIC.held && MUSIC.held.g].filter(g => g && g.music));
+    for (let i = GAMES.length - 1; i >= 0; i--) if (GAMES[i].music && !keep.has(GAMES[i])) GAMES.splice(i, 1);
+    this.musicItems(m || {}, old).forEach(g => { if (!keep.has(g)) GAMES.push(g); });
+    if (!quiet) { renderSysbar(); if (mode === 'shelf' && !busy) relayout(); else pendingRelayout = true; }
+  },
   openUrl(url) { if (/^https?:\/\//i.test(url || '')) this.send('openUrl', { url }); },
   update(g, fields) {
     const m = { id: g.id, fields: fields.slice() };
@@ -159,6 +227,10 @@ const LIB = {
     document.documentElement.classList.toggle('pn-fullscreen', PN_STATE.mode === 'fullscreen');
     const old = new Map(GAMES.map(g => [g.id, g]));
     GAMES.length = 0; (m.games || []).forEach(r => GAMES.push(this.fromHost(r, old.get(r.id))));
+    /* the video room exists only when Jellyfin is linked and has something to show */
+    if (m.video) (m.video.items || []).forEach(r => GAMES.push(this.fromVideo(r, old.get('jf:' + r.id))));
+    this.player = m.video ? m.video.player || '' : '';
+    if (m.music) this.setMusic(m.music, true);
     if (m.focusId) this.focusId = m.focusId;
     if (this.bootRes) { this.bootRes(); this.bootRes = null; }
     else if (mode === 'shelf') relayout({ follow: null }); else pendingRelayout = true;
@@ -195,6 +267,9 @@ const LIB = {
     if (!m || typeof m !== 'object') return;
     switch (m.type) {
       case 'library': this.load(m); break;
+      /* Jellyfin answered after the games were already on the shelf (or the library changed there) */
+      case 'video': this.setVideos(m); break;
+      case 'music': this.setMusic(m.music); break;
       case 'games': this.upsert(m.games); break;
       case 'removed': this.remove(m.ids); break;
       case 'lists': this.setLists(m); if (active) renderInfo(true); break;
@@ -227,6 +302,12 @@ const LIB = {
       case 'failed': if (PN_STATE.running === m.id) this.eject({ auto: true, msg: m.reason || T('No se ha podido arrancar.') }, true); break;
       case 'activated': if (this.onShown) this.onShown(); break;
       case 'fetched': { const res = this.pendingFetch.get(m.url); if (res) { this.pendingFetch.delete(m.url); res(m.local || null); } break; }
+      case 'jfSeasons': { const res = this.pending.get('S:' + m.id); if (res) res((m.seasons || []).map(x => ({ id: x.id, idx: x.idx ?? 1, name: x.name || T('Temporada {0}', x.idx ?? 1), year: x.year || null, count: x.count ?? null }))); break; }
+      case 'jfEpisodes': { const res = this.pending.get('E:' + m.season); if (res) res((m.episodes || []).map(e => ({ id: e.id, n: e.n ?? null, season: e.season ?? null, t: e.name || '', runtime: e.runtime || 0, played: !!e.played, pos: e.pos || 0 }))); break; }
+      /* the film is playing in the external player; and it has closed (with how far you got) */
+      case 'videoStarted': if (active && active.g.video && PN_STATE.running === active.g.id) { PN_STATE.waiting = false; renderPlayBanner(); } break;
+      case 'videoStopped': if (active && active.g.video && (mode === 'playing' || PN_STATE.waiting)) this.eject({ auto: true, video: { pos: m.pos ?? null, played: !!m.played } }, m.active); else videoLate(m); PN_STATE.running = null; break;
+      case 'videoFailed': if (active && active.g.video && PN_STATE.running === active.g.id) this.eject({ auto: true, video: {}, msg: m.reason || T('No se ha podido abrir el reproductor.') }, true); break;
       case 'pad': this.pad(m.button, m.state); break;
       case 'focus': this.focusGame(m.id); break;
       case 'pause': this.paused = true; break;
@@ -269,8 +350,30 @@ const MOCKHOST = {
     this.src = new Map(base.map(g => [g.id, g]));
     return base.map((g, i) => ({ id: g.id, name: g.t, sort: g.t, status: ST0[g.id] || g.status, cats: (CAT0[g.id] || []).slice(), plats: [plats[i % plats.length]], genres: [g.genre], devs: [g.dev], pubs: [g.pub], features: g.online ? ['Multijugador en línea', 'Mando'] : ['Un jugador'], series: [], age: [`PEGI ${g.age}`], src: i % 3 ? 'Steam' : 'GOG', year: g.year, release: String(g.year), playtime: Math.round(g.hours * 3600), playCount: g.sessions, lastActivity: this.iso(g.last), added: this.iso(g.added), installed: i % 5 !== 0, score: g.rating ? g.rating * 20 : null, critic: 70 + (i % 25), community: null, hasCover: true, hasBg: true, hasLogo: i % 4 === 1, ver: '1', sum: g.sum }));
   },
+  /* the demo's video shop, as Jellyfin would describe it */
+  videos() {
+    const list = demoVideos(); this.vsrc = new Map(list.map(v => [v.id, v]));
+    list.forEach(v => this.src.set(v.id, v));
+    return { player: 'vlc', items: list.map(v => ({ id: v.id, type: v.kind === 'series' ? 'Series' : 'Movie', name: v.t, sort: v.t, year: v.year, lib: v.lib, libOrder: v.libOrder, genres: [v.genre], overview: v.sum, runtime: v.runtime, played: v.played, pos: v.pos, lastPlayed: this.iso(v.last), added: this.iso(v.added), studios: [v.dev], rating: v.age ? '+' + v.age : '', episodes: v.episodes, hasCover: true, hasBg: true, hasLogo: false, ver: '1' })) };
+  },
+  /* the demo's record shop, as Navidrome would describe it */
+  music() {
+    const list = demoMusic(), albums = list.filter(g => g.kind === 'album');
+    list.forEach(g => this.src.set(g.nd, g));
+    return {
+      albums: albums.map(a => ({ id: a.nd, name: a.t, artist: a.artist, artistId: a.artistId, year: a.year, genre: a.genre, duration: a.dur, coverArt: a.nd })),
+      artists: list.filter(g => g.kind === 'artist').map(a => ({ id: a.nd, name: a.t, coverArt: a.nd })),
+      songs: albums.flatMap(a => a.tracks.map(t => ({ id: t.id, title: t.t, artist: t.artist, artistId: t.artistId, album: a.t, albumId: a.nd, year: t.year, track: t.n, duration: t.dur, suffix: 'mp3', coverArt: a.nd, genre: a.genre }))),
+      playlists: list.filter(g => g.kind === 'playlist').map(p => ({ id: p.nd, name: p.t, duration: p.dur, coverArt: p.nd, entries: p.tracks.map(t => t.id) }))
+    };
+  },
   receive(m) {
-    if (m.type === 'ready') { this.lib = this.build(); this.post({ type: 'library', mode: 'desktop', statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib, running: this.runningAtStart() }); }
+    if (m.type === 'ndScrobble') console.log('[mock] scrobble', m.id);
+    if (m.type === 'jfSeasons') { const v = this.vsrc.get(m.id); this.post({ type: 'jfSeasons', id: m.id, seasons: v ? v.demoSeasons.map(s => ({ id: m.id + '-s' + s.idx, idx: s.idx, name: s.name, year: s.year, count: s.count })) : [] }); }
+    if (m.type === 'jfEpisodes') { const v = this.vsrc.get(m.id), idx = +String(m.season).split('-s').pop(), s = v && v.demoSeasons.find(x => x.idx === idx); this.post({ type: 'jfEpisodes', id: m.id, season: m.season, episodes: s ? demoEpisodes(v, s).map(e => ({ id: e.id, n: e.n, season: e.season, name: e.t, runtime: e.runtime, played: e.played, pos: e.pos })) : [] }); }
+    if (m.type === 'jfPlay') { console.log('[mock] jfPlay', m); setTimeout(() => this.post({ type: 'videoStarted', id: m.id }), 1500); this.vT = setTimeout(() => this.post({ type: 'videoStopped', id: m.id, pos: 42 * 60 * TICKS, played: false, active: !document.hidden }), 9000); }
+    if (m.type === 'jfStop') { clearTimeout(this.vT); console.log('[mock] jfStop'); }
+    if (m.type === 'ready') { this.lib = this.build(); this.post({ type: 'library', mode: 'desktop', statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib, running: this.runningAtStart(), video: this.videos(), music: this.music() }); }
     if (m.type === 'detail') { const s = this.src.get(m.id); this.post({ type: 'detail', id: m.id, desc: s ? `<p>${esc(s.desc)}</p><p>${esc(s.sum)}</p><script>alert(1)<\/script>` : '', links: [{ name: 'Web oficial', url: 'https://example.com' }, { name: 'Wiki', url: 'https://example.org/wiki' }] }); }
     if (m.type === 'start') { const r = this.lib.find(q => q.id === m.id); if (r && !r.installed) { this.post({ type: 'notInstalled', id: m.id }); return; } setTimeout(() => this.post({ type: 'started', id: m.id }), 1800);
       /* ?mock&leftover: Playnite gives up after a few seconds while the game keeps running */
@@ -283,6 +386,7 @@ const MOCKHOST = {
   remote() { return null; },
   image(url) {
     const [, kind, id] = url.split(':'), s = this.src.get(id); if (!s) return null;
+    if (s.music) return musicArt(s, 512);
     if (kind === 'logo') { const c = mkCanvas(640, 200), x = c.getContext('2d'); let fs = 120; x.font = `${fs}px ${F.bungee}`; while (x.measureText(s.t).width > 600 && fs > 20) { fs -= 4; x.font = `${fs}px ${F.bungee}`; } x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = fs * .12; x.strokeStyle = s.pal[0]; x.strokeText(s.t, 320, 104); x.fillStyle = s.pal[3]; x.fillText(s.t, 320, 104); return c; }
     const W = kind === 'bg' ? 960 : 400, H = kind === 'bg' ? 540 : 600, c = mkCanvas(W, H), x = c.getContext('2d');
     drawArt(x, W, H, s, kind === 'bg' ? 7 : 0); gradeArt(x, W, H, rng(1));

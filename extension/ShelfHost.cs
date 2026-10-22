@@ -262,9 +262,11 @@ namespace MyVLibrary
             }
 
             var uri = e.Request.Uri;
+            string range = null;
+            try { if (e.Request.Headers.Contains("Range")) range = e.Request.Headers.GetHeader("Range"); } catch { }
             var deferral = e.GetDeferral();
             var env = core.Environment;
-            Task.Run(() => plugin.Bridge.LoadMedia(uri)).ContinueWith(t =>
+            Task.Run(() => plugin.Bridge.LoadMedia(uri, range)).ContinueWith(t =>
             {
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
@@ -278,8 +280,8 @@ namespace MyVLibrary
                         var media = t.Status == TaskStatus.RanToCompletion ? t.Result : null;
                         if (media != null)
                         {
-                            e.Response = env.CreateWebResourceResponse(new MemoryStream(media.Bytes), 200, "OK",
-                                "Content-Type: " + media.ContentType + "\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: max-age=31536000");
+                            e.Response = env.CreateWebResourceResponse(new MemoryStream(media.Bytes), media.Status, media.Status == 206 ? "Partial Content" : "OK",
+                                media.Headers ?? "Content-Type: " + media.ContentType + "\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: max-age=31536000");
                         }
                         else
                         {

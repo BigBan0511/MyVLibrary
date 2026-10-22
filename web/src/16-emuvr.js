@@ -48,7 +48,7 @@ const EMUVR = (() => {
   const KNOWN = {
     N64_System: ['Nintendo 64', 'N64'], PS1_System: ['PlayStation', 'PS1'], PS2: ['PlayStation 2', 'PS2'], GameCube: ['GameCube', 'GC'],
     NES: ['NES', 'NES'], SNES: ['Super Nintendo', 'SNES'], SNES_PAL: ['Super Nintendo (PAL)', 'SNES'], SNES_JP: ['Super Famicom', 'SNES'],
-    VCR: ['Vídeo VHS', ''], Generic_System: ['Consola genérica de EmuVR', '']
+    VCR: ['Vídeo VHS', 'tape'], Generic_System: ['Consola genérica de EmuVR', '']
   };
   /* reads the consoles out of the EmuVR folder the user picked (a list of Files); progress(done, total) */
   async function scan(list, progress) {

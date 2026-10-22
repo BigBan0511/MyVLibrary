@@ -48,7 +48,8 @@ canvasEl.addEventListener('pointermove', e => {
     const h = hit(); setHovered(h ? h.case : null); canvasEl.style.cursor = h ? 'pointer' : 'default';
   }
   else if (mode === 'inspect') { const h = hit(); canvasEl.style.cursor = h && h.case === active ? (h.part === 'tab' ? 'grab' : active.g.dust > .02 ? 'crosshair' : 'pointer') : 'default'; }
-  else if (mode === 'open') { const h = hit(); hoverPart = h && h.case === active ? h.part : null; canvasEl.style.cursor = hoverPart === 'disc' || hoverPart === 'manual' ? 'pointer' : 'default'; }
+  else if (mode === 'hifi') canvasEl.style.cursor = hifiHit() ? 'pointer' : 'default';
+  else if (mode === 'open') { const h = hit(); hoverPart = h && h.case === active ? h.part : null; if (active.multi) setEpFocus(active, hoverPart === 'ep' ? slotOf(active, h.obj) : null, true); canvasEl.style.cursor = hoverPart === 'disc' || hoverPart === 'manual' || hoverPart === 'ep' ? 'pointer' : 'default'; }
 });
 canvasEl.addEventListener('pointerleave', () => { if (mode === 'shelf' && !kbNav) setHovered(null); });
 canvasEl.addEventListener('pointerdown', e => {
@@ -68,7 +69,8 @@ canvasEl.addEventListener('pointerup', e => {
   setPointer(e); kbNav = false; const h = hit();
   if (mode === 'shelf') { if (h) { focus = h.case; pick(h.case); } }
   else if (mode === 'inspect') { if (h && h.case === active && h.part !== 'tab') flipCase(); }
-  else if (mode === 'open') { if (h && h.case === active) { if (h.part === 'disc') insertDisc(); else if (h.part === 'manual') openManual(); } }
+  else if (mode === 'hifi') { const b = hifiHit(); if (b) musicAct(b); }
+  else if (mode === 'open') { if (h && h.case === active) { if (h.part === 'ep') { const sl = slotOf(active, h.obj); if (sl) chooseVideo(active, sl); } else if (h.part === 'disc') insertDisc(); else if (h.part === 'manual') openManual(); } }
 });
 canvasEl.addEventListener('pointercancel', () => { endDrag(); pointer.down = null; });
 canvasEl.addEventListener('wheel', e => {
@@ -78,6 +80,12 @@ canvasEl.addEventListener('wheel', e => {
 function handleKey(k) {
   if (mode === 'manual') { if (k === 'ArrowRight' || k === 'PageDown' || k === 'e' || k === 'c') turn(1); else if (k === 'ArrowLeft' || k === 'PageUp' || k === 'q' || k === 'z') turn(-1); else if (k === 'Escape' || k === 'm' || k === 'M') closeManual(); else return false; return true; }
   if (busy) return false;
+  if (mode === 'hifi') {
+    /* the hi-fi's buttons from the keyboard */
+    const a = { ' ': 'mToggle', Enter: 'mToggle', p: 'mToggle', P: 'mToggle', ArrowRight: 'mNext', ArrowLeft: 'mPrev', ArrowUp: 'mUp', ArrowDown: 'mDown', '+': 'mUp', '-': 'mDown', x: 'mEject', X: 'mEject', Escape: 'mBack', Backspace: 'mBack' }[k];
+    if (!a) return false; musicAct(a); return true;
+  }
+  if ((k === 'p' || k === 'P') && MPLAY.state !== 'off' && mode === 'shelf') { musicAct('mToggle'); return true; }
   if (mode === 'shelf') {
     if (k.startsWith('Arrow')) { moveFocus(k.slice(5).toLowerCase()); return true; }
     if (k === 'Enter' || k === ' ') { if (focus && hovered === focus && navOrder.includes(focus)) pick(focus); else moveFocus('right'); return true; }
@@ -93,10 +101,20 @@ function handleKey(k) {
   if ((mode === 'inspect' || mode === 'open') && (k === 'i' || k === 'I')) { setCard(prefs.card === 'hide' ? 'show' : 'hide'); return true; }
   if (mode === 'inspect') {
     if (k === 'f' || k === 'F' || k === 'ArrowLeft' || k === 'ArrowRight') { flipCase(); return true; }
+    if ((k === 'Enter' || k === 'o' || k === 'O') && active && active.g.music && !musicOpenable(active.g)) { musicEnter(); return true; }
     if (k === 'Enter' || k === 'o' || k === 'O') { if (active && active.wrap) { if (prefs.seal === 'manual') toast(T('Tira de la lengüeta roja para quitar el precinto')); else unwrapAction(); } else openCase(); return true; }
     if (k === 'Escape' || k === 'Backspace') { putBack(); return true; }
+  } else if (mode === 'open' && active && active.multi) {
+    /* a season: left and right bring the previous or next episodes, up and down choose one */
+    const m = active.multi;
+    if (k === 'ArrowLeft' || k === 'q' || k === 'z' || k === 'PageUp') { multiGo(active, m.page - 1); return true; }
+    if (k === 'ArrowRight' || k === 'e' || k === 'c' || k === 'PageDown') { multiGo(active, m.page + 1); return true; }
+    if (k === 'ArrowUp' || k === 'ArrowDown') { const vis = m.slots.filter(o => !o.userData.away), i = Math.max(0, vis.indexOf(m.slots[m.focus || 0])); setEpFocus(active, vis[clamp(i + (k === 'ArrowDown' ? 1 : -1), 0, vis.length - 1)]); return true; }
+    if (k === 'Enter' || k === 'd' || k === 'D') { const sl = m.slots[m.focus || 0]; if (sl && !sl.userData.away) chooseVideo(active, sl); return true; }
+    if (k === '/' || k === 'b' || k === 'B') { $('#epQ').focus(); return true; }
+    if (k === 'Escape' || k === 'Backspace') { closeCase(false); return true; }
   } else if (mode === 'open') {
-    if (k === 'm' || k === 'M') { openManual(); return true; }
+    if (k === 'm' || k === 'M') { if (!active.g.video) openManual(); return true; }
     if (k === 'Enter' || k === 'd' || k === 'D') { insertDisc(); return true; }
     if (k === 'Escape' || k === 'Backspace') { closeCase(false); return true; }
   } else if (mode === 'playing') { if (k === 'Escape' || (!PLAYNITE && k === 'Enter')) { doAct('quit'); return true; } }
@@ -143,6 +161,9 @@ function frame(now) {
   tilt.x += (tilt.tx - tilt.x) * (1 - Math.exp(-5 * dt)); tilt.y += (tilt.ty - tilt.y) * (1 - Math.exp(-5 * dt));
   const pulse = .55 + .3 * Math.sin(now * .005);
   for (const c of cases) { if (c.disposed) continue; c.glowT = mode === 'shelf' && c === hovered ? (kbNav ? 1 : .7) : c.match ? pulse : 0; c.update(dt); }
+  if (heldTape && !heldTape.disposed) heldTape.update(dt);
+  for (const c of looseCases) if (!c.disposed) c.update(dt);
+  musicTick(dt, now);
   if (active && active.disc) {
     const on = mode === 'open';
     active.discLabelMat.emissive.setScalar(on && hoverPart === 'disc' ? .16 : 0);
@@ -190,5 +211,5 @@ async function boot() {
   if (PLAYNITE && LIB.running && LIB.running.length) { const r = LIB.running[0]; setTimeout(() => restorePlaying(r.id, r.seconds), 600); }
   else if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
 }
-window.__mvl = { room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, sys: setSystem, dbgCases: () => [...caseById.values()].filter(c => c.root.visible && (c.mode !== 'home' || c.root.position.distanceTo(c.home.pos) > 1)).map(c => [c.g.id, c.mode, c.root.position.toArray().map(v => +v.toFixed(1)), +c.root.scale.x.toFixed(2), c.openA]), cam: () => ({ pos: camera.position.toArray().map(v => +v.toFixed(1)), look: cam.look.toArray().map(v => +v.toFixed(1)), fov: camera.fov, room: tvRoom.visible, tv: tvGroup.visible, flat: flatTv.visible, con: conGroup.visible, pc: pcGroup.visible, tray: pcTray ? +pcTray.position.z.toFixed(2) : null, fmt: active && active.g.fmt, port: active && portOf(active).kind }), systems: () => systemsList().map(s => s.key), state: () => ({ mode, busy, view: cam.view, stage: STAGE.name, sys: STAGE.sys, device: DEV.cur && DEV.cur.name, screen: STAGE.screen, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB, games: () => navOrder.map(c => ({ id: c.g.id, t: c.g.t, installed: c.g.installed, fmt: c.g.fmt })), ui: () => ({ toast: $('#toast').textContent, note: $('#playNote').textContent, eyebrow: $('#playEyebrow').textContent, pn: Object.assign({}, PN_STATE, { pendingEject: !!PN_STATE.pendingEject }), playnite: PLAYNITE }) };
+window.__mvl = { mus: () => ({ state: MPLAY.state, i: MPLAY.i, n: MPLAY.q.length, t: +MPLAY.time().toFixed(1), held: MUSIC.held && MUSIC.held.g.id, heldMode: MUSIC.held && MUSIC.held.mode, bag: BAG.length, flipAt: MPLAY.flipAt, side: MPLAY.side, medium: MPLAY.medium() }), musicAct, bagAdd: id => bagAdd((GAMES.find(g => g.music && g.kind === 'song' && g.track.id === id) || {}).track), playBag, songs: () => GAMES.filter(g => g.music && g.kind === 'song').slice(0, 8).map(g => g.track.id), setSysKey: k => { prefs.sys = k; prefs.shelf = '__all'; applyStage(k); buildGroups(); curGroup = 0; curPage = 0; layoutPage(); setView('shelf'); renderPills(); renderBrand(); renderSysbar(); }, dbgActive: () => active && { fmt: active.g.fmt, dim: active.dim.name, multi: active.multi ? { kind: active.multi.kind, eps: active.multi.eps.length, page: active.multi.page } : null, interior: !!active.interior, seasons: active.g.seasons ? active.g.seasons.length : null, eps: seasonOf(active.g) && seasonOf(active.g).eps ? seasonOf(active.g).eps.length : null }, room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, sys: setSystem, dbgCases: () => [...caseById.values()].filter(c => c.root.visible && (c.mode !== 'home' || c.root.position.distanceTo(c.home.pos) > 1)).map(c => [c.g.id, c.mode, c.root.position.toArray().map(v => +v.toFixed(1)), +c.root.scale.x.toFixed(2), c.openA]), cam: () => ({ pos: camera.position.toArray().map(v => +v.toFixed(1)), look: cam.look.toArray().map(v => +v.toFixed(1)), fov: camera.fov, room: tvRoom.visible, tv: tvGroup.visible, flat: flatTv.visible, con: conGroup.visible, pc: pcGroup.visible, tray: pcTray ? +pcTray.position.z.toFixed(2) : null, fmt: active && active.g.fmt, port: active && portOf(active).kind }), systems: () => systemsList().map(s => s.key), state: () => ({ mode, busy, view: cam.view, stage: STAGE.name, sys: STAGE.sys, device: DEV.cur && DEV.cur.name, screen: STAGE.screen, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB, games: () => navOrder.map(c => ({ id: c.g.id, t: c.g.t, installed: c.g.installed, fmt: c.g.fmt })), ui: () => ({ toast: $('#toast').textContent, note: $('#playNote').textContent, eyebrow: $('#playEyebrow').textContent, pn: Object.assign({}, PN_STATE, { pendingEject: !!PN_STATE.pendingEject }), playnite: PLAYNITE }) };
 boot();

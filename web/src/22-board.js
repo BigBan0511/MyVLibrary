@@ -62,7 +62,8 @@ function drawBoard(force) {
     const s = fitMarker(x, gr.label.toUpperCase(), maxW - 80, 66), w = marker(x, gr.label.toUpperCase(), L + 70, 116, s);
     scribbleLine(x, L + 66, L + 74 + w, 138);
     const hrs = gr.games.reduce((a, b) => a + (b.hours || 0), 0), np = gr.pages.length;
-    marker(x, T(gr.games.length === 1 ? '{0} juego' : '{0} juegos', gr.games.length) + ' · ' + T('{0} jugadas', fmtH(hrs)), L, 250, 44);
+    if (STAGE.name === 'music') { const songs = gr.games.reduce((a, q) => a + (q.kind === 'song' ? 1 : (tracksOf(q) || []).length), 0); marker(x, T(gr.games.length === 1 ? '{0} elemento' : '{0} elementos', gr.games.length) + ' · ' + T('{0} canciones', songs), L, 250, 44); }
+    else marker(x, T(gr.games.length === 1 ? '{0} juego' : '{0} juegos', gr.games.length) + ' · ' + T('{0} jugadas', fmtH(hrs)), L, 250, 44);
     if (np > 1) marker(x, T('Página {0} de {1}', curPage + 1, np), L, 320, 40, { col: INK2 });
     const lastG = gr.games.filter(q => q.last !== null && q.last !== undefined).sort((a, b) => a.last - b.last)[0];
     if (lastG) wrapMarker(x, T('Lo último: {0}', lastG.t), L, np > 1 ? 380 : 320, maxW * .8, 36, 46, 1);
@@ -78,6 +79,14 @@ function drawBoard(force) {
       const m = Math.max(0, Math.floor((performance.now() - playStart) / 60000));
       marker(x, PN_STATE.waiting ? T('Playnite está abriendo el juego') : T('Esta sesión: {0}', m < 1 ? T('acaba de empezar') : m === 1 ? T('1 minuto') : T('{0} minutos', m)), L, y + 110, 40);
       wrapMarker(x, mediaT(g, PLAYNITE ? 'Al cerrar el juego, el disco vuelve solo a su caja' : 'Esc para sacar el disco'), L, y + 190, maxW * .9, 34, 44, 2, INK2);
+      boardTex.needsUpdate = true; return;
+    }
+    if (g.music) {
+      /* a record: who, when, how long; and what the hi-fi is playing */
+      const list = tracksOf(g) || [];
+      marker(x, [musicSub(g), g.year].filter(Boolean).join(' · '), L, y, 44, { col: INK });
+      marker(x, T(list.length === 1 ? '{0} canción' : '{0} canciones', list.length) + ' · ' + clockS(sumDur(list)), L, y + 62, 38);
+      if (MPLAY.cur) wrapMarker(x, T('Sonando: {0}', MPLAY.cur.t), L, y + 130, maxW * .9, 34, 44, 1, INK3);
       boardTex.needsUpdate = true; return;
     }
     const st = g.status ? TD(g.status) : T('Sin estado');

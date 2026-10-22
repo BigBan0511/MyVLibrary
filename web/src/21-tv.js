@@ -74,6 +74,7 @@ function drawTV(now) {
       x.fillStyle = '#ffffff'; x.font = `700 16px ${F.mono}`; x.textAlign = 'right'; x.fillText(String(Math.floor(t * 137)).padStart(7, '0'), W - 16, 19); x.textAlign = 'center';
     }
   }
+  else if (tv.state === 'burn') drawBurnScreen(x, W, H, now);
   x.fillStyle = 'rgba(0,0,0,.16)'; for (let y = 0; y < H; y += 3) x.fillRect(0, y, W, 1);
   x.fillStyle = tvVig; x.fillRect(0, 0, W, H);
   tvTex.needsUpdate = true;
