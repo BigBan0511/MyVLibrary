@@ -36,6 +36,9 @@ namespace MyVLibrary
     {
         public byte[] Bytes;
         public string ContentType;
+        /* a song is served in pieces: 206 and its own headers */
+        public int Status = 200;
+        public string Headers;
     }
 
     /// <summary>
@@ -490,6 +493,10 @@ namespace MyVLibrary
             var video = CachedVideo();
             if (video != null) message["video"] = video;
             RefreshVideo(false);
+            /* the record shop: the same, from Navidrome */
+            var music = CachedMusic();
+            if (music != null) message["music"] = music;
+            RefreshMusic(false);
             if (host.FocusGame.HasValue)
             {
                 message["focusId"] = host.FocusGame.Value.ToString();
@@ -562,6 +569,9 @@ namespace MyVLibrary
                         break;
                     case "jfStop":
                         VideoStop();
+                        break;
+                    case "ndScrobble":
+                        MusicScrobble(m.id);
                         break;
                 }
             }
@@ -767,7 +777,7 @@ namespace MyVLibrary
         // ---------- covers and backgrounds ----------
 
         /// <summary>https://media.myvlibrary/{cover|bg|icon}/{gameId}?w=512 → a JPEG no wider than w, cached on disk.</summary>
-        public MediaFile LoadMedia(string url)
+        public MediaFile LoadMedia(string url, string range = null)
         {
             try
             {
@@ -783,6 +793,13 @@ namespace MyVLibrary
                 }
                 /* a film's or series' picture from Jellyfin */
                 if (parts.Length == 3 && parts[0] == "jf") return LoadJellyfinImage(parts[1], parts[2], width, ver);
+                /* music from Navidrome: a cover, or a song's sound */
+                if (parts.Length == 3 && parts[0] == "nd" && parts[1] == "cover") return LoadNavidromeCover(Uri.UnescapeDataString(parts[2]), width);
+                if (parts.Length == 3 && parts[0] == "nd" && parts[1] == "stream")
+                {
+                    var f = uri.Query.TrimStart('?').Split('&').Select(p => p.Split('=')).Where(kv => kv.Length == 2 && kv[0] == "f").Select(kv => Uri.UnescapeDataString(kv[1])).FirstOrDefault();
+                    return LoadNavidromeAudio(Uri.UnescapeDataString(parts[2]), f, range);
+                }
                 if (parts.Length != 2 || !Guid.TryParse(parts[1], out var id)) return null;
                 var kind = parts[0];
 

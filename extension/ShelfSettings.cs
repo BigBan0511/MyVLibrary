@@ -53,6 +53,16 @@ namespace MyVLibrary
         /// <summary>"system" (whatever plays videos in Windows) or "vlc"; anything else (the old "jmp") counts as "system".</summary>
         public string JellyfinPlayer { get => jellyfinPlayer; set => SetValue(ref jellyfinPlayer, value); }
         public string VlcPath { get => vlcPath; set => SetValue(ref vlcPath, value); }
+
+        // ---------- Navidrome: the record shop ----------
+        private string navidromeUrl = "";
+        private string navidromeUser = "";
+
+        /// <summary>The server, e.g. http://192.168.1.10:4533</summary>
+        public string NavidromeUrl { get => navidromeUrl; set => SetValue(ref navidromeUrl, value); }
+        public string NavidromeUser { get => navidromeUser; set => SetValue(ref navidromeUser, value); }
+        /// <summary>The password, encrypted for this Windows user (Navidrome needs it for every request); empty when not linked.</summary>
+        public string NavidromePassword { get; set; } = "";
     }
 
     public class ShelfSettingsViewModel : ObservableObject, ISettings
@@ -82,6 +92,7 @@ namespace MyVLibrary
             plugin.SavePluginSettings(Settings);
             plugin.Bridge.LibraryChanged();
             plugin.Bridge.RefreshVideo();
+            plugin.Bridge.RefreshMusic();
         }
 
         internal MyVLibraryPlugin Plugin => plugin;
@@ -93,12 +104,19 @@ namespace MyVLibrary
         }
     }
 
-    /// <summary>Settings page, built in code (no XAML to compile).</summary>
+    /// <summary>Settings page, built in code (no XAML to compile): the shelf, the video room and the record shop in tabs.</summary>
     public class ShelfSettingsView : UserControl
     {
         public ShelfSettingsView()
         {
             var panel = new StackPanel { Margin = new Thickness(20) };
+            var video = new StackPanel { Margin = new Thickness(20) };
+            var music = new StackPanel { Margin = new Thickness(20) };
+            TabItem Tab(string header, StackPanel content) => new TabItem { Header = header, Content = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+            var tabs = new TabControl();
+            tabs.Items.Add(Tab(Loc.S("Estantería", "Shelf"), panel));
+            tabs.Items.Add(Tab(Loc.S("Vídeo (Jellyfin)", "Video (Jellyfin)"), video));
+            tabs.Items.Add(Tab(Loc.S("Música (Navidrome)", "Music (Navidrome)"), music));
             panel.Children.Add(new TextBlock
             {
                 Text = "MyVLibrary",
@@ -128,7 +146,8 @@ namespace MyVLibrary
             Check(Loc.S("Herramientas de desarrollo (F12)", "Developer tools (F12)"), nameof(ShelfSettings.DevTools),
                 Loc.S("Solo para depurar la estantería. Se aplica la próxima vez que la abras.", "Only for debugging the shelf. Applies the next time you open it."));
 
-            AddJellyfin(panel);
+            AddJellyfin(video);
+            AddNavidrome(music);
 
             panel.Children.Add(new TextBlock
             {
@@ -140,7 +159,69 @@ namespace MyVLibrary
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 18, 0, 0)
             });
-            Content = panel;
+            Content = tabs;
+        }
+
+        /// <summary>
+        /// The record shop: link a Navidrome server. Its API needs the password for every request, so it is kept,
+        /// encrypted for this Windows user.
+        /// </summary>
+        private void AddNavidrome(StackPanel panel)
+        {
+            panel.Children.Add(new TextBlock { Text = Loc.S("Tienda de música (Navidrome)", "Record shop (Navidrome)"), FontSize = 16, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new TextBlock
+            {
+                Text = Loc.S("Tus álbumes, artistas, canciones y listas de Navidrome aparecen como una tienda de discos. Hasta 1972 salen en vinilo, hasta 1999 en casete y después en CD; las listas, en CD. Suenan en una cadena de música dentro de la estantería y siguen sonando mientras la recorres. El formato se cambia en cada disco o, para todos, en Ajustes → Música dentro de la estantería.",
+                             "Your Navidrome albums, artists, songs and playlists appear as a record shop. Up to 1972 they come on vinyl, up to 1999 on cassette and after that on CD; playlists on CD. They play on a hi-fi inside the shelf and keep playing while you walk around it. The format changes on each record or, for all of them, in Settings → Music inside the shelf."),
+                Opacity = .7, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8)
+            });
+            Grid Row(string label, UIElement field)
+            {
+                var g = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                var t = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center };
+                Grid.SetColumn(field, 1); g.Children.Add(t); g.Children.Add(field);
+                panel.Children.Add(g); return g;
+            }
+            TextBox Bound(string path) { var b = new TextBox(); b.SetBinding(TextBox.TextProperty, new Binding("Settings." + path) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged }); return b; }
+            Row(Loc.S("Servidor", "Server"), Bound(nameof(ShelfSettings.NavidromeUrl)));
+            Row(Loc.S("Usuario", "User"), Bound(nameof(ShelfSettings.NavidromeUser)));
+            var pass = new PasswordBox();
+            Row(Loc.S("Contraseña", "Password"), pass);
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(150, 6, 0, 4) };
+            var connect = new Button { Content = Loc.S("Conectar", "Connect"), Padding = new Thickness(12, 3, 12, 3) };
+            var unlink = new Button { Content = Loc.S("Desvincular", "Unlink"), Padding = new Thickness(12, 3, 12, 3), Margin = new Thickness(8, 0, 0, 0) };
+            buttons.Children.Add(connect); buttons.Children.Add(unlink); panel.Children.Add(buttons);
+            var status = new TextBlock { Opacity = .8, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(150, 2, 0, 6) };
+            panel.Children.Add(status);
+            panel.Children.Add(new TextBlock { Text = Loc.S("La contraseña se guarda cifrada para tu usuario de Windows: Navidrome la pide en cada petición. Las canciones que escuchas se guardan un tiempo en la carpeta de la extensión (hasta 1 GB).", "The password is kept encrypted for your Windows user: Navidrome needs it for every request. The songs you play are kept for a while in the extension's folder (up to 1 GB)."), Opacity = .6, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(150, 0, 0, 4) });
+
+            ShelfSettingsViewModel Vm() => DataContext as ShelfSettingsViewModel;
+            Loaded += (s, e) => { var vm = Vm(); if (vm == null) return; status.Text = string.IsNullOrEmpty(vm.Settings.NavidromePassword) ? Loc.S("Sin vincular.", "Not linked.") : Loc.S("Vinculado como ", "Linked as ") + vm.Settings.NavidromeUser + "."; };
+            connect.Click += async (s, e) =>
+            {
+                var vm = Vm(); if (vm == null) return;
+                var st = vm.Settings;
+                if (string.IsNullOrWhiteSpace(st.NavidromeUrl) || string.IsNullOrWhiteSpace(st.NavidromeUser) || pass.Password.Length == 0) { status.Text = Loc.S("Escribe la dirección del servidor, tu usuario y tu contraseña.", "Type the server address, your user and your password."); return; }
+                if (!st.NavidromeUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)) st.NavidromeUrl = "http://" + st.NavidromeUrl.Trim();
+                connect.IsEnabled = false; status.Text = Loc.S("Conectando…", "Connecting…");
+                try
+                {
+                    await new NavidromeClient(st.NavidromeUrl, st.NavidromeUser, pass.Password).Ping();
+                    st.NavidromePassword = Secret.Protect(pass.Password); pass.Clear();
+                    status.Text = Loc.S("Vinculado como ", "Linked as ") + st.NavidromeUser + ". " + Loc.S("Guarda los ajustes y la tienda de música aparecerá en la estantería.", "Save the settings and the record shop will appear on the shelf.");
+                }
+                catch (UnauthorizedAccessException) { status.Text = Loc.S("Usuario o contraseña incorrectos.", "Wrong user or password."); }
+                catch (Exception ex) { status.Text = Loc.S("No se ha podido conectar: ", "Could not connect: ") + ex.Message; }
+                finally { connect.IsEnabled = true; }
+            };
+            unlink.Click += (s, e) =>
+            {
+                var vm = Vm(); if (vm == null) return;
+                vm.Settings.NavidromePassword = "";
+                status.Text = Loc.S("Sin vincular. Guarda los ajustes para quitar la tienda de música.", "Not linked. Save the settings to remove the record shop.");
+            };
         }
 
         private static readonly DependencyProperty ToggleButton_IsChecked = System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty;
@@ -151,7 +232,7 @@ namespace MyVLibrary
         /// </summary>
         private void AddJellyfin(StackPanel panel)
         {
-            panel.Children.Add(new TextBlock { Text = Loc.S("Sala de vídeo (Jellyfin)", "Video room (Jellyfin)"), FontSize = 16, Margin = new Thickness(0, 22, 0, 4) });
+            panel.Children.Add(new TextBlock { Text = Loc.S("Sala de vídeo (Jellyfin)", "Video room (Jellyfin)"), FontSize = 16, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(new TextBlock
             {
                 Text = Loc.S("Tus películas y series de Jellyfin aparecen como un videoclub: una estantería por biblioteca. Hasta 1997 salen en VHS, hasta 2014 en DVD y después en Blu-ray, y se puede cambiar cada una. Se ven en el reproductor de Windows o en VLC.",

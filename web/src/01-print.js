@@ -27,6 +27,7 @@ function imgW(i) { return i.naturalWidth || i.videoWidth || i.width; }
 function imgH(i) { return i.naturalHeight || i.videoHeight || i.height; }
 function coverFit(x, img, X, Y, W, H, fx = .5, fy = .5) { const iw = imgW(img), ih = imgH(img); if (!iw || !ih) return; const sc = Math.max(W / iw, H / ih); x.drawImage(img, X + (W - iw * sc) * fx, Y + (H - ih * sc) * fy, iw * sc, ih * sc); }
 function fmtLabel(g) {
+  if (g.music) return DIMS[g.fmt].label;
   if (g.video) { const s = seasonOf(g); return (s && g.seasons.length > 1 ? T('TEMPORADA {0}', s.idx) + ' · ' : '') + DIMS[g.fmt].label; }
   if (!g.real && sysOf(g) === 'PC') return T(DIMS[g.fmt].label);
   return `${g.plat} · ` + ({ jewel: 'CD', bigjewel: 'CD', big: T('CAJA'), floppy: '3½" HD', cart: T('CARTUCHO') }[g.fmt] || 'DVD');
@@ -38,9 +39,10 @@ function placeholderArt(x, W, H, g) {
   let s = W * .14; x.font = titleFont(g, s); const t = titleText(g); while (x.measureText(t).width > W * .84 && s > 10) { s *= .94; x.font = titleFont(g, s); }
   x.fillStyle = g.pal[4]; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(t, W / 2, H * .3);
 }
-function coverSize(g) { if (g.video) return [512, Math.round(512 * DIMS[g.fmt].h / DIMS[g.fmt].w)]; return { jewel: [512, 452], bigjewel: [512, 470], big: [512, 592], floppy: [512, 694], cart: [512, 686] }[g.fmt] || [512, 720]; }
+function coverSize(g) { if (g.video || g.music) return [512, Math.round(512 * DIMS[g.fmt].h / DIMS[g.fmt].w)]; return { jewel: [512, 452], bigjewel: [512, 470], big: [512, 592], floppy: [512, 694], cart: [512, 686] }[g.fmt] || [512, 720]; }
 function spineSize(g) {
   if (g.video) { const d = DIMS[g.fmt]; return [Math.round(1000 * d.d / d.h), 1000]; }
+  if (g.music) { const d = DIMS[g.fmt]; return [Math.max(28, Math.round(1000 * d.d / d.h)), 1000]; }
   const s = { big: [224, 1036], floppy: [200, 1080], cart: [192, 1060], bigjewel: [104, 760] }[g.fmt];
   if (s) return s;
   if (g.real) return g.fmt === 'jewel' ? [80, 704] : [72, 976];
@@ -112,6 +114,7 @@ function drawTitle(x, g, W, H, top) {
 }
 
 function drawCover(g) {
+  if (g.music) return musicCover(g);
   const [W, H] = coverSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), r = rng(hash(g.id) + 3);
   if (g.real) {
     const src = g.cover || g.coverSmall; if (src) coverFit(x, src, 0, 0, W, H); else placeholderArt(x, W, H, g);
@@ -212,6 +215,7 @@ function featureList(g) {
 }
 function drawBack(g, coverCanvas) {
   if (g.video) return drawVideoBack(g, coverCanvas);
+  if (g.music) return musicBack(g, coverCanvas);
   const [W, H] = coverSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal;
   const dark = lum(p[0]) < .5, base = dark ? mix(p[0], '#000000', .15) : mix(p[0], '#ffffff', .2);
   const ink = dark ? '#f6f2ea' : '#1d1a17', soft = dark ? 'rgba(246,242,234,.82)' : 'rgba(29,26,23,.8)';
@@ -324,6 +328,7 @@ function drawRealSpine(g) {
   return c;
 }
 function drawSpine(g) {
+  if (g.music) return musicSpine(g);
   if (g.real) return drawRealSpine(g);
   const [W, H] = spineSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal, r = rng(hash(g.id) + 11);
   const base = g.spine || p[0], ink = g.scol || p[4];
@@ -414,7 +419,7 @@ function drawCartLabel(g, coverCanvas) {
   x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.8)'; x.shadowBlur = 8; x.fillStyle = g.pal[4]; x.fillText(titleText(g), W / 2, H * .82); x.shadowBlur = 0;
   return c;
 }
-function drawMediaLabel(g, coverCanvas) { if (g.video) return drawVideoLabel(g, coverCanvas, g.ep || null); const m = mediaOf(g); return m === 'floppy' ? drawFloppyLabel(g, coverCanvas, 0, DIMS.floppy.disks) : m === 'cart' ? drawCartLabel(g, coverCanvas) : drawDisc(g, coverCanvas); }
+function drawMediaLabel(g, coverCanvas) { if (g.music) return musicLabel(g, coverCanvas); if (g.video) return drawVideoLabel(g, coverCanvas, g.ep || null); const m = mediaOf(g); return m === 'floppy' ? drawFloppyLabel(g, coverCanvas, 0, DIMS.floppy.disks) : m === 'cart' ? drawCartLabel(g, coverCanvas) : drawDisc(g, coverCanvas); }
 function drawManualCover(g, coverCanvas) {
   const W = 300, H = Math.round(300 * DIMS[g.fmt].man[1] / DIMS[g.fmt].man[0]), c = mkCanvas(W, H), x = c.getContext('2d');
   x.fillStyle = '#f3eee3'; x.fillRect(0, 0, W, H);
@@ -524,7 +529,9 @@ function makeWindowCanvas(kind) {
   return c;
 }
 function makeTrayCanvas(fmt) {
-  const d = DIMS[fmt], W = 512, H = Math.round(512 * d.h / d.w), c = mkCanvas(W, H), x = c.getContext('2d');
+  const d = DIMS[fmt], W = 512, H = Math.round(512 * d.h / d.w);
+  if (fmt === 'lp' || fmt === 'cass') return musicTray(fmt, W, H);
+  const c = mkCanvas(W, H), x = c.getContext('2d');
   const cx = W * (.5 + d.discX / d.w), cy = H / 2, R = d.discR / d.w * W;
   if (fmt === 'big') {
     x.fillStyle = '#d9c9a8'; x.fillRect(0, 0, W, H);
@@ -578,7 +585,9 @@ function makeTrayCanvas(fmt) {
   return c;
 }
 function makeLidCanvas(fmt) {
-  const d = DIMS[fmt], W = 512, H = Math.round(512 * d.h / d.w), c = mkCanvas(W, H), x = c.getContext('2d');
+  const d = DIMS[fmt], W = 512, H = Math.round(512 * d.h / d.w);
+  if (fmt === 'lp' || fmt === 'cass') return musicLid(fmt, W, H);
+  const c = mkCanvas(W, H), x = c.getContext('2d');
   if (d.shell === 'card') { x.fillStyle = fmt === 'big' ? '#e4d6b8' : '#ddd0b0'; x.fillRect(0, 0, W, H); x.fillStyle = 'rgba(90,70,40,.12)'; for (let i = 0; i < 30; i++) x.fillRect(0, i * H / 30, W, 2); }
   else if (d.video) {
     /* video cases: black (VHS, DVD) or Blu-ray blue, the multi-disc ones with two hubs on the lid side */

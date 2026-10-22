@@ -24,6 +24,7 @@ function renderTip() {
   const c = mode === 'shelf' ? hovered : null;
   if (!c) { tipEl.hidden = true; return; }
   const g = c.g, idle = g.last === null || g.last === undefined ? g.added : g.last;
+  if (g.music) { tipEl.innerHTML = `<b>${esc(g.t)}</b><span>${esc([musicSub(g), g.year, T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</span>`; tipEl.hidden = false; placeTip(); return; }
   const extra = g.wrapped ? ' · ' + T('precintado') : g.dust > .3 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : '';
   tipEl.innerHTML = `<b>${esc(g.t)}</b><span>${fmtH(g.hours)} · ${esc(g.status ? TD(g.status) : T('Sin estado'))}${extra}</span>`; tipEl.hidden = false; placeTip();
 }
@@ -36,7 +37,7 @@ function placeTip() {
 }
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), ms); }
 
-function setMode(m) { mode = m; if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
+function setMode(m) { mode = m; renderMini(); renderBag(); if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
 const btn = (k, label, a, primary) => `<button class="pbtn${primary ? ' primary' : ''}" type="button" data-act="${a}"><kbd>${k}</kbd>${label}</button>`;
 function tearHintText(c) { return c.tear > .05 ? T('Precinto {0} % · sigue tirando', Math.round(100 * c.tear / c.L)) : T('Arrastra la lengüeta roja para quitar el precinto'); }
 function renderPrompts() {
@@ -56,21 +57,23 @@ function renderPrompts() {
   if (mode === 'open' && active.g.video) h = (active.multi ? `<span class="hint">${T(active.multi.kind === 'tape' ? 'Elige una cinta' : 'Elige un disco')} · <kbd>←</kbd><kbd>→</kbd> ${T('más capítulos')} · <kbd>↑</kbd><kbd>↓</kbd> ${T('elegir')}</span>` + btn(T('Intro'), T('Ver este'), 'insert', true) : btn(T('Intro'), mediaT(active.g, 'Meter el disco'), 'insert', true)) + btn('Esc', T('Cerrar la caja'), 'close');
   else if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), mediaT(active.g, active.g.real && !active.g.installed ? 'Meter el disco (instalar)' : 'Meter el disco'), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
   if (mode === 'playing') h = btn('Esc', active.g.video ? mediaT(active.g, 'Sacar el disco') : PLAYNITE ? mediaT(active.g, 'Sacar el disco') : T('Cerrar el juego'), 'quit', true);
+  if (mode === 'hifi' || (active && active.g.music && (mode === 'inspect' || mode === 'open'))) h = musicPrompts();
   el.innerHTML = h;
   if (typeof renderEpBar === 'function') renderEpBar();
 }
 $('#prompts').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) { sfx.init(); doAct(b.dataset.act); } });
 function doAct(a) {
   const fns = { flip: flipCase, open: openCase, unwrap: unwrapAction, back: putBack, manual: openManual, insert: insertDisc, close: () => closeCase(false), quit: () => closeGame(PLAYNITE && PN_STATE.running && !PN_STATE.waiting ? { keepRunning: true } : {}), prevPage: () => setPage(curPage - 1), nextPage: () => setPage(curPage + 1), prevShelf: () => setGroup(curGroup - 1), nextShelf: () => setGroup(curGroup + 1) };
-  if (fns[a]) fns[a]();
+  if (fns[a]) fns[a](); else if (a[0] === 'm') musicAct(a);
 }
 
 /* ---------- header: brand count and the pills that choose what is on the shelf ---------- */
 function renderBrand() {
   renderSysbar();
   const gr = groups[curGroup], n = gr ? gr.games.length : 0;
+  if (STAGE.name === 'music') { const all = GAMES.filter(g => g.music).length; $('#brandCount').textContent = T(all === 1 ? '{0} de {1} elemento' : '{0} de {1} elementos', n, all); return; }
   if (STAGE.name === 'video') { const all = GAMES.filter(g => g.video).length; $('#brandCount').textContent = T(all === 1 ? '{0} de {1} título' : '{0} de {1} títulos', n, all); return; }
-  const games = GAMES.filter(g => !g.video).length; $('#brandCount').textContent = T(games === 1 ? '{0} de {1} juego' : '{0} de {1} juegos', n, games);
+  const games = GAMES.filter(g => !g.video && !g.music).length; $('#brandCount').textContent = T(games === 1 ? '{0} de {1} juego' : '{0} de {1} juegos', n, games);
 }
 function renderPills() {
   const el = $('#pills');
@@ -119,7 +122,7 @@ function renderSysbar() {
   el.hidden = !L.length; if (!L.length) return;
   const cur = L.find(s => s.key === curSysKey()) || L[0];
   el.querySelector('b').textContent = cur.name;
-  el.querySelector('span').textContent = T(cur.key === 'VIDEO' ? (cur.n === 1 ? '{0} título' : '{0} títulos') : cur.n === 1 ? '{0} juego' : '{0} juegos', cur.n) + (L.length > 1 ? ` · ${L.indexOf(cur) + 1} / ${L.length}` : '');
+  el.querySelector('span').textContent = T(cur.key === 'VIDEO' ? (cur.n === 1 ? '{0} título' : '{0} títulos') : cur.key === 'MUSIC' ? (cur.n === 1 ? '{0} elemento' : '{0} elementos') : cur.n === 1 ? '{0} juego' : '{0} juegos', cur.n) + (L.length > 1 ? ` · ${L.indexOf(cur) + 1} / ${L.length}` : '');
   el.querySelectorAll('[data-sys]').forEach(b => { b.disabled = L.length < 2; });
 }
 $('#sysbar').addEventListener('click', e => { const b = e.target.closest('[data-sys]'); if (b && !b.disabled) { sfx.init(); setSystem(+b.dataset.sys); } });
@@ -150,6 +153,7 @@ function renderInfo(force) {
   placeCard();
   if (prefs.card === 'hide') { el.hidden = true; lastInfoKey = ''; tab.hidden = false; tab.innerHTML = `<span>${T('Ficha')}</span><b>${esc(active.g.t)}</b><i aria-hidden="true">▾</i>`; return; }
   tab.hidden = true;
+  if (active.g.music) { const g = active.g, mk = ['m', g.id, g.fmt, BAG.length, BAG.map(t => t.id).join(',').length].join('|'); el.hidden = false; if (!force && mk === lastInfoKey) return; lastInfoKey = mk; el.classList.add('open'); renderMusicInfo(el, g); return; }
   if (active.g.video) { const g = active.g, s = seasonOf(g), vk = ['v', g.id, g.fmt, g.seasonIdx, g.seasons ? g.seasons.length : 0, s && s.eps ? s.eps.length : -1, g.pos, g.played].join('|'); el.hidden = false; if (!force && vk === lastInfoKey) return; lastInfoKey = vk; el.classList.add('open'); renderVideoInfo(el, g); return; }
   const g = active.g, key = [g.id, g.fmt, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
@@ -262,7 +266,7 @@ $('#infoTab').addEventListener('click', () => setCard('show'));
 
 /* ---------- search ---------- */
 const qEl = $('#q'), countEl = $('#count');
-function searchText(g) { return norm([g.t, g.genre, g.dev, g.pub, g.plat, g.status, T(DIMS[g.fmt].name), ...(g.cats || [])].filter(Boolean).join(' ')); }
+function searchText(g) { return norm([g.t, g.artist, g.album, g.genre, g.dev, g.pub, g.plat, g.status, T(DIMS[g.fmt].name), ...(g.cats || [])].filter(Boolean).join(' ')); }
 function applySearch(stay) {
   const q = norm(qEl.value.trim()), gr = groups[curGroup]; if (!gr) return;
   const hits = q ? gr.games.filter(g => searchText(g).includes(q)) : [];
@@ -277,7 +281,7 @@ qEl.addEventListener('keydown', e => { if (e.key === 'Enter') { const m = navOrd
 const setBtn = $('#setBtn'), setPop = $('#settings');
 function renderUgcList() {
   const el = $('#ugcList'); if (!el) return;
-  const rows = [...systemsList().flatMap(s => s.key === 'VIDEO' ? [['vid:tape', T('Vídeo VHS'), T('Genérico')], ['vid:disc', T('Reproductor de DVD y Blu-ray'), T('Genérico')]] : [['sys:' + s.key, s.name, s.key === 'PC' ? T('PC genérico') : T('Consola genérica (ID-2)')]]), ['scr:crt', T('Tele de tubo'), T('Genérica')], ['scr:flat', T('Tele plana'), T('Genérica')], ['scr:monitor', T('Monitor del PC'), T('Genérico')]];
+  const rows = [...systemsList().filter(s => s.key !== 'MUSIC').flatMap(s => s.key === 'VIDEO' ? [['vid:tape', T('Vídeo VHS'), T('Genérico')], ['vid:disc', T('Reproductor de DVD y Blu-ray'), T('Genérico')]] : [['sys:' + s.key, s.name, s.key === 'PC' ? T('PC genérico') : T('Consola genérica (ID-2)')]]), ['scr:crt', T('Tele de tubo'), T('Genérica')], ['scr:flat', T('Tele plana'), T('Genérica')], ['scr:monitor', T('Monitor del PC'), T('Genérico')]];
   /* EmuVR's own consoles, once its folder has been read: offered on every system, the ones that suit it first */
   const bases = UGCS.bases(), sysOfKey = k => k.slice(4);
   const baseSel = k => !bases.length || !/^(sys|vid):/.test(k) || k === 'sys:PC' ? '' : `<select data-ugc-base="${k}" aria-label="${T('Consola de EmuVR')}"><option value="">EmuVR…</option>${bases.slice().sort((a, b) => (b.sys === sysOfKey(k)) - (a.sys === sysOfKey(k))).map(b => `<option value="${esc(b.id)}"${UGCS.meta()[k] && UGCS.meta()[k].base === b.id ? ' selected' : ''}>${esc(T(b.name))}</option>`).join('')}</select>`;
@@ -316,7 +320,13 @@ $('#ugcFile').addEventListener('change', async e => {
   catch (err) { console.error(err); toast(T(err && err.message ? err.message : 'No se ha podido leer el .ugc', err && err.arg), 5000); }
   renderUgcList();
 });
-function renderSettings() { renderUgcList(); const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
+function renderSettings() {
+  const hasMusic = GAMES.some(g => g.music); if (prefs.setTab === 'music' && !hasMusic) prefs.setTab = 'general';
+  $('#tabMusic').hidden = !hasMusic;
+  setPop.querySelectorAll('[data-tab-btn]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tabBtn === prefs.setTab)));
+  setPop.querySelectorAll('[data-tab]').forEach(r => { r.hidden = r.dataset.tab !== prefs.setTab; });
+  const mv = $('#mvolRange'); if (mv) { mv.value = prefs.mvol; $('#mvolVal').textContent = prefs.mvol + ' %'; }
+  renderUgcList(); const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
 function renderRoomPick() {
   const el = $('#roomPick'); if (!el) return;
   el.innerHTML = ROOM_ORDER.map(k => { const R = ROOMS[k]; return `<button type="button" class="room" data-room="${k}" aria-pressed="${prefs.room === k}"><i style="background:linear-gradient(90deg,${R.sw[0]} 0 45%,${R.sw[1]} 45% 72%,${R.sw[2]} 72%)"></i><span>${T(R.name)}</span></button>`; }).join('');
@@ -333,10 +343,13 @@ async function switchRoom(name) {
 $('#roomPick').addEventListener('click', e => { const b = e.target.closest('[data-room]'); if (b) switchRoom(b.dataset.room); });
 setBtn.addEventListener('click', () => { setPop.hidden = !setPop.hidden; setBtn.setAttribute('aria-expanded', String(!setPop.hidden)); renderSettings(); });
 setPop.addEventListener('input', e => {
+  if (e.target.id === 'mvolRange') { MPLAY.setVol(+e.target.value); $('#mvolVal').textContent = prefs.mvol + ' %'; }
   if (e.target.id === 'volRange') { prefs.vol = +e.target.value; sfx.setVolume(prefs.vol / 100); $('#volVal').textContent = prefs.vol + ' %'; savePrefs(); if (trailer.video) trailer.video.volume = trailerVolume(); }
 });
 setPop.addEventListener('change', e => { if (e.target.id === 'volRange') sfx.tick(); });
 setPop.addEventListener('click', e => {
+  const tb = e.target.closest('[data-tab-btn]'); if (tb) { prefs.setTab = tb.dataset.tabBtn; savePrefs(); renderSettings(); sfx.tick(); return; }
+  const all = e.target.closest('[data-all]'); if (all) { setMusicBulk(['album', 'playlist', 'song'], all.dataset.all); sfx.tick(); return; }
   const b = e.target.closest('button[data-v]'); if (!b) return; const k = b.closest('[data-pref]').dataset.pref; if (prefs[k] === b.dataset.v) return; prefs[k] = b.dataset.v; savePrefs(); renderSettings();
   if (k === 'light') applyLight(prefs.light);
   if (k === 'sound') { sfx.on = prefs.sound !== 'off'; if (sfx.on) sfx.tick(); if (trailer.video) trailer.video.volume = trailerVolume(); }
@@ -345,6 +358,8 @@ setPop.addEventListener('click', e => {
   if (k === 'seal') renderPrompts();
   if (k === 'fmtCon') { GAMES.forEach(resolveFmt); if (active) renderInfo(true); relayout({ full: true }); }
   if (k === 'sort') relayout({ full: true });
+  if (k === 'mfAlb' || k === 'mfPl' || k === 'mfSong') setMusicBulk([{ mfAlb: 'album', mfPl: 'playlist', mfSong: 'song' }[k]], prefs[k]);
+  if (k === 'mixFmt') renderBag();
   if (k === 'group') { prefs.shelf = '__all'; savePrefs(); relayout({ full: true, reset: true }); }
 });
 document.addEventListener('pointerdown', e => {
@@ -521,6 +536,7 @@ function insertDisc() {
   if (active.g.video && !VPLAY.item) { const m = active.multi; return chooseVideo(active, m ? m.slots[m.focus || 0] : null); }
   return guarded(async () => {
     const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), P = portOf(c);
+    if (c.g.music) musicMakeRoom(c); else if (MPLAY.state === 'playing') MPLAY.pause();
     setMode('busy'); hoverPart = null; c.discLabelMat.emissive.set('#000000'); stopTrailer();
     await waitReal(sfx.mediaOut(c.g.fmt) - .005);
     /* it comes loose with a slight tilt, whatever way it was lying */
@@ -534,6 +550,7 @@ function insertDisc() {
     await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, P.s || 1, t)); _qt.copy(_q0).slerp(P.q, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, t * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
     d.scale.setScalar(P.s || 1); d.quaternion.copy(P.q); d.position.copy(_p2);
     await pushIn(d, P);
+    if (c.g.music) { await musicInserted(c); return; }
     setLed(true); await waitReal(.17);
     sfx.tvOn(); tvSet('boot', c);
     if (c.g.video) {

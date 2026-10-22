@@ -478,9 +478,9 @@ function isRooms() { return prefs.layout === 'rooms'; }
 const UGC_SCREEN_MAT = new THREE.MeshBasicMaterial({ map: tvTex, toneMapped: false });
 const STAGE = { name: '', sys: '', screen: null, dirty: false, vmed: 'tape' };
 /* what the current system's room is: the desk for PC, the video shop for films, the TV room for the rest */
-function stageFor(sys) { return !isRooms() ? 'table' : sys === 'PC' ? 'pc' : sys === 'VIDEO' ? 'video' : 'tv'; }
+function stageFor(sys) { return !isRooms() ? 'table' : sys === 'PC' ? 'pc' : sys === 'VIDEO' ? 'video' : sys === 'MUSIC' ? 'music' : 'tv'; }
 /* the video room plays tapes on the CRT and discs on the flat TV */
-function screenFor(stage, sys) { return stage === 'pc' ? 'monitor' : stage === 'video' ? (STAGE.vmed === 'tape' ? 'crt' : 'flat') : stage === 'tv' ? (FLAT_SYSTEMS.has(sys) ? 'flat' : 'crt') : 'crt'; }
+function screenFor(stage, sys) { return stage === 'pc' || stage === 'music' ? 'monitor' : stage === 'video' ? (STAGE.vmed === 'tape' ? 'crt' : 'flat') : stage === 'tv' ? (FLAT_SYSTEMS.has(sys) ? 'flat' : 'crt') : 'crt'; }
 /* the machine a system's games go into: its own key, or the video room's player for the medium in hand */
 function devKey(sys) { return sys === 'VIDEO' ? 'vid:' + STAGE.vmed : 'sys:' + sys; }
 /* a tape needs the VCR and the CRT, a disc the player and the flat TV: the room changes while you hold the case */
@@ -492,17 +492,18 @@ function applyStage(sys) {
   if (st === 'table') { tvGroup.position.set(0, 0, 0); conGroup.position.set(0, 0, 0); }
   else { tvGroup.position.set(CAB.x - TV.x, CAB.h - TABLE.top, CAB.front - 3 - TV.zFront); conGroup.position.set(FLOOR_CON.x - CON.x, RUG.y * 2 - TABLE.top, FLOOR_CON.front - CON.zFront); }
   flatTv.position.set(CAB.x, CAB.h, CAB.front - 12);
-  pcGroup.visible = st === 'pc';
+  pcGroup.visible = st === 'pc' || st === 'music';
   const scr = screenFor(st, sys); STAGE.screen = scr;
   /* EmuVR models, when you have chosen one for this system or this screen */
-  const devModel = st === 'table' ? null : UGCS.ready(devKey(sys)), scrModel = st === 'table' ? null : UGCS.ready('scr:' + scr);
+  const devModel = st === 'table' || st === 'music' ? null : UGCS.ready(devKey(sys)), scrModel = st === 'table' || st === 'music' ? null : UGCS.ready('scr:' + scr);
   UGCS.showOnly([devModel, scrModel].filter(Boolean));
   if (devModel) {
     devModel.position.copy(st === 'pc' ? new V3(PCT.x + 4, TABLE.top, PCT.front - devModel.userData.size.z / 2) : new V3(FLOOR_CON.x, RUG.y * 2, FLOOR_CON.front - devModel.userData.size.z / 2));
     devModel.rotation.y = UGCS.rot(devKey(sys)) ? Math.PI : 0;
     DEV.cur = devModel.userData.dev;
-  } else DEV.cur = st === 'pc' ? DEV.pc : st === 'video' ? (STAGE.vmed === 'tape' ? DEV.vcr : DEV.dvp) : DEV.id2;
-  conGroup.visible = !devModel && st !== 'pc' && st !== 'video';
+  } else DEV.cur = st === 'pc' ? DEV.pc : st === 'music' ? DEV.hifi : st === 'video' ? (STAGE.vmed === 'tape' ? DEV.vcr : DEV.dvp) : DEV.id2;
+  conGroup.visible = !devModel && st !== 'pc' && st !== 'video' && st !== 'music';
+  musicStage(st);
   /* our VCR or disc player on the rug, where the console would be */
   [[vcrGroup, 'tape', VCR], [playerGroup, 'disc', DVP]].forEach(([g, m, S]) => { g.visible = st === 'video' && !devModel && STAGE.vmed === m; g.position.set(FLOOR_CON.x, RUG.y * 2, FLOOR_CON.front); });
   if (st === 'pc' && devModel) pcGroup.children.forEach(o => { o.visible = !(o.position.x < PCT.x + PCT.w / 2 + 2 && o.position.x > PCT.x - PCT.w / 2 - 2); });
@@ -528,6 +529,7 @@ function applyStage(sys) {
    the bottom half stays put and the lid swings over to the left, like a real case on a table. */
 const _rqY = new Q4(), _rqF = new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0)), _rv = new V3(), YAX = new V3(0, 1, 0);
 function restPose(c, P, Q) {
+  if (STAGE.name === 'music') { musicRestPose(c, P, Q); return; }
   const D = c.dim, o = easeIO(c.openA); let x, y, z, yaw;
   if (STAGE.name === 'pc') { x = MON.x + MON.w / 2 + 2 + 1.5 * D.w; z = 10; y = TABLE.top + .1; yaw = -.1; }
   else if (STAGE.name === 'tv' || STAGE.name === 'video') {
@@ -541,6 +543,8 @@ function restPose(c, P, Q) {
 function stageBox(view) {
   const narrow = camera.aspect < .95;
   /* the video shop is framed like the bookcases; when a film goes in, the camera turns to the TV room */
+  /* the record shop: the hi-fi on the cabinet and the case on the rug; the computer when burning */
+  if (STAGE.name === 'music') return view === 'console' ? { box: { cx: CAB.x - 14, cy: 52, cz: 34, w: narrow ? 120 : 170, h: narrow ? 190 : 112 }, dir: new V3(0, .34, 1) } : view === 'burn' ? { box: narrow ? { cx: -20, cy: TABLE.top + 26, w: 110, h: 150 } : { cx: -18, cy: TABLE.top + 22, w: 140, h: 76 }, dir: new V3(.02, .2, 1) } : null;
   if (STAGE.name === 'video') return view === 'console' ? { box: { cx: CAB.x, cy: 42, cz: 45, w: narrow ? 120 : 150, h: narrow ? 190 : 150 }, dir: new V3(0, .18, 1) } : null;
   if (STAGE.name === 'tv') {
     if (view === 'browse') return { box: { cx: clamp(cam.browseX, CAB.x - CAB.w / 2 + 34, CAB.x + CAB.w / 2 - 34), cy: CAB.boards[cam.browseRow || 0] + CAB.rowH / 2, cz: CAB.front - 8, w: narrow ? 50 : 84, h: 36 }, dir: new V3(0, .2, 1) };
@@ -610,6 +614,6 @@ const UGCS = {
       return this.building.get(k);
     }));
   },
-  keysFor(sys) { const st = stageFor(sys); return st === 'table' ? [] : st === 'video' ? ['vid:tape', 'vid:disc', 'scr:crt', 'scr:flat'] : ['sys:' + sys, 'scr:' + screenFor(st, sys)]; }
+  keysFor(sys) { const st = stageFor(sys); return st === 'table' || st === 'music' ? [] : st === 'video' ? ['vid:tape', 'vid:disc', 'scr:crt', 'scr:flat'] : ['sys:' + sys, 'scr:' + screenFor(st, sys)]; }
 };
 scene.add(UGCS.group);
