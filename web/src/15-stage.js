@@ -386,7 +386,9 @@ function ugcDevice(root) {
         per[m] = { q, s, inward, inside: ready.p.clone().addScaledVector(n, .15), disc };
         continue;
       }
-      if (move.length() > .3) inward = move.clone().normalize();
+      /* the way in is the socket's axis nearest to its movement: a machine that lowers the tape onto its
+         reels while pulling it in (EmuVR's VCR) must not tilt it up out of the mouth */
+      if (move.length() > .3) { const mv = move.clone().normalize(); inward = [ready.x, ready.y, ready.z].map(a => a.dot(mv) < 0 ? a.clone().negate() : a.clone()).sort((a, b) => b.dot(mv) - a.dot(mv))[0]; }
       else {
         /* the axis of the socket that leads out of the machine; up, then the front, win a close call */
         const axes = [ready.x, ready.y, ready.z].flatMap(a => [a.clone(), a.clone().negate()]);
@@ -524,8 +526,6 @@ function restPose(c, P, Q) {
     const m = DEV.cur && DEV.cur.name === 'ugc' ? UGCS.ready(devKey(STAGE.sys)) : null, s = m ? m.userData.size : DEV.cur && DEV.cur.group && STAGE.name === 'video' ? { x: DEV.cur === DEV.vcr ? VCR.w : DVP.w, z: DEV.cur === DEV.vcr ? VCR.d : DVP.d } : null;
     x = FLOOR_CON.x - (s ? s.x : CON.w) / 2 - 5 - D.w / 2; z = FLOOR_CON.front - (s ? s.z : CON.d) / 2; y = RUG.y * 2; yaw = .14;
   } else { x = CON.x + CON.w / 2 + 3 + 1.5 * D.w; z = 10; y = TABLE.top; yaw = -.08; }
-  /* a box of tapes waits standing up, its open top up, so the tape can go back into it */
-  if (c.g.fmt === 'vhsbox') { Q.copy(_rqY.setFromAxisAngle(YAX, yaw)); P.set(x, y + D.h / 2, z); return; }
   Q.copy(_rqY.setFromAxisAngle(YAX, yaw)).multiply(_rqF);
   P.set(x, y + D.d / 2, z).add(_rv.set(-D.w / 2 * o, 0, 0).applyQuaternion(Q));
 }

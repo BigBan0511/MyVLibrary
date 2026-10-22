@@ -152,6 +152,7 @@ function frame(now) {
   tilt.x += (tilt.tx - tilt.x) * (1 - Math.exp(-5 * dt)); tilt.y += (tilt.ty - tilt.y) * (1 - Math.exp(-5 * dt));
   const pulse = .55 + .3 * Math.sin(now * .005);
   for (const c of cases) { if (c.disposed) continue; c.glowT = mode === 'shelf' && c === hovered ? (kbNav ? 1 : .7) : c.match ? pulse : 0; c.update(dt); }
+  if (heldTape && !heldTape.disposed) heldTape.update(dt);
   if (active && active.disc) {
     const on = mode === 'open';
     active.discLabelMat.emissive.setScalar(on && hoverPart === 'disc' ? .16 : 0);

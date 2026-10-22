@@ -56,6 +56,7 @@ namespace MyVLibrary
         public string DeviceId { get; set; }
         public string UserId { get; set; }
         public bool SupportsRemoteControl { get; set; }
+        public bool SupportsMediaControl { get; set; }
         public DateTime? LastActivityDate { get; set; }
         public JfItem NowPlayingItem { get; set; }
         public JfPlayState PlayState { get; set; }

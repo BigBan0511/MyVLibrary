@@ -520,7 +520,7 @@ function insertDisc() {
   if (!active || mode !== 'open') return;
   if (active.g.video && !VPLAY.item) { const m = active.multi; return chooseVideo(active, m ? m.slots[m.focus || 0] : null); }
   return guarded(async () => {
-    const c = active, d = c.disc, home = c.discHome, above = c.aboveOverride ? c.aboveOverride.clone() : discAbove(c, new V3()), P = portOf(c);
+    const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), P = portOf(c);
     setMode('busy'); hoverPart = null; c.discLabelMat.emissive.set('#000000'); stopTrailer();
     await waitReal(sfx.mediaOut(c.g.fmt) - .005);
     /* it comes loose with a slight tilt, whatever way it was lying */
@@ -590,7 +590,7 @@ function closeGame(o = {}) {
   return guarded(async () => {
     const c = active, d = c.disc, g = c.g, home = c.discHome, P = portOf(c), rest = c.mode === 'rest';
     /* into a case lying open on the table the medium drops from straight above */
-    const above = c.aboveOverride ? c.aboveOverride.clone() : rest ? new V3(home.x, home.y, home.z + 7) : discAbove(c, new V3()), qIn = c.discQuat || new Q4();
+    const above = rest ? new V3(home.x, home.y, home.z + 7) : discAbove(c, new V3()), qIn = c.discQuat || new Q4();
     const mins = Math.max(1, Math.floor((performance.now() - playStart) / 1000));
     /* pulled out by hand while only the shelf was keeping track: stop counting from here */
     if (g.video && !o.auto) stopVideo();
@@ -614,7 +614,7 @@ function closeGame(o = {}) {
     await tween(.22, t => { d.position.z = home.z + 1.4 * (1 - t); }); d.position.copy(home);
     if (c.multi) await putBackInSet(c);
     let msg, moved = false;
-    if (g.video) msg = videoDone(c, o);
+    if (g.video) msg = videoDone(c.box || c, o);
     else if (PLAYNITE) {
       const s = o.seconds || 0;
       msg = o.msg || (o.keepRunning ? T('El juego sigue abierto: Playnite seguirá contando el tiempo.') : s >= 60 ? T('+{0} min en {1}. Playnite ya lo ha apuntado.', Math.round(s / 60), g.t) : s > 0 ? T('Partida corta en {0}.', g.t) : mediaT(g, 'Disco fuera.'));
@@ -625,13 +625,16 @@ function closeGame(o = {}) {
       c.setDust(0); g.dust0 = 0; saveGame(g);
       msg = moved ? T('+{0} min. Ahora está en «{1}».', mins, g.status) : T('+{0} min en {1}. Tus horas ya están en la caja.', mins, g.t);
     }
-    c.dirty = true; c.refreshSpine(); if (moved) pendingRelayout = true;
+    /* an episode's tape case goes back into its box, and the box to the shelf */
+    const owner = c.box || c;
+    owner.dirty = true; owner.refreshSpine(); if (moved) pendingRelayout = true;
     toast(msg);
     /* it closes and goes back to its place */
     await waitReal(.25);
     const h = clamp(sfx.caseClose(g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0;
-    setView('shelf'); await waitReal(.2);
-    await slideHome(c); focus = c; setMode('shelf');
+    if (c.box) { await caseBackInBox(c); await closeCase(true); } else setView('shelf');
+    await waitReal(.2);
+    await slideHome(owner); focus = owner; setMode('shelf');
   }).then(() => { if (pendingRelayout) { pendingRelayout = false; relayout({ follow: back }); } });
 }
 

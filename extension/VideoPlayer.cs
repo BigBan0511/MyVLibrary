@@ -118,42 +118,74 @@ namespace MyVLibrary
         private static bool IsDesktopClient(JfSession s) =>
             s.SupportsRemoteControl && (s.Client ?? "").IndexOf("Jellyfin", StringComparison.OrdinalIgnoreCase) >= 0 &&
             ((s.Client ?? "").IndexOf("Desktop", StringComparison.OrdinalIgnoreCase) >= 0 || (s.Client ?? "").IndexOf("Media Player", StringComparison.OrdinalIgnoreCase) >= 0) &&
-            string.Equals(s.DeviceName, Environment.MachineName, StringComparison.OrdinalIgnoreCase);
+            IsThisComputer(s.DeviceName);
+
+        /// <summary>The player names the computer by its full host name; Windows' own name is cut to 15 letters.</summary>
+        private static bool IsThisComputer(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            string host;
+            try { host = Dns.GetHostName(); } catch { host = Environment.MachineName; }
+            return string.Equals(name, host, StringComparison.OrdinalIgnoreCase) || string.Equals(name, Environment.MachineName, StringComparison.OrdinalIgnoreCase) ||
+                   name.StartsWith(Environment.MachineName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>This computer's Jellyfin Desktop, the one ready to take orders and most recently active first.</summary>
+        private async Task<JfSession> DesktopSession() =>
+            (await jf.Sessions().ConfigureAwait(false)).Where(IsDesktopClient)
+                .OrderByDescending(s => s.SupportsMediaControl).ThenByDescending(s => s.LastActivityDate ?? DateTime.MinValue).FirstOrDefault();
 
         private async Task PlayJellyfinDesktop(string itemId, long startTicks, Action started, CancellationToken ct)
         {
             jmpSession = null;
-            var session = (await jf.Sessions().ConfigureAwait(false)).FirstOrDefault(IsDesktopClient);
-            Process proc = null;
-            if (session == null)
+            var exe = FindJellyfinDesktop(settings);
+            JfSession session = null;
+            try { session = await DesktopSession().ConfigureAwait(false); } catch { }
+            var launched = false;
+            void Launch()
             {
-                var exe = FindJellyfinDesktop(settings);
                 if (exe == null) throw new PlayerMissingException(Loc.S("No encuentro Jellyfin Desktop. Indica dónde está en los ajustes de MyVLibrary.", "Jellyfin Desktop was not found. Set its location in MyVLibrary's settings."));
-                proc = Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) });
-                /* it has to start and connect to the server before it can be told what to play */
-                for (var i = 0; i < 60 && session == null; i++)
-                {
-                    await Task.Delay(1000, ct).ConfigureAwait(false);
-                    session = (await jf.Sessions().ConfigureAwait(false)).FirstOrDefault(IsDesktopClient);
-                }
-                if (session == null) throw new PlayerMissingException(Loc.S("Jellyfin Desktop no se ha conectado a tu servidor con tu usuario.", "Jellyfin Desktop did not connect to your server with your user."));
+                launched = true;
+                if (Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exe)).Length > 0) return;
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) });
             }
-            jmpSession = session.Id;
-            await jf.PlayOn(session.Id, itemId, startTicks).ConfigureAwait(false);
-            /* playing until that session plays something else or nothing (or the program closes) */
-            var seen = false;
+            if (session == null) Launch();
+            /* The program shows up on the server before its player is listening, so an order sent too soon is lost:
+               it is sent again every few seconds until the episode is playing. A session left behind by a program
+               already closed does not answer either: then the program is started. */
             var since = DateTime.Now;
+            var lastSend = DateTime.MinValue;
+            var sends = 0;
+            DateTime? appeared = null;
+            var seen = false;
             for (var misses = 0; ; )
             {
                 await Task.Delay(seen ? 3000 : 1000, ct).ConfigureAwait(false);
-                JfSession now = null;
-                try { now = (await jf.Sessions().ConfigureAwait(false)).FirstOrDefault(s => s.Id == session.Id); misses = 0; }
+                JfSession now;
+                try { now = seen ? (await jf.Sessions().ConfigureAwait(false)).FirstOrDefault(s => s.Id == session.Id) : await DesktopSession().ConfigureAwait(false); misses = 0; }
                 catch { if (++misses > 5) break; continue; }
-                var playing = now?.NowPlayingItem?.Id == itemId;
-                if (playing && !seen) { seen = true; started(); }
-                if (seen && !playing) break;
-                /* it never started: the program closed, or nothing happened for a minute and a half */
-                if (!seen && ((now == null && (proc == null || proc.HasExited)) || DateTime.Now - since > TimeSpan.FromSeconds(90))) break;
+                if (seen)
+                {
+                    /* playing until that session plays something else or nothing (or the program closes) */
+                    if (now?.NowPlayingItem?.Id != itemId) break;
+                    continue;
+                }
+                if (now != null && now.NowPlayingItem?.Id == itemId) { session = now; jmpSession = now.Id; seen = true; started(); continue; }
+                if (DateTime.Now - since > TimeSpan.FromSeconds(90))
+                {
+                    if (now == null) throw new PlayerMissingException(Loc.S("Jellyfin Desktop no se ha conectado a tu servidor con tu usuario.", "Jellyfin Desktop did not connect to your server with your user."));
+                    break;
+                }
+                if (now == null) { if (!launched) Launch(); continue; }
+                session = now; jmpSession = now.Id;
+                /* just connected: a moment for its player to load */
+                if (appeared == null) appeared = DateTime.Now;
+                if (launched && sends == 0 && DateTime.Now - appeared < TimeSpan.FromSeconds(4)) continue;
+                if (DateTime.Now - lastSend < TimeSpan.FromSeconds(6)) continue;
+                if (sends == 2 && !launched) Launch();
+                lastSend = DateTime.Now; sends++;
+                try { await jf.PlayOn(now.Id, itemId, startTicks).ConfigureAwait(false); }
+                catch (Exception e) { logger.Warn(e, "MyVLibrary: Jellyfin Desktop no ha aceptado la orden de reproducir"); }
             }
             jmpSession = null;
         }
@@ -201,7 +233,9 @@ namespace MyVLibrary
             var port = FreePort();
             var password = Guid.NewGuid().ToString("N");
             var startSec = (long)(startTicks / 10000000);
-            var args = $"\"{jf.StreamUrl(itemId)}\" --start-time={startSec} --fullscreen --play-and-exit --no-video-title-show " +
+            /* a VLC of its own: with "one instance only" on, a new VLC hands the file to the one already open and
+               quits at once, and that looked as if the film had ended */
+            var args = $"\"{jf.StreamUrl(itemId)}\" --no-one-instance --no-playlist-enqueue --start-time={startSec} --fullscreen --play-and-exit --no-video-title-show " +
                        $"--extraintf=http --http-host=127.0.0.1 --http-port={port} --http-password={password}";
             vlc = Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false });
             var playSession = Guid.NewGuid().ToString("N");
@@ -212,17 +246,28 @@ namespace MyVLibrary
             using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) })
             {
                 http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Basic " + auth);
-                while (!vlc.HasExited && !ct.IsCancellationRequested)
+                /* it is over when VLC has closed and its web interface no longer answers (or after the film,
+                   when it says it has stopped) */
+                var stoppedPolls = 0;
+                for (var gone = 0; gone < 2 && !ct.IsCancellationRequested; )
                 {
                     try { await Task.Delay(2000, ct).ConfigureAwait(false); } catch (OperationCanceledException) { break; }
                     try
                     {
                         var st = Serialization.FromJson<VlcStatus>(await http.GetStringAsync($"http://127.0.0.1:{port}/requests/status.json").ConfigureAwait(false));
+                        gone = 0;
+                        stoppedPolls = seen && st?.state == "stopped" ? stoppedPolls + 1 : 0;
+                        if (stoppedPolls >= 3) break;
                         if (st?.time != null && st.time > 0) position = (long)(st.time.Value * 10000000);
                         if (!seen && st?.state == "playing") { seen = true; started(); await jf.Report("start", itemId, position, false, playSession).ConfigureAwait(false); }
                         if (seen && DateTime.Now - lastReport > TimeSpan.FromSeconds(10)) { lastReport = DateTime.Now; await jf.Report("progress", itemId, position, st?.state == "paused", playSession).ConfigureAwait(false); }
                     }
-                    catch { /* VLC still starting, or closing */ }
+                    catch
+                    {
+                        /* VLC still starting, or closing */
+                        if (vlc.HasExited) gone++;
+                        else if (!seen && DateTime.Now - vlc.StartTime > TimeSpan.FromSeconds(60)) break;
+                    }
                 }
             }
             /* closed: Jellyfin works out from the position whether it counts as watched */

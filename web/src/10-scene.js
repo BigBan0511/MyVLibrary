@@ -507,8 +507,11 @@ class Case {
     this.tearA += (tearT - this.tearA) * (1 - Math.exp(-6 * s));
     if (!this.wrap && this.tearDone && Math.abs(this.tearA - this.tearDone) < .01) { this.tearA = 0; this.tearDone = 0; }
     const tp = this.targetPose(), k = this.fast ? 26 : this.mode === 'rest' ? (this.root.position.distanceToSquared(tp.pos) < 4 ? 40 : 6) : (this.mode === 'inspect' || this.mode === 'parked') ? 7 : 9, a = 1 - Math.exp(-k * s);
-    this.root.position.lerp(tp.pos, a); this.root.quaternion.slerp(tp.quat, a);
-    const sc = this.root.scale.x + ((this.mode === 'parked' ? PARK_SCALE : 1) * (this.vanish ? .02 : 1) - this.root.scale.x) * a; this.root.scale.setScalar(sc);
+    /* (a tape case on its way back into its box is moved by hand) */
+    if (!this.pinned) {
+      this.root.position.lerp(tp.pos, a); this.root.quaternion.slerp(tp.quat, a);
+      const sc = this.root.scale.x + ((this.mode === 'parked' ? PARK_SCALE : 1) * (this.vanish ? .02 : 1) - this.root.scale.x) * a; this.root.scale.setScalar(sc);
+    }
     const o = this.openA;
     /* a box of tapes does not open like a book: it leans back and the tapes rise out of its open top */
     if (this.g.fmt === 'vhsbox') { this.pivot.rotation.y = 0; this.inner.position.x = 0; this.inner.rotation.x = .9 * easeIO(o); }

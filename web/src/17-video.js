@@ -198,7 +198,6 @@ function dropMultiInterior(c) {
   const m = c.multi; if (!m) return;
   m.mats.forEach(mt => { if (mt.map) mt.map.dispose(); unM(mt); });
   if (m.trayMesh) m.trayMesh.geometry.dispose();
-  if (m.tape) { m.tape.parent && m.tape.parent.remove(m.tape); }
   c.multi = null;
 }
 /* one disc or tape case shows an episode, or stays out of sight when there is none */
@@ -357,41 +356,60 @@ async function chooseVideo(c, slot) {
   const it = m ? slot && slot.userData.ep : filmItem(g); if (!it) return;
   const start = await askResume(it); if (start === null) return;
   busy = true;
-  try { if (m) await takeFromSet(c, slot, it); } finally { busy = false; }
+  try { if (m && m.kind === 'tape') await caseFromBox(c, slot, it); else if (m) takeFromSet(c, slot); } finally { busy = false; }
   g.ep = it; VPLAY.item = it; VPLAY.start = start;
   return insertDisc();
 }
-/* a tape in its case: standing on end, its spine to the front, the label facing the side */
-const TAPE_IN_CASE = new Q4().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new V3(0, 1, 0), new V3(0, 0, -1), new V3(-1, 0, 0)));
-/* the episode leaves its place: its disc comes free of the leaf, or the tape slides up out of its case */
-async function takeFromSet(c, slot, it) {
-  const m = c.multi;
-  if (m.kind === 'disc') {
-    /* it stops being part of the case's inside, so it is seen all the way into the player */
-    const i = c.thick.indexOf(slot); if (i >= 0) c.thick.splice(i, 1); slot.userData.thick = false; slot.visible = true;
-    m.taken = { o: slot, parent: slot.parent };
-    c.inner.attach(slot); c.disc = slot; c.discHome = slot.position.clone(); c.discQuat = slot.quaternion.clone();
-    c.discLabelMat = slot.userData.mat; c.aboveOverride = null;
-    return;
-  }
-  const lm = M(THREE.MeshPhysicalMaterial, { map: tex(drawTapeLabel(c.g, c.coverCanvas, it)), roughness: .4, clearcoat: .6, emissive: new THREE.Color('#000000') }, 1); m.mats.push(lm);
-  const tape = makeTape(lm); c.inner.add(tape); tape.position.copy(slot.position); tape.quaternion.copy(TAPE_IN_CASE);
-  m.tape = tape; m.taken = { o: slot }; c.disc = tape; c.discLabelMat = lm;
-  const y0 = slot.position.y, rise = DIMS.vhsbox.h + 1;
-  sfx.slide(); await tweenReal(.6, t => { tape.position.y = y0 + rise * t; }, easeIO);
-  c.discHome = tape.position.clone(); c.discQuat = TAPE_IN_CASE.clone(); c.aboveOverride = c.discHome.clone().add(new V3(0, 3, 0));
+/* the episode's disc comes free of its leaf: it stops being part of the case's inside, so it is seen all the way into the player */
+function takeFromSet(c, slot) {
+  const m = c.multi, i = c.thick.indexOf(slot); if (i >= 0) c.thick.splice(i, 1); slot.userData.thick = false; slot.visible = true;
+  m.taken = { o: slot, parent: slot.parent };
+  c.inner.attach(slot); c.disc = slot; c.discHome = slot.position.clone(); c.discQuat = slot.quaternion.clone(); c.discLabelMat = slot.userData.mat;
 }
-/* the episode is back: the disc returns to its leaf, the tape slides down into its case */
-async function putBackInSet(c) {
+/* the disc is back on its leaf */
+function putBackInSet(c) {
   const m = c.multi; if (!m || !m.taken) return;
-  const o = m.taken.o;
-  if (m.kind === 'disc') { m.taken.parent.attach(o); o.userData.thick = true; c.thick.push(o); }
-  else if (m.tape) {
-    const tape = m.tape, y0 = tape.position.y, y1 = o.position.y;
-    sfx.slide(); await tweenReal(.55, t => { tape.position.y = lerp(y0, y1, t); }, easeIO);
-    c.inner.remove(tape); m.tape = null; o.userData.lift = 0;
-  }
-  m.taken = null; c.disc = null; c.discQuat = null; c.aboveOverride = null;
+  const o = m.taken.o; m.taken.parent.attach(o); o.userData.thick = true; c.thick.push(o);
+  m.taken = null; c.disc = null; c.discQuat = null;
+}
+/* ---------- a tape from the box: the episode's own case leaves the box and goes to the VCR like a
+   film's; the box waits out of sight until it comes back ---------- */
+/* a case standing in the box (its thin side across the box, its spine to the front), turned the way a case is built */
+const QBOX = new Q4().setFromAxisAngle(new V3(0, 1, 0), Math.PI / 2);
+let heldTape = null;
+function slotPose(slot, P, Q) { slot.updateWorldMatrix(true, false); slot.getWorldPosition(P); slot.getWorldQuaternion(Q).multiply(QBOX); }
+async function caseFromBox(c, slot, it) {
+  const m = c.multi, g = c.g, rise = DIMS.vhsbox.h + 2;
+  setMode('busy'); m.taken = { o: slot }; setEpFocus(c, slot);
+  const l0 = slot.userData.lift || 0;
+  sfx.slide(); await tweenReal(.6, t => { slot.userData.lift = lerp(l0, rise, t); }, easeIO);
+  /* the episode as a film of its own: the series' cover, this episode on the spine and on the tape */
+  const eg = Object.assign(Object.create(g), { fmt: 'vhs', ep: it, wrapped: false, dust: 0 });
+  const n = new Case(eg); n.box = c; n.slot = slot; heldTape = n;
+  const sc = n.spineCanvas; sc.getContext('2d').drawImage(drawTapeSpine(g, it), 0, 0, sc.width, sc.height); n.spineTex.needsUpdate = true;
+  n.ensureDetail(); n.setShadow(true);
+  slotPose(slot, n.root.position, n.root.quaternion); n.root.scale.setScalar(c.root.scale.x);
+  slot.userData.away = true;
+  n.mode = 'inspect'; n.leaving = true; active = n;
+  /* the box shrinks away; the case comes to your hands and opens */
+  c.vanish = true; c.fast = true; sfx.whoosh();
+  await wait(560); c.root.visible = false; c.fast = false;
+  await swingOpen(n); setMode('open');
+}
+/* after the episode: the box comes back, the case flies into its place and slides down */
+async function caseBackInBox(n) {
+  const b = n.box, slot = n.slot, m = b.multi, rise = DIMS.vhsbox.h + 2, P = new V3(), Q = new Q4();
+  setView('shelf'); b.root.visible = true; b.vanish = false; b.mode = 'inspect'; active = b;
+  slot.userData.lift = rise;
+  await wait(420);
+  n.pinned = true; const p0 = n.root.position.clone(), q0 = n.root.quaternion.clone(), s0 = n.root.scale.x;
+  sfx.whoosh();
+  await tween(1, t => { const e = easeIO(t); slotPose(slot, P, Q); n.root.position.lerpVectors(p0, P, e); n.root.position.y += Math.sin(Math.PI * t) * 12; n.root.quaternion.copy(q0).slerp(Q, e); n.root.scale.setScalar(lerp(s0, b.root.scale.x, e)); });
+  /* its spine now shows whether it has been seen */
+  if (m) paintSlot(b, slot, slot.userData.ep);
+  slot.userData.away = false; heldTape = null; n.dispose();
+  sfx.slide(); await tweenReal(.55, t => { slot.userData.lift = rise * (1 - t); }, easeIO);
+  if (m) { m.taken = null; setEpFocus(b, slot); }
 }
 /* the films play outside the shelf: Jellyfin Media Player or VLC (the extension starts them) */
 function startVideo(c) {
