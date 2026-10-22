@@ -14,9 +14,11 @@ const SORTS = {
   added: (a, b) => (a.added ?? 1e9) - (b.added ?? 1e9) || SORTS.alpha(a, b),
   year: (a, b) => (a.year || 9999) - (b.year || 9999) || SORTS.alpha(a, b)
 };
-function isCases() { return prefs.layout === 'cases'; }
+/* the bookcases: the earlier design, and always the video room's shop (one bookcase per Jellyfin library) */
+function isCases() { return prefs.layout === 'cases' || STAGE.name === 'video'; }
+function isVideoRoom() { return isRooms() && curSysKey() === 'VIDEO'; }
 /* ---------- systems (rooms by system): the ones in your library, PC first, then by generation ---------- */
-function sysLabel(g) { const s = sysOf(g); return s === 'PC' ? 'PC' : (g.platFull || g.plat || s); }
+function sysLabel(g) { const s = sysOf(g); return s === 'PC' ? 'PC' : s === 'VIDEO' ? T('Vídeo') : (g.platFull || g.plat || s); }
 function systemsList() {
   const m = new Map();
   GAMES.forEach(g => { const s = sysOf(g); if (!m.has(s)) m.set(s, { key: s, name: sysLabel(g), n: 0 }); m.get(s).n++; });
@@ -49,7 +51,14 @@ function groupRank(k, n) {
 }
 function belongs(g, key) { return key === '__all' || keysOf(g).includes(key); }
 function buildGroups() {
-  const sys = curSysKey(), all = isRooms() ? GAMES.filter(g => sysOf(g) === sys) : GAMES.slice(), map = new Map();
+  const sys = curSysKey(), all = isRooms() ? GAMES.filter(g => sysOf(g) === sys) : GAMES.filter(g => !g.video), map = new Map();
+  if (isRooms() && sys === 'VIDEO') {
+    /* the video room: a bookcase per library, in Jellyfin's order */
+    all.forEach(g => { const k = g.lib || T('Vídeo'); if (!map.has(k)) map.set(k, []); map.get(k).push(g); });
+    const keys = [...map.keys()].sort((a, b) => (map.get(a)[0].libOrder ?? 99) - (map.get(b)[0].libOrder ?? 99) || a.localeCompare(b, LANG));
+    groups = bookcasesFrom([{ key: '__all', label: T('Todos'), games: all }, ...keys.map(k => ({ key: k, label: k, games: map.get(k) }))], true);
+    return;
+  }
   if (prefs.group !== 'all') all.forEach(g => keysOf(g).forEach(k => { if (!map.has(k)) map.set(k, []); map.get(k).push(g); }));
   const keys = [...map.keys()].sort((a, b) => groupRank(a, map.get(a).length) - groupRank(b, map.get(b).length) || String(a).localeCompare(String(b), LANG));
   const G = [{ key: '__all', label: T('Todos'), games: all }, ...keys.map(k => ({ key: k, label: groupLabel(k), games: map.get(k) }))];
@@ -157,8 +166,8 @@ function showWallShelf(on) { shelfGroup.visible = on; shelfShadow.visible = on; 
 /* ---------- bookcases (the earlier design): one carcass per group, up to three rows ---------- */
 const SH = { innerW: 36, rowH: 25, x0: 150, step: 58, maxRows: 3, cap: 34.6, front: WALL_Z + 30 };
 let units = [], unitsKey = '';
-function bookcasesFrom(G) {
-  const src = prefs.group === 'all' ? G.slice(0, 1) : G.slice(1), out = [];
+function bookcasesFrom(G, byKey) {
+  const src = prefs.group === 'all' && !byKey ? G.slice(0, 1) : G.slice(1), out = [];
   src.forEach(gr => {
     const bks = []; let rows = [], row = [], x = 0;
     for (const it of sortedItems(gr, .24)) {
@@ -172,6 +181,9 @@ function bookcasesFrom(G) {
   return out;
 }
 function boardY(R, i) { return 8 + SH.rowH * (R - 1 - i); }
+/* where each bookcase stands: to the right of the room, or for the video shop to the left of the desk, the last one nearest */
+function bookX(ui) { return STAGE.name === 'video' ? VIDEO_SHOP_X - (groups.length - 1 - ui) * SH.step : SH.x0 + ui * SH.step; }
+const VIDEO_SHOP_X = -170;
 function furniture(parent, cx, ow, rowsYs, H, depth = 30) {
   const iw = ow - 4, sideH = H - 2;
   [-(ow / 2 - 1), ow / 2 - 1].forEach(dx => fbox(sideH, 2, depth, shelfMat, cx + dx, sideH / 2, 0, parent, Math.PI / 2));
@@ -189,11 +201,11 @@ function clearBookcases() {
   units = []; unitsKey = '';
 }
 function buildBookcases() {
-  const key = groups.map(g => g.label + ':' + g.rows.length + ':' + g.count).join('|') + RP.name;
+  const key = groups.map(g => g.label + ':' + g.rows.length + ':' + g.count).join('|') + RP.name + STAGE.name;
   if (key === unitsKey) return;
   clearBookcases(); unitsKey = key;
   units = groups.map((gr, ui) => {
-    const R = gr.rows.length, H = 8 + SH.rowH * R, x = SH.x0 + ui * SH.step, g = new THREE.Group(); scene.add(g);
+    const R = gr.rows.length, H = 8 + SH.rowH * R, x = bookX(ui), g = new THREE.Group(); scene.add(g);
     const ys = []; for (let k = 0; k <= R; k++) ys.push(8 + SH.rowH * k);
     furniture(g, x, SH.innerW + 4, ys, H);
     for (let i = 0; i < R; i++) aoCompartment(g, x, boardY(R, i), SH.innerW, SH.rowH);

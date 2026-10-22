@@ -13,9 +13,9 @@ let shelfPicks = [];
 function buildShelfPicks() { shelfPicks = navOrder.flatMap(c => [c.shell, c.lid, c.spine, c.wrap].filter(Boolean)); }
 function hit(list) {
   ndc.set(pointer.x, pointer.y); ray.setFromCamera(ndc, camera);
-  list = list || (mode === 'shelf' ? shelfPicks : active ? [active.shell, active.lid, active.spine, active.wrap, active.tabHit, ...(active.strip ? active.path.map(p => p.mesh) : []), ...(active.disc ? active.disc.children : []), active.manual].filter(Boolean) : []);
+  list = list || (mode === 'shelf' ? shelfPicks : active ? [active.shell, active.lid, active.spine, active.wrap, active.tabHit, ...(active.strip ? active.path.map(p => p.mesh) : []), ...(active.disc ? active.disc.children : []), active.manual, ...(active.multi ? active.multi.slots.filter(o => !o.userData.away).flatMap(o => o.children) : [])].filter(Boolean) : []);
   const h = ray.intersectObjects(list, false)[0];
-  return h ? { case: h.object.userData.case, part: h.object.userData.part || null, point: h.point } : null;
+  return h ? { case: h.object.userData.case, part: h.object.userData.part || null, point: h.point, obj: h.object } : null;
 }
 let prefetchT = 0;
 function setHovered(c) { if (hovered === c) return; if (hovered) hovered.hoverT = 0; hovered = c; if (c) { c.hoverT = 1; if (kbNav) sfx.tick(); clearTimeout(prefetchT); prefetchT = setTimeout(() => { if (hovered === c) LIB.prefetch(c.g); }, 220); } renderTip(); }
@@ -53,9 +53,11 @@ function renderPrompts() {
     } else h += btn(T('Intro'), T('Abrir la caja'), 'open', true);
     h += btn('F', active.flipT ? T('Ver portada') : T('Ver contraportada'), 'flip') + btn('Esc', T('Devolver'), 'back');
   }
-  if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), mediaT(active.g, active.g.real && !active.g.installed ? 'Meter el disco (instalar)' : 'Meter el disco'), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
-  if (mode === 'playing') h = btn('Esc', PLAYNITE ? mediaT(active.g, 'Sacar el disco') : T('Cerrar el juego'), 'quit', true);
+  if (mode === 'open' && active.g.video) h = (active.multi ? `<span class="hint">${T(active.multi.kind === 'tape' ? 'Elige una cinta' : 'Elige un disco')} · <kbd>←</kbd><kbd>→</kbd> ${T('más capítulos')} · <kbd>↑</kbd><kbd>↓</kbd> ${T('elegir')}</span>` + btn(T('Intro'), T('Ver este'), 'insert', true) : btn(T('Intro'), mediaT(active.g, 'Meter el disco'), 'insert', true)) + btn('Esc', T('Cerrar la caja'), 'close');
+  else if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), mediaT(active.g, active.g.real && !active.g.installed ? 'Meter el disco (instalar)' : 'Meter el disco'), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
+  if (mode === 'playing') h = btn('Esc', active.g.video ? mediaT(active.g, 'Sacar el disco') : PLAYNITE ? mediaT(active.g, 'Sacar el disco') : T('Cerrar el juego'), 'quit', true);
   el.innerHTML = h;
+  if (typeof renderEpBar === 'function') renderEpBar();
 }
 $('#prompts').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) { sfx.init(); doAct(b.dataset.act); } });
 function doAct(a) {
@@ -67,7 +69,8 @@ function doAct(a) {
 function renderBrand() {
   renderSysbar();
   const gr = groups[curGroup], n = gr ? gr.games.length : 0;
-  $('#brandCount').textContent = T(GAMES.length === 1 ? '{0} de {1} juego' : '{0} de {1} juegos', n, GAMES.length);
+  if (STAGE.name === 'video') { const all = GAMES.filter(g => g.video).length; $('#brandCount').textContent = T(all === 1 ? '{0} de {1} título' : '{0} de {1} títulos', n, all); return; }
+  const games = GAMES.filter(g => !g.video).length; $('#brandCount').textContent = T(games === 1 ? '{0} de {1} juego' : '{0} de {1} juegos', n, games);
 }
 function renderPills() {
   const el = $('#pills');
@@ -116,7 +119,7 @@ function renderSysbar() {
   el.hidden = !L.length; if (!L.length) return;
   const cur = L.find(s => s.key === curSysKey()) || L[0];
   el.querySelector('b').textContent = cur.name;
-  el.querySelector('span').textContent = T(cur.n === 1 ? '{0} juego' : '{0} juegos', cur.n) + (L.length > 1 ? ` · ${L.indexOf(cur) + 1} / ${L.length}` : '');
+  el.querySelector('span').textContent = T(cur.key === 'VIDEO' ? (cur.n === 1 ? '{0} título' : '{0} títulos') : cur.n === 1 ? '{0} juego' : '{0} juegos', cur.n) + (L.length > 1 ? ` · ${L.indexOf(cur) + 1} / ${L.length}` : '');
   el.querySelectorAll('[data-sys]').forEach(b => { b.disabled = L.length < 2; });
 }
 $('#sysbar').addEventListener('click', e => { const b = e.target.closest('[data-sys]'); if (b && !b.disabled) { sfx.init(); setSystem(+b.dataset.sys); } });
@@ -147,6 +150,7 @@ function renderInfo(force) {
   placeCard();
   if (prefs.card === 'hide') { el.hidden = true; lastInfoKey = ''; tab.hidden = false; tab.innerHTML = `<span>${T('Ficha')}</span><b>${esc(active.g.t)}</b><i aria-hidden="true">▾</i>`; return; }
   tab.hidden = true;
+  if (active.g.video) { const g = active.g, s = seasonOf(g), vk = ['v', g.id, g.fmt, g.seasonIdx, g.seasons ? g.seasons.length : 0, s && s.eps ? s.eps.length : -1, g.pos, g.played].join('|'); el.hidden = false; if (!force && vk === lastInfoKey) return; lastInfoKey = vk; el.classList.add('open'); renderVideoInfo(el, g); return; }
   const g = active.g, key = [g.id, g.fmt, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
   const idle = g.last === null || g.last === undefined ? g.added : g.last;
@@ -157,7 +161,7 @@ function renderInfo(force) {
   el.innerHTML = `<div class="info-bar"><button type="button" class="info-more" data-more="1" aria-expanded="${infoOpen}">${infoOpen ? T('Menos') : T('Estado y categorías')}</button><button type="button" class="info-hide" data-hide="1" aria-label="${T('Ocultar la ficha')}" title="${T('Ocultar la ficha')} (I) · ${T('Arrastra para moverla')}">${T('Ocultar')} <i aria-hidden="true">▴</i></button></div><div class="eyebrow">${esc([g.genre, g.year, g.real ? g.plat : T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</div><h2>${esc(g.t)}</h2>
     <dl><dt>${T('Jugado')}</dt><dd>${fmtH(g.hours)}${g.sessions ? ' · ' + T(g.sessions === 1 ? '{0} vez' : '{0} veces', g.sessions) : ''}</dd><dt>${T('Última vez')}</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>${T('Logros')}</dt><dd>${T('{0} de {1}', g.ach[0], g.ach[1])}</dd>` : ''}<dt>${T('Polvo')}</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : ''}</dd></dl>
     <div class="frow"><label for="stSel">${T('Estado')}</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : `<option value="" selected>${T('Sin estado')}</option>`}${statuses.map(s => `<option value="${esc(s)}"${s === g.status ? ' selected' : ''}>${esc(TD(s))}</option>`).join('')}<option value="__new">+ ${T('Nuevo estado…')}</option></select></div>
-    <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="fmt-ico" aria-hidden="true">${FMT_ICON[g.fmt] || ''}</span><select id="fmtSel"${fmtLocked(g) ? ' disabled' : ''}>${FMTS.map(f => `<option value="${f}"${f === g.fmt ? ' selected' : ''}>${esc(T(DIMS[f].name))}</option>`).join('')}</select></div>
+    <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="fmt-ico" aria-hidden="true">${FMT_ICON[g.fmt] || ''}</span><select id="fmtSel"${fmtLocked(g) ? ' disabled' : ''}>${GAME_FMTS.map(f => `<option value="${f}"${f === g.fmt ? ' selected' : ''}>${esc(T(DIMS[f].name))}</option>`).join('')}</select></div>
     ${fmtLocked(g) ? `<p class="fmt-lock">${T('El original de {0}. Se puede cambiar en Ajustes → Formato en consolas.', esc(g.platFull || g.plat))}</p>` : ''}
     ${newStatus ? `<form class="cat-new st-new"><input id="stNew" type="text" placeholder="${T('Nombre del estado nuevo')}" maxlength="40" autocomplete="off"><button type="submit">${T('Crear')}</button></form>` : ''}
     <div class="cats"><span class="lbl">${T('Categorías')}</span><div class="chips">${g.cats.length ? g.cats.map(c => `<span class="chip">${esc(TD(c))}</span>`).join('') : `<em>${T('Ninguna')}</em>`}<button type="button" class="chip add" data-edit="1">${infoEdit ? T('Listo') : '+ ' + T('Categorías')}</button></div></div>
@@ -197,31 +201,43 @@ $('#info').addEventListener('submit', e => {
   gameChanged(active, ['cats'], prefs.group === 'cat'); toast(T('Categoría «{0}» añadida', name));
 });
 /* ---------- format: the case in your hands shrinks away and the new one takes its place ---------- */
-const FMT_ICON = { dvd: '▮', jewel: '◫', bigjewel: '◧', big: '▣', floppy: '▤', cart: '▭' };
+const FMT_ICON = { dvd: '▮', jewel: '◫', bigjewel: '◧', big: '▣', floppy: '▤', cart: '▭', vhs: '▬', bluray: '▮', dvdbox: '▯', bdbox: '▯', vhsbox: '▦' };
 function setFormat(fmt) {
-  if (!active || !DIMS[fmt] || busy || !(mode === 'inspect' || mode === 'open') || fmtLocked(active.g)) { renderInfo(true); return; }
+  if (!active || !DIMS[fmt] || DIMS[fmt].video || busy || !(mode === 'inspect' || mode === 'open') || fmtLocked(active.g)) { renderInfo(true); return; }
   if (active.g.fmt === fmt) return;
+  return swapCaseTo(active, () => { active.g.fmt = fmt; active.g.fmtPick = fmt; }, true);
+}
+/* a new case for the same game where the old one is, taking over its place on the shelf */
+function replaceCase(c) {
+  const n = new Case(c.g); n.key = c.key; caseById.set(c.key, n);
+  n.root.position.copy(c.root.position); n.root.quaternion.copy(c.root.quaternion); n.root.scale.copy(c.root.scale);
+  n.mode = c.mode; n.flipT = n.flipA = c.flipT; n.leaving = c.leaving; n.row = c.row; n.unitIdx = c.unitIdx; n.fresh = false; n.match = c.match; n.pullHold = c.pullHold;
+  /* its place on the shelf: same spot for now; the shelf makes room when you put it back */
+  placeCase(n, c.home.x, c.faceOut, c.home.board, isCases() ? SH.front : SHELF.front);
+  const i = navOrder.indexOf(c); if (i >= 0) navOrder[i] = n;
+  if (focus === c) focus = n; if (hovered === c) hovered = n;
+  c.dispose(); cases = [...caseById.values()]; buildShelfPicks();
+  pendingRelayout = true;
+  return n;
+}
+/* the case in your hands shrinks away and another takes its place: a new format, or another season */
+function swapCaseTo(c0, change, sayFormat) {
+  if (!c0 || busy || !(mode === 'inspect' || mode === 'open')) { renderInfo(true); return; }
   return guarded(async () => {
-    const c = active, g = c.g, wasOpen = mode === 'open';
+    const c = c0, g = c.g, wasOpen = mode === 'open';
     setMode('busy'); stopTrailer();
     if (wasOpen) await closeCase(true);
     if (c.wrap) g.tear = c.tear;
     sfx.whoosh(); c.vanish = true; c.fast = true; await wait(170);
-    g.fmt = fmt; g.fmtPick = fmt; saveGame(g);
-    const n = new Case(g); n.key = c.key; caseById.set(c.key, n);
-    n.root.position.copy(c.root.position); n.root.quaternion.copy(c.root.quaternion); n.root.scale.setScalar(.02);
-    n.mode = c.mode; n.flipT = n.flipA = c.flipT; n.leaving = true; n.row = c.row; n.unitIdx = c.unitIdx; n.fresh = false; n.match = c.match;
-    /* its place on the shelf: same spot for now; the shelf makes room when you put it back */
-    placeCase(n, c.home.x, c.faceOut, c.home.board, isCases() ? SH.front : SHELF.front);
-    const i = navOrder.indexOf(c); if (i >= 0) navOrder[i] = n;
-    if (focus === c) focus = n; if (hovered === c) hovered = n;
-    c.dispose(); cases = [...caseById.values()]; buildShelfPicks();
+    change(); if (g.kind === 'series') await videoEpisodes(g, seasonOf(g)).then(() => resolveVideoFmt(g));
+    const fmt = g.fmt; saveGame(g);
+    const n = replaceCase(c); n.root.scale.setScalar(.02); n.leaving = true;
     active = n; n.ensureDetail(); n.setShadow(true); n.placeExtras();
-    pendingRelayout = true;
     sfx.handle(fmt); await wait(420);
-    if (wasOpen) { await swingOpen(n); setMode('open'); } else setMode('inspect');
+    if (g.video) setVideoMedium(DIMS[fmt].media);
+    if (wasOpen) { await swingOpen(n); if (n.multi) multiOpened(n); setMode('open'); } else setMode('inspect');
     startTrailer(n); renderInfo(true);
-    toast(T('Ahora es: {0}', T(DIMS[fmt].name)), 2200);
+    toast(sayFormat || !g.video ? T('Ahora es: {0}', T(DIMS[fmt].name)) : (seasonOf(g) ? seasonOf(g).name : g.t), 2200);
   });
 }
 /* the card can be dragged by its top bar anywhere on screen; the place is remembered (double click: back home) */
@@ -261,10 +277,10 @@ qEl.addEventListener('keydown', e => { if (e.key === 'Enter') { const m = navOrd
 const setBtn = $('#setBtn'), setPop = $('#settings');
 function renderUgcList() {
   const el = $('#ugcList'); if (!el) return;
-  const rows = [...systemsList().map(s => ['sys:' + s.key, s.name, s.key === 'PC' ? T('PC genérico') : T('Consola genérica (ID-2)')]), ['scr:crt', T('Tele de tubo'), T('Genérica')], ['scr:flat', T('Tele plana'), T('Genérica')], ['scr:monitor', T('Monitor del PC'), T('Genérico')]];
+  const rows = [...systemsList().flatMap(s => s.key === 'VIDEO' ? [['vid:tape', T('Vídeo VHS'), T('Genérico')], ['vid:disc', T('Reproductor de DVD y Blu-ray'), T('Genérico')]] : [['sys:' + s.key, s.name, s.key === 'PC' ? T('PC genérico') : T('Consola genérica (ID-2)')]]), ['scr:crt', T('Tele de tubo'), T('Genérica')], ['scr:flat', T('Tele plana'), T('Genérica')], ['scr:monitor', T('Monitor del PC'), T('Genérico')]];
   /* EmuVR's own consoles, once its folder has been read: offered on every system, the ones that suit it first */
   const bases = UGCS.bases(), sysOfKey = k => k.slice(4);
-  const baseSel = k => !bases.length || !k.startsWith('sys:') || k === 'sys:PC' ? '' : `<select data-ugc-base="${k}" aria-label="${T('Consola de EmuVR')}"><option value="">EmuVR…</option>${bases.slice().sort((a, b) => (b.sys === sysOfKey(k)) - (a.sys === sysOfKey(k))).map(b => `<option value="${esc(b.id)}"${UGCS.meta()[k] && UGCS.meta()[k].base === b.id ? ' selected' : ''}>${esc(T(b.name))}</option>`).join('')}</select>`;
+  const baseSel = k => !bases.length || !/^(sys|vid):/.test(k) || k === 'sys:PC' ? '' : `<select data-ugc-base="${k}" aria-label="${T('Consola de EmuVR')}"><option value="">EmuVR…</option>${bases.slice().sort((a, b) => (b.sys === sysOfKey(k)) - (a.sys === sysOfKey(k))).map(b => `<option value="${esc(b.id)}"${UGCS.meta()[k] && UGCS.meta()[k].base === b.id ? ' selected' : ''}>${esc(T(b.name))}</option>`).join('')}</select>`;
   const head = `<div class="ugc-item"><div class="ugc-what"><b>${T('Consolas de EmuVR')}</b><span${bases.length ? ' class="on"' : ''}>${bases.length ? T('{0} consolas leídas', bases.length) : T('Las que trae EmuVR, sin .ugc')}</span></div><div class="ugc-btns"><button type="button" data-ugc-emuvr>${bases.length ? T('Volver a leer') : T('Leer carpeta de EmuVR')}</button></div></div>`;
   el.innerHTML = head + rows.map(([k, label, gen]) => { const m = UGCS.meta()[k]; return `<div class="ugc-item"><div class="ugc-what"><b>${esc(label)}</b><span${m ? ' class="on"' : ''}>${m ? esc(m.name) : gen}</span></div><div class="ugc-btns">${m ? `<button type="button" data-ugc-rot="${k}" title="${T('Girar 180°')}" aria-label="${T('Girar 180°')}">↻</button><button type="button" data-ugc-del="${k}" title="${T('Quitar')}" aria-label="${T('Quitar')}">✕</button>` : ''}${baseSel(k)}<button type="button" data-ugc-pick="${k}">${m ? T('Cambiar') : T('Elegir .ugc')}</button></div></div>`; }).join('');
 }
@@ -349,6 +365,9 @@ function pick(c) {
     if (cam.view === 'browse') setView('shelf');
     setMode('busy');
     if (c.g.real) await LIB.prepare(c.g, 1500);
+    /* a series learns its seasons first: if the season comes in another case, that case leaves the shelf instead */
+    if (c.g.kind === 'series') { const old = c.g.fmt; await videoSeasons(c.g); await videoEpisodes(c.g, seasonOf(c.g)); resolveVideoFmt(c.g); if (c.g.fmt !== old) { const n = replaceCase(c); c = n; active = n; } }
+    if (c.g.video) setVideoMedium(c.dim.media);
     c.ensureDetail(); c.setShadow(true);
     /* the case slides out for as long as the recorded scrape lasts and comes free on its loudest moment */
     const h = clamp(sfx.slide(c.g.fmt), .18, .7);
@@ -373,6 +392,7 @@ function openCase() {
     const c = active; setMode('busy');
     if (c.flipT) { c.flipT = 0; await wait(450); }
     await swingOpen(c);
+    if (c.multi) multiOpened(c);
     setMode('open');
   });
 }
@@ -404,7 +424,7 @@ async function finishWrap(c) {
 }
 function closeCase(internal) {
   /* the lid speeds up and lands exactly on the recorded snap */
-  const run = async () => { const c = active; if (!internal) setMode('busy'); const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0; if (!internal) setMode('inspect'); };
+  const run = async () => { const c = active; if (!internal) setMode('busy'); if (c.multi) { multiClosing(c); await wait(c.multi.kind === 'tape' ? 380 : 260); } const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0; if (!internal) setMode('inspect'); };
   if (internal) return run();
   if (!active || mode !== 'open') return;
   return guarded(run);
@@ -498,6 +518,7 @@ async function popOut(d, P) {
 function afterOut(P) { if (P.kind === 'tray') setTimeout(() => trayTo(false), 350); if (P.kind === 'socket' && P.after) setTimeout(() => P.after(), 500); }
 function insertDisc() {
   if (!active || mode !== 'open') return;
+  if (active.g.video && !VPLAY.item) { const m = active.multi; return chooseVideo(active, m ? m.slots[m.focus || 0] : null); }
   return guarded(async () => {
     const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), P = portOf(c);
     setMode('busy'); hoverPart = null; c.discLabelMat.emissive.set('#000000'); stopTrailer();
@@ -513,6 +534,13 @@ function insertDisc() {
     await pushIn(d, P);
     setLed(true); await waitReal(.17);
     sfx.tvOn(); tvSet('boot', c);
+    if (c.g.video) {
+      startVideo(c); await wait(1200); tvSet('play', c);
+      playStart = performance.now(); $('#playTitle').textContent = c.g.t + (VPLAY.item && !VPLAY.item.film ? ' · ' + epCode(VPLAY.item) : ''); renderPlayBanner();
+      setMode('playing');
+      if (PN_STATE.pendingEject) { const o = PN_STATE.pendingEject; PN_STATE.pendingEject = null; setTimeout(() => closeGame(o), 700); }
+      return;
+    }
     if (PLAYNITE) {
       /* the real thing: Playnite launches the game; the TV waits until it is actually running */
       PN_STATE.waiting = true; PN_STATE.running = c.g.id; LIB.start(c.g);
@@ -548,6 +576,7 @@ async function restorePlaying(id, seconds) {
 }
 function renderPlayBanner() {
   const g = active ? active.g : { fmt: 'dvd' };
+  if (g.video) { $('#playNote').textContent = mediaT(g, PLAYNITE && g.real ? (PN_STATE.waiting ? 'Abriendo el reproductor…' : 'Al cerrar el reproductor, el disco vuelve a su caja.') : 'En esta demo, la película dura unos segundos.'); $('#playEyebrow').textContent = T(PN_STATE.waiting && g.real ? 'Arrancando' : 'Viendo'); return; }
   $('#playNote').textContent = mediaT(g, PLAYNITE ? (PN_STATE.waiting ? 'Playnite está abriendo el juego. Si no arranca, saca el disco con Esc.' : PN_STATE.selfTrack ? 'Playnite lo ha dado por cerrado, pero sigue abierto: la estantería cuenta el tiempo y el disco sale cuando lo cierres.' : 'Playnite cuenta el tiempo. Al cerrar el juego, el disco vuelve solo a su caja.') : 'En esta demo cada segundo cuenta como un minuto de partida.');
   $('#playEyebrow').textContent = T(PLAYNITE && PN_STATE.waiting ? 'Arrancando' : 'En marcha');
 }
@@ -562,7 +591,8 @@ function closeGame(o = {}) {
     const above = rest ? new V3(home.x, home.y, home.z + 7) : discAbove(c, new V3());
     const mins = Math.max(1, Math.floor((performance.now() - playStart) / 1000));
     /* pulled out by hand while only the shelf was keeping track: stop counting from here */
-    const released = PLAYNITE && o.keepRunning && PN_STATE.selfTrack;
+    if (g.video && !o.auto) stopVideo();
+    const released = !g.video && PLAYNITE && o.keepRunning && PN_STATE.selfTrack;
     if (released) { LIB.send('release', { id: g.id }); o = Object.assign({}, o, { keepRunning: false, msg: mediaT(g, 'Disco fuera. El tiempo hasta ahora se suma a {0} en Playnite.', g.t) }); }
     PN_STATE.waiting = false; PN_STATE.selfTrack = false; if (!o.keepRunning) PN_STATE.running = null;
     setMode('busy'); tvSet('standby'); setLed(false); sfx.tvOff();
@@ -580,8 +610,10 @@ function closeGame(o = {}) {
     sfx.mediaIn(g.fmt, { hitAt: (.55 + .22) * SPEED });
     await tween(.55, t => { d.position.y = lerp(above.y, home.y, t); d.position.z = lerp(above.z, home.z + 1.4, t); });
     await tween(.22, t => { d.position.z = home.z + 1.4 * (1 - t); }); d.position.copy(home);
+    if (c.multi) putBackInSet(c);
     let msg, moved = false;
-    if (PLAYNITE) {
+    if (g.video) msg = videoDone(c, o);
+    else if (PLAYNITE) {
       const s = o.seconds || 0;
       msg = o.msg || (o.keepRunning ? T('El juego sigue abierto: Playnite seguirá contando el tiempo.') : s >= 60 ? T('+{0} min en {1}. Playnite ya lo ha apuntado.', Math.round(s / 60), g.t) : s > 0 ? T('Partida corta en {0}.', g.t) : mediaT(g, 'Disco fuera.'));
       if (s > 0 || o.auto) { g.dust = 0; c.setDust(0); saveGame(g); }

@@ -156,6 +156,85 @@ let pcTray = null;
   kb.position.set(MON.x - 2, TABLE.top + 1.6, 35); kb.rotation.x = .07; kb.castShadow = kb.receiveShadow = true; pcGroup.add(kb);
 }
 
+/* ---------- the video room's machines: a VHS recorder and a disc player, our own designs ---------- */
+const VCR = { w: 43, h: 9.4, d: 30, slot: [19.6, 2.8] }, DVP = { w: 43, h: 6, d: 26, tray: 13.6 };
+const vcrGroup = new THREE.Group(), playerGroup = new THREE.Group(); scene.add(vcrGroup, playerGroup);
+const vidLedMat = new THREE.MeshBasicMaterial({ color: '#2a1d10', toneMapped: false });
+let vcrFlap = null, dvpTray = null;
+function makeFrontCanvas(W, H, draw) { const c = mkCanvas(W, H), x = c.getContext('2d'); draw(x, W, H); return c; }
+{
+  const silver = M(THREE.MeshStandardMaterial, { color: '#2b2c30', roughness: .45, metalness: .35 }, 1), dark = M(THREE.MeshStandardMaterial, { color: '#111114', roughness: .55 }, .8);
+  /* VCR: brushed front, the tape door in the middle, a clock display on the right */
+  const k = 20, front = makeFrontCanvas(VCR.w * k, VCR.h * k, (x, W, H) => {
+    x.fillStyle = lg(x, 0, 0, 0, H, [[0, '#3a3b40'], [1, '#24252a']]); x.fillRect(0, 0, W, H);
+    for (let i = 0; i < 90; i++) { x.fillStyle = `rgba(255,255,255,${.012 + (i % 3) * .006})`; x.fillRect(0, i * H / 90, W, 1); }
+    x.fillStyle = '#0c0c0e'; rr(x, W / 2 - VCR.slot[0] * k / 2 - 10, H * .28 - 8, VCR.slot[0] * k + 20, VCR.slot[1] * k + 16, 8); x.fill();
+    x.fillStyle = '#08120c'; rr(x, W * .76, H * .3, W * .16, H * .34, 6); x.fill(); x.fillStyle = '#44ff88'; x.font = `700 ${Math.round(H * .2)}px ${F.mono}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('--:--', W * .84, H * .47);
+    x.fillStyle = '#c9c9cf'; x.font = `800 ${Math.round(H * .13)}px ${F.saira}`; x.textAlign = 'left'; x.fillText('MYV  VHS · HQ', W * .04, H * .8);
+    ['⏏', '◀◀', '▶', '■', '▶▶'].forEach((t, i) => { x.fillStyle = '#4a4b52'; rr(x, W * .05 + i * W * .045, H * .32, W * .038, H * .2, 4); x.fill(); x.fillStyle = '#cfcfd6'; x.font = `700 ${Math.round(H * .11)}px ${F.fig}`; x.textAlign = 'center'; x.fillText(t, W * .069 + i * W * .045, H * .43); });
+  });
+  const body = new THREE.Mesh(slabGeometry(VCR.w, VCR.h, VCR.d, .6, .3), [M(THREE.MeshStandardMaterial, { map: tex(front), roughness: .5, metalness: .2 }, .9), silver, silver]);
+  body.position.set(0, VCR.h / 2 + .6, -VCR.d / 2); body.castShadow = body.receiveShadow = true; vcrGroup.add(body);
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => addBox(2.6, .6, 2.6, dark, a * (VCR.w / 2 - 3), .3, -VCR.d / 2 + b * (VCR.d / 2 - 3), vcrGroup));
+  vcrFlap = new THREE.Group(); vcrFlap.position.set(0, .6 + VCR.h * .72 + .35, .05); vcrGroup.add(vcrFlap);
+  const flap = new THREE.Mesh(new THREE.BoxGeometry(VCR.slot[0], VCR.slot[1], .25), dark); flap.position.y = -VCR.slot[1] / 2; vcrFlap.add(flap);
+  const led = new THREE.Mesh(new THREE.BoxGeometry(.5, .25, .1), vidLedMat); led.position.set(VCR.w * .3, VCR.h * .78, .06); vcrGroup.add(led);
+  VCR.slotY = vcrFlap.position.y - VCR.slot[1] / 2;
+  /* the disc player: slim, a tray across the left half */
+  const pf = makeFrontCanvas(DVP.w * k, DVP.h * k, (x, W, H) => {
+    x.fillStyle = lg(x, 0, 0, 0, H, [[0, '#2c2d32'], [1, '#1b1c20']]); x.fillRect(0, 0, W, H);
+    x.fillStyle = '#0a0a0c'; x.fillRect(W * .06, H * .2, W * .42, H * .16);
+    x.fillStyle = '#c9c9cf'; x.font = `800 ${Math.round(H * .2)}px ${F.saira}`; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText('MYV  DVD · BLU-RAY', W * .06, H * .7);
+    x.fillStyle = '#08120c'; rr(x, W * .6, H * .25, W * .22, H * .3, 6); x.fill(); x.fillStyle = '#5fb7ff'; x.font = `700 ${Math.round(H * .18)}px ${F.mono}`; x.textAlign = 'center'; x.fillText('NO DISC', W * .71, H * .41);
+  });
+  const pbody = new THREE.Mesh(slabGeometry(DVP.w, DVP.h, DVP.d, .5, .25), [M(THREE.MeshStandardMaterial, { map: tex(pf), roughness: .45, metalness: .25 }, .9), silver, silver]);
+  pbody.position.set(0, DVP.h / 2 + .6, -DVP.d / 2); pbody.castShadow = pbody.receiveShadow = true; playerGroup.add(pbody);
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => addBox(2.4, .6, 2.4, dark, a * (DVP.w / 2 - 3), .3, -DVP.d / 2 + b * (DVP.d / 2 - 3), playerGroup));
+  const trayC = makeFrontCanvas(256, 256, (x, W, H) => { x.fillStyle = '#1c1d21'; x.fillRect(0, 0, W, H); x.fillStyle = '#121316'; x.beginPath(); x.arc(W / 2, H / 2, W * .47, 0, 7); x.fill(); x.fillStyle = '#2b2d33'; x.beginPath(); x.arc(W / 2, H / 2, W * .1, 0, 7); x.fill(); });
+  dvpTray = new THREE.Mesh(new THREE.BoxGeometry(DVP.tray, .5, DVP.tray), [dark, dark, M(THREE.MeshStandardMaterial, { map: tex(trayC), roughness: .6 }, .7), dark, dark, dark]);
+  dvpTray.userData.home = new V3(-DVP.w * .27 + 1, DVP.h * .55 + .6, -DVP.tray / 2 - .3); dvpTray.position.copy(dvpTray.userData.home); dvpTray.castShadow = true; playerGroup.add(dvpTray);
+  const pled = new THREE.Mesh(new THREE.BoxGeometry(.5, .25, .1), vidLedMat); pled.position.set(DVP.w * .42, DVP.h * .75, .06); playerGroup.add(pled);
+}
+/* our machines as devices: the tape goes in through the door and disappears, the disc rides the tray in */
+function videoMachine(kind) {
+  const grp = kind === 'tape' ? vcrGroup : playerGroup;
+  const play = (sec, fn) => tweenReal(sec, fn, easeIO);
+  const dev = {
+    name: kind === 'tape' ? 'vcr' : 'dvp', group: grp, flaps: [], floppyLed: null,
+    led(on) { vidLedMat.color.set(on ? (kind === 'tape' ? '#ff4a2e' : '#5fb7ff') : '#2a1d10'); },
+    reset() { vcrFlap.rotation.x = 0; dvpTray.position.copy(dvpTray.userData.home); },
+    port() {
+      grp.updateMatrixWorld(true); const w = v => grp.localToWorld(v);
+      if (kind === 'tape') {
+        /* flat, label up, the flap edge first; its spine is what you see going in */
+        const y = VCR.slotY, mid = MSIZE.tape.h / 2;
+        return {
+          kind: 'socket', m: 'tape', q: new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0)), s: 1,
+          entry: w(new V3(0, y, mid + 6)), inside: w(new V3(0, y, mid + .4)), out: w(new V3(0, y, mid + 3)),
+          prepare() { },
+          async seat(d) { sfx.click(.6); await play(.18, t => { vcrFlap.rotation.x = -1.4 * t; }); sfx.slotIn(); const z0 = d.position.z; await play(.55, t => { d.position.z = z0 - (MSIZE.tape.h + 1) * t; }); d.visible = false; await play(.18, t => { vcrFlap.rotation.x = -1.4 * (1 - t); }); },
+          async unseat(d) { sfx.slotOut(); await play(.16, t => { vcrFlap.rotation.x = -1.4 * t; }); d.visible = true; const z0 = d.position.z; await play(.5, t => { d.position.z = z0 + (MSIZE.tape.h + 1) * t; }); scene.attach(d); },
+          after() { play(.2, t => { vcrFlap.rotation.x = -1.4 * (1 - t); }); },
+          restore(d) { d.visible = false; }
+        };
+      }
+      const h = dvpTray.userData.home, outZ = DVP.tray - .5, onTray = new V3(h.x, h.y + .45, h.z + outZ);
+      const trayTo = open => { sfx.tray(); const z0 = dvpTray.position.z, z1 = h.z + (open ? outZ : 0); return play(.7, t => { dvpTray.position.z = lerp(z0, z1, t); }); };
+      return {
+        kind: 'socket', m: 'disc', q: new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0)), s: 1,
+        entry: w(onTray.clone().add(new V3(0, 8, 0))), inside: w(onTray.clone()), out: w(onTray.clone().add(new V3(0, 4, 0))),
+        prepare() { trayTo(true); },
+        async seat(d) { sfx.thud(); await waitReal(.2); dvpTray.attach(d); await trayTo(false); },
+        async unseat(d) { await trayTo(true); scene.attach(d); },
+        after() { trayTo(false); },
+        restore(d) { d.position.copy(w(new V3(h.x, h.y + .45, h.z))); dvpTray.attach(d); }
+      };
+    },
+    bounds() { return new THREE.Box3().setFromObject(grp); }
+  };
+  return dev;
+}
+
 /* =====================================================================
    MACHINES: where each medium goes in, for whatever is on the table or the floor
    ===================================================================== */
@@ -185,6 +264,7 @@ const DEV = {
     },
     bounds() { return new THREE.Box3().setFromObject(pcGroup); }
   },
+  vcr: videoMachine('tape'), dvp: videoMachine('disc'),
   ugc: null,  /* filled when a model is in use */
   led(on) { if (DEV.cur) DEV.cur.led(on); }
 };
@@ -195,7 +275,7 @@ const DEV = {
    socket), so the machine is always posed as a whole: shut or open, empty or holding the medium.
    Which way the medium goes in comes from that movement; with no animation for it, from the way out of the
    socket that nothing blocks (rays against the model). Discs lie across the socket's Y axis, as EmuVR's do;
-   cartridges and floppies go in on their leading edge, the label to the front (or up, when they go in
+   cartridges, floppies and tapes go in on their leading edge, the label to the front (or up, when they go in
    flat). In a tight opening (a handheld, a UMD) the medium is scaled down to fit.
    Models without any of this fall back to a lid (a mesh called lid) or to the top of the model. */
 /* how far a ray goes inside the model before it meets it (both faces count: the rays start inside) */
@@ -288,7 +368,7 @@ function ugcDevice(root) {
     const played = sock(), na = discAxis(played), nl = [played.x, played.y, played.z].map(a => a.dot(na));
     pose(opens, false);
     const deep = ready.p.clone().add(move), per = {};
-    for (const m of ['disc', 'cart', 'floppy']) {
+    for (const m of ['disc', 'cart', 'floppy', 'tape']) {
       const disc = m === 'disc', H = disc ? DIMS.dvd.discR * 2 : MSIZE[m].h, q = new Q4();
       let inward, s = 1;
       if (disc) {
@@ -378,7 +458,7 @@ function ugcDevice(root) {
   return dev;
 }
 /* the name the TV prints while the machine boots */
-function deviceLabel() { const d = DEV.cur; if (!d || d.name === 'id2') return 'ID-2'; if (d.name === 'pc') return 'MYV 486'; const m = UGCS.meta()['sys:' + STAGE.sys]; return (m && m.name || 'UGC').toUpperCase().slice(0, 18); }
+function deviceLabel() { const d = DEV.cur; if (!d || d.name === 'id2') return 'ID-2'; if (d.name === 'pc') return 'MYV 486'; if (d.name === 'vcr') return 'MYV VHS'; if (d.name === 'dvp') return 'MYV DVD'; const m = UGCS.meta()[devKey(STAGE.sys)]; return (m && m.name || 'UGC').toUpperCase().slice(0, 18); }
 function setLids(dev, v) { (dev && dev.lids || []).forEach(p => { p.rotation.x = -1.3 * v; }); }
 
 /* =====================================================================
@@ -386,10 +466,15 @@ function setLids(dev, v) { (dev && dev.lids || []).forEach(p => { p.rotation.x =
    ===================================================================== */
 function isRooms() { return prefs.layout === 'rooms'; }
 const UGC_SCREEN_MAT = new THREE.MeshBasicMaterial({ map: tvTex, toneMapped: false });
-const STAGE = { name: '', sys: '', screen: null, dirty: false };
-/* what the current system's room is: the desk for PC, the TV room for the rest */
-function stageFor(sys) { return !isRooms() ? 'table' : sys === 'PC' ? 'pc' : 'tv'; }
-function screenFor(stage, sys) { return stage === 'pc' ? 'monitor' : stage === 'tv' ? (FLAT_SYSTEMS.has(sys) ? 'flat' : 'crt') : 'crt'; }
+const STAGE = { name: '', sys: '', screen: null, dirty: false, vmed: 'tape' };
+/* what the current system's room is: the desk for PC, the video shop for films, the TV room for the rest */
+function stageFor(sys) { return !isRooms() ? 'table' : sys === 'PC' ? 'pc' : sys === 'VIDEO' ? 'video' : 'tv'; }
+/* the video room plays tapes on the CRT and discs on the flat TV */
+function screenFor(stage, sys) { return stage === 'pc' ? 'monitor' : stage === 'video' ? (STAGE.vmed === 'tape' ? 'crt' : 'flat') : stage === 'tv' ? (FLAT_SYSTEMS.has(sys) ? 'flat' : 'crt') : 'crt'; }
+/* the machine a system's games go into: its own key, or the video room's player for the medium in hand */
+function devKey(sys) { return sys === 'VIDEO' ? 'vid:' + STAGE.vmed : 'sys:' + sys; }
+/* a tape needs the VCR and the CRT, a disc the player and the flat TV: the room changes while you hold the case */
+function setVideoMedium(m) { m = m === 'tape' ? 'tape' : 'disc'; if (STAGE.vmed === m && STAGE.name === 'video') return; STAGE.vmed = m; if (STAGE.name === 'video') { UGCS.load(UGCS.keysFor('VIDEO')).then(() => { if (STAGE.vmed === m && mode !== 'playing') applyStage('VIDEO'); }); applyStage('VIDEO'); } }
 function applyStage(sys) {
   const st = stageFor(sys); STAGE.name = st; STAGE.sys = sys;
   tvRoom.visible = isRooms();
@@ -400,14 +485,16 @@ function applyStage(sys) {
   pcGroup.visible = st === 'pc';
   const scr = screenFor(st, sys); STAGE.screen = scr;
   /* EmuVR models, when you have chosen one for this system or this screen */
-  const devModel = st === 'table' ? null : UGCS.ready('sys:' + sys), scrModel = st === 'table' ? null : UGCS.ready('scr:' + scr);
+  const devModel = st === 'table' ? null : UGCS.ready(devKey(sys)), scrModel = st === 'table' ? null : UGCS.ready('scr:' + scr);
   UGCS.showOnly([devModel, scrModel].filter(Boolean));
   if (devModel) {
     devModel.position.copy(st === 'pc' ? new V3(PCT.x + 4, TABLE.top, PCT.front - devModel.userData.size.z / 2) : new V3(FLOOR_CON.x, RUG.y * 2, FLOOR_CON.front - devModel.userData.size.z / 2));
-    devModel.rotation.y = UGCS.rot('sys:' + sys) ? Math.PI : 0;
+    devModel.rotation.y = UGCS.rot(devKey(sys)) ? Math.PI : 0;
     DEV.cur = devModel.userData.dev;
-  } else DEV.cur = st === 'pc' ? DEV.pc : DEV.id2;
-  conGroup.visible = !devModel && st !== 'pc';
+  } else DEV.cur = st === 'pc' ? DEV.pc : st === 'video' ? (STAGE.vmed === 'tape' ? DEV.vcr : DEV.dvp) : DEV.id2;
+  conGroup.visible = !devModel && st !== 'pc' && st !== 'video';
+  /* our VCR or disc player on the rug, where the console would be */
+  [[vcrGroup, 'tape', VCR], [playerGroup, 'disc', DVP]].forEach(([g, m, S]) => { g.visible = st === 'video' && !devModel && STAGE.vmed === m; g.position.set(FLOOR_CON.x, RUG.y * 2, FLOOR_CON.front); });
   if (st === 'pc' && devModel) pcGroup.children.forEach(o => { o.visible = !(o.position.x < PCT.x + PCT.w / 2 + 2 && o.position.x > PCT.x - PCT.w / 2 - 2); });
   else pcGroup.children.forEach(o => { o.visible = true; });
   /* the screen */
@@ -433,8 +520,8 @@ const _rqY = new Q4(), _rqF = new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0)),
 function restPose(c, P, Q) {
   const D = c.dim, o = easeIO(c.openA); let x, y, z, yaw;
   if (STAGE.name === 'pc') { x = MON.x + MON.w / 2 + 2 + 1.5 * D.w; z = 10; y = TABLE.top + .1; yaw = -.1; }
-  else if (STAGE.name === 'tv') {
-    const m = DEV.cur && DEV.cur.name === 'ugc' ? UGCS.ready('sys:' + STAGE.sys) : null, s = m ? m.userData.size : null;
+  else if (STAGE.name === 'tv' || STAGE.name === 'video') {
+    const m = DEV.cur && DEV.cur.name === 'ugc' ? UGCS.ready(devKey(STAGE.sys)) : null, s = m ? m.userData.size : DEV.cur && DEV.cur.group && STAGE.name === 'video' ? { x: DEV.cur === DEV.vcr ? VCR.w : DVP.w, z: DEV.cur === DEV.vcr ? VCR.d : DVP.d } : null;
     x = FLOOR_CON.x - (s ? s.x : CON.w) / 2 - 5 - D.w / 2; z = FLOOR_CON.front - (s ? s.z : CON.d) / 2; y = RUG.y * 2; yaw = .14;
   } else { x = CON.x + CON.w / 2 + 3 + 1.5 * D.w; z = 10; y = TABLE.top; yaw = -.08; }
   Q.copy(_rqY.setFromAxisAngle(YAX, yaw)).multiply(_rqF);
@@ -443,6 +530,8 @@ function restPose(c, P, Q) {
 /* camera boxes for each room */
 function stageBox(view) {
   const narrow = camera.aspect < .95;
+  /* the video shop is framed like the bookcases; when a film goes in, the camera turns to the TV room */
+  if (STAGE.name === 'video') return view === 'console' ? { box: { cx: CAB.x, cy: 42, cz: 45, w: narrow ? 120 : 150, h: narrow ? 190 : 150 }, dir: new V3(0, .18, 1) } : null;
   if (STAGE.name === 'tv') {
     if (view === 'browse') return { box: { cx: clamp(cam.browseX, CAB.x - CAB.w / 2 + 34, CAB.x + CAB.w / 2 - 34), cy: CAB.boards[cam.browseRow || 0] + CAB.rowH / 2, cz: CAB.front - 8, w: narrow ? 50 : 84, h: 36 }, dir: new V3(0, .2, 1) };
     if (view === 'console') return { box: { cx: CAB.x, cy: 42, cz: 45, w: narrow ? 120 : 150, h: narrow ? 190 : 150 }, dir: new V3(0, .18, 1) };
@@ -511,6 +600,6 @@ const UGCS = {
       return this.building.get(k);
     }));
   },
-  keysFor(sys) { const st = stageFor(sys); return st === 'table' ? [] : ['sys:' + sys, 'scr:' + screenFor(st, sys)]; }
+  keysFor(sys) { const st = stageFor(sys); return st === 'table' ? [] : st === 'video' ? ['vid:tape', 'vid:disc', 'scr:crt', 'scr:flat'] : ['sys:' + sys, 'scr:' + screenFor(st, sys)]; }
 };
 scene.add(UGCS.group);

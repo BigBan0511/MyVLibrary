@@ -48,7 +48,7 @@ canvasEl.addEventListener('pointermove', e => {
     const h = hit(); setHovered(h ? h.case : null); canvasEl.style.cursor = h ? 'pointer' : 'default';
   }
   else if (mode === 'inspect') { const h = hit(); canvasEl.style.cursor = h && h.case === active ? (h.part === 'tab' ? 'grab' : active.g.dust > .02 ? 'crosshair' : 'pointer') : 'default'; }
-  else if (mode === 'open') { const h = hit(); hoverPart = h && h.case === active ? h.part : null; canvasEl.style.cursor = hoverPart === 'disc' || hoverPart === 'manual' ? 'pointer' : 'default'; }
+  else if (mode === 'open') { const h = hit(); hoverPart = h && h.case === active ? h.part : null; if (active.multi) setEpFocus(active, hoverPart === 'ep' ? slotOf(active, h.obj) : null, true); canvasEl.style.cursor = hoverPart === 'disc' || hoverPart === 'manual' || hoverPart === 'ep' ? 'pointer' : 'default'; }
 });
 canvasEl.addEventListener('pointerleave', () => { if (mode === 'shelf' && !kbNav) setHovered(null); });
 canvasEl.addEventListener('pointerdown', e => {
@@ -68,7 +68,7 @@ canvasEl.addEventListener('pointerup', e => {
   setPointer(e); kbNav = false; const h = hit();
   if (mode === 'shelf') { if (h) { focus = h.case; pick(h.case); } }
   else if (mode === 'inspect') { if (h && h.case === active && h.part !== 'tab') flipCase(); }
-  else if (mode === 'open') { if (h && h.case === active) { if (h.part === 'disc') insertDisc(); else if (h.part === 'manual') openManual(); } }
+  else if (mode === 'open') { if (h && h.case === active) { if (h.part === 'ep') { const sl = slotOf(active, h.obj); if (sl) chooseVideo(active, sl); } else if (h.part === 'disc') insertDisc(); else if (h.part === 'manual') openManual(); } }
 });
 canvasEl.addEventListener('pointercancel', () => { endDrag(); pointer.down = null; });
 canvasEl.addEventListener('wheel', e => {
@@ -95,8 +95,17 @@ function handleKey(k) {
     if (k === 'f' || k === 'F' || k === 'ArrowLeft' || k === 'ArrowRight') { flipCase(); return true; }
     if (k === 'Enter' || k === 'o' || k === 'O') { if (active && active.wrap) { if (prefs.seal === 'manual') toast(T('Tira de la lengüeta roja para quitar el precinto')); else unwrapAction(); } else openCase(); return true; }
     if (k === 'Escape' || k === 'Backspace') { putBack(); return true; }
+  } else if (mode === 'open' && active && active.multi) {
+    /* a season: left and right bring the previous or next episodes, up and down choose one */
+    const m = active.multi;
+    if (k === 'ArrowLeft' || k === 'q' || k === 'z' || k === 'PageUp') { multiGo(active, m.page - 1); return true; }
+    if (k === 'ArrowRight' || k === 'e' || k === 'c' || k === 'PageDown') { multiGo(active, m.page + 1); return true; }
+    if (k === 'ArrowUp' || k === 'ArrowDown') { const vis = m.slots.filter(o => !o.userData.away), i = Math.max(0, vis.indexOf(m.slots[m.focus || 0])); setEpFocus(active, vis[clamp(i + (k === 'ArrowDown' ? 1 : -1), 0, vis.length - 1)]); return true; }
+    if (k === 'Enter' || k === 'd' || k === 'D') { const sl = m.slots[m.focus || 0]; if (sl && !sl.userData.away) chooseVideo(active, sl); return true; }
+    if (k === '/' || k === 'b' || k === 'B') { $('#epQ').focus(); return true; }
+    if (k === 'Escape' || k === 'Backspace') { closeCase(false); return true; }
   } else if (mode === 'open') {
-    if (k === 'm' || k === 'M') { openManual(); return true; }
+    if (k === 'm' || k === 'M') { if (!active.g.video) openManual(); return true; }
     if (k === 'Enter' || k === 'd' || k === 'D') { insertDisc(); return true; }
     if (k === 'Escape' || k === 'Backspace') { closeCase(false); return true; }
   } else if (mode === 'playing') { if (k === 'Escape' || (!PLAYNITE && k === 'Enter')) { doAct('quit'); return true; } }

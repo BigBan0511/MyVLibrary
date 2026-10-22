@@ -29,12 +29,22 @@ const DIMS = {
   /* late-90s PC games on 3½" floppies: a cardboard box with a few disks inside */
   floppy:   { w: 15.5, h: 21,   d: 4,    split: 0,   discX: 0,    discR: 0,   man: [13.6, 18.4], label: 'PC · 3½" HD',  short: '3½"',  name: 'Caja de disquetes', shell: 'card',  media: 'floppy', wide: true, disks: 3 },
   /* a 16-bit cartridge in its cardboard box, in the style of the European Super Nintendo */
-  cart:     { w: 13.6, h: 18.2, d: 3.4,  split: -0.7, discX: 0,   discR: 0,   man: [12, 16.2],   label: 'CARTUCHO',     short: 'CART', name: 'Caja de cartucho',  shell: 'card',  media: 'cart', wide: true }
+  cart:     { w: 13.6, h: 18.2, d: 3.4,  split: -0.7, discX: 0,   discR: 0,   man: [12, 16.2],   label: 'CARTUCHO',     short: 'CART', name: 'Caja de cartucho',  shell: 'card',  media: 'cart', wide: true },
+  /* video (Jellyfin): the black clamshell of a VHS tape, the blue Blu-ray case, and for series with several
+     episodes a DVD or Blu-ray case with a flip tray (four discs in view) or a cardboard box of six tapes */
+  vhs:      { w: 12.6, h: 20.6, d: 3.2,  split: 0,   discX: 0,    discR: 0,   man: [0, 0],       label: 'VHS',          short: 'VHS',  name: 'Caja de VHS',       shell: 'keep',  media: 'tape', video: true },
+  bluray:   { w: 13.5, h: 17.1, d: 1.2,  split: 0,   discX: 0.45, discR: 6,   man: [0, 0],       label: 'BLU-RAY',      short: 'BD',   name: 'Caja Blu-ray',      shell: 'keep',  media: 'disc', video: true },
+  dvdbox:   { w: 13.5, h: 19,   d: 2.2,  split: 0,   discX: 0.45, discR: 6,   man: [0, 0],       label: 'DVD',          short: 'DVD',  name: 'Caja DVD de varios discos',    shell: 'keep', media: 'disc', video: true, multi: 4 },
+  bdbox:    { w: 13.5, h: 17.1, d: 1.9,  split: 0,   discX: 0.45, discR: 6,   man: [0, 0],       label: 'BLU-RAY',      short: 'BD',   name: 'Caja Blu-ray de varios discos', shell: 'keep', media: 'disc', video: true, multi: 4 },
+  vhsbox:   { w: 20.8, h: 21.6, d: 13.4, split: 6.55, discX: 0,   discR: 0,   man: [0, 0],       label: 'VHS',          short: 'VHS',  name: 'Caja de cintas',    shell: 'card',  media: 'tape', video: true, multi: 6, wide: true }
 };
 const FMTS = Object.keys(DIMS);
-const FMT_ORDER = { dvd: 0, jewel: 1, bigjewel: 2, big: 3, floppy: 4, cart: 5 };
-/* the media themselves (cm): a 3½" disk and a cartridge, both drawn upright in their own XY plane */
-const MSIZE = { floppy: { w: 9, h: 9.4, t: .33 }, cart: { w: 12.7, h: 8.6, t: 2 } };
+const FMT_ORDER = { dvd: 0, jewel: 1, bigjewel: 2, big: 3, floppy: 4, cart: 5, vhs: 6, bluray: 7, dvdbox: 8, bdbox: 9, vhsbox: 10 };
+/* the cases a game can come in, and the families a film or a season can be changed to */
+const GAME_FMTS = FMTS.filter(f => !DIMS[f].video);
+const VIDEO_FMTS = ['vhs', 'dvd', 'bluray'];
+/* the media themselves (cm): a 3½" disk, a cartridge and a VHS tape, all drawn upright in their own XY plane */
+const MSIZE = { floppy: { w: 9, h: 9.4, t: .33 }, cart: { w: 12.7, h: 8.6, t: 2 }, tape: { w: 18.7, h: 10.2, t: 2.5 } };
 function mediaOf(g) { return DIMS[g.fmt].media; }
 
 /* ---------- systems: PC games live at the desk, every other platform has its own room with a TV ---------- */
@@ -42,8 +52,9 @@ const PC_SYSTEMS = new Set(['PC', 'LINUX', 'MAC']);
 /* from the PS3 generation on, the TV in the room is a flat one */
 const FLAT_SYSTEMS = new Set(['PS3', 'PS4', 'PS5', 'X360', 'XONE', 'XSX', 'WII', 'WII U', 'SWITCH', 'SWITCH 2']);
 const CART_SYSTEMS = new Set(['NES', 'SNES', 'N64', 'MD', 'SMS', 'GB', 'GBC', 'GBA', 'GG', 'NEO GEO', 'DS', '3DS', 'VITA', 'SWITCH', 'SWITCH 2']);
-const SYS_ORDER = ['PC', 'NES', 'SMS', 'MD', 'PCE', 'GB', 'GG', 'SNES', 'NEO GEO', 'MEGA CD', '3DO', 'SATURN', 'PS1', 'N64', 'GBC', 'DC', 'PS2', 'GBA', 'GC', 'XBOX', 'DS', 'PSP', 'X360', 'PS3', 'WII', '3DS', 'VITA', 'WII U', 'XONE', 'PS4', 'SWITCH', 'XSX', 'PS5', 'SWITCH 2', 'ARCADE'];
-function sysOf(g) { return g.plat && !PC_SYSTEMS.has(g.plat) ? g.plat : 'PC'; }
+const SYS_ORDER = ['PC', 'NES', 'SMS', 'MD', 'PCE', 'GB', 'GG', 'SNES', 'NEO GEO', 'MEGA CD', '3DO', 'SATURN', 'PS1', 'N64', 'GBC', 'DC', 'PS2', 'GBA', 'GC', 'XBOX', 'DS', 'PSP', 'X360', 'PS3', 'WII', '3DS', 'VITA', 'WII U', 'XONE', 'PS4', 'SWITCH', 'XSX', 'PS5', 'SWITCH 2', 'ARCADE', 'VIDEO'];
+/* films and series from Jellyfin live in a room of their own, the video room */
+function sysOf(g) { return g.video ? 'VIDEO' : g.plat && !PC_SYSTEMS.has(g.plat) ? g.plat : 'PC'; }
 function sysRank(s) { const i = SYS_ORDER.indexOf(s); return i < 0 ? 900 : i; }
 /* the format a game came in, from its platform (and, for PC, its year) */
 /* the case each system's games came in. PC games by their year: floppies before 1994, CDs up to 2003, DVDs after */
@@ -53,13 +64,27 @@ function fmtFor(plat, year) {
   if (CART_SYSTEMS.has(plat)) return 'cart';
   return SYS_FMT[plat] || 'dvd';
 }
-/* console games keep the case they came in unless Settings frees them; PC games can always change */
-function fmtLocked(g) { return prefs.fmtCon !== 'free' && sysOf(g) !== 'PC'; }
-function resolveFmt(g) { g.fmt = !fmtLocked(g) && g.fmtPick && DIMS[g.fmtPick] ? g.fmtPick : fmtFor(g.plat, g.year); return g.fmt; }
+/* console games keep the case they came in unless Settings frees them; PC games, films and series can always change */
+function fmtLocked(g) { return !g.video && prefs.fmtCon !== 'free' && sysOf(g) !== 'PC'; }
+function resolveFmt(g) { if (g.video) return resolveVideoFmt(g); g.fmt = !fmtLocked(g) && g.fmtPick && DIMS[g.fmtPick] ? g.fmtPick : fmtFor(g.plat, g.year); return g.fmt; }
+/* films by their year: VHS up to 1997, DVD up to 2014, Blu-ray from 2015 */
+function videoFamily(year) { return !year ? 'dvd' : year <= 1997 ? 'vhs' : year <= 2014 ? 'dvd' : 'bluray'; }
+const VIDEO_BOX = { vhs: 'vhsbox', dvd: 'dvdbox', bluray: 'bdbox' };
+const VIDEO_FAMILY = { vhs: 'vhs', vhsbox: 'vhs', dvd: 'dvd', dvdbox: 'dvd', bluray: 'bluray', bdbox: 'bluray' };
+/* a film is one case; a series shows the season you are holding: its own year and format, and a box
+   of tapes or a multi-disc case when it has more than one episode */
+function seasonOf(g) { return g.kind === 'series' && g.seasons ? g.seasons[g.seasonIdx || 0] || null : null; }
+function resolveVideoFmt(g) {
+  const s = seasonOf(g), pick = (s && g.seasonPicks && g.seasonPicks[s.idx]) || g.fmtPick;
+  const fam = VIDEO_FMTS.includes(pick) ? pick : videoFamily((s && s.year) || g.year);
+  const multi = g.kind === 'series' && (s ? (s.count ?? 2) > 1 : (g.episodes ?? 2) > 1);
+  g.fmt = multi ? VIDEO_BOX[fam] : fam; return g.fmt;
+}
 /* texts that name the thing you put in the console: written for the disc, said right for the others */
 function mediaT(g, s, ...a) {
   const m = mediaOf(g);
-  if (m !== 'disc') { const w = m === 'floppy' ? ['disquete', 'Disquete', 'DISQUETE'] : ['cartucho', 'Cartucho', 'CARTUCHO']; s = s.replace(/disco/g, w[0]).replace(/Disco/g, w[1]).replace(/DISCO/g, w[2]); }
+  if (m === 'tape') s = s.replace(/\bel disco/g, 'la cinta').replace(/\bEl disco/g, 'La cinta').replace(/disco/g, 'cinta').replace(/Disco/g, 'Cinta').replace(/DISCO/g, 'CINTA');
+  else if (m !== 'disc') { const w = m === 'floppy' ? ['disquete', 'Disquete', 'DISQUETE'] : ['cartucho', 'Cartucho', 'CARTUCHO']; s = s.replace(/disco/g, w[0]).replace(/Disco/g, w[1]).replace(/DISCO/g, w[2]); }
   return T(s, ...a);
 }
 
@@ -262,10 +287,15 @@ try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e)
 function persist() { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (e) { } }
 function saveGame(g) {
   /* fmt is only kept when you chose it; otherwise each game keeps the format its platform suggests */
-  if (PLAYNITE) { saved[g.id] = { wrapped: g.wrapped, tear: g.tear, dust: +(g.dust || 0).toFixed(3), dustAt: Date.now(), fmt: g.fmtPick || undefined }; persist(); return; }
-  saved[g.id] = { hours: g.hours, sessions: g.sessions, last: g.last, status: g.status, wrapped: g.wrapped, tear: g.tear, dust: g.dust, notes: g.notes, rating: g.rating, ach: g.ach, cats: g.cats, fmt: g.fmtPick || undefined }; persist();
+  if (PLAYNITE) { saved[g.id] = { wrapped: g.wrapped, tear: g.tear, dust: +(g.dust || 0).toFixed(3), dustAt: Date.now(), fmt: g.fmtPick || undefined, seasons: g.seasonPicks || undefined }; persist(); return; }
+  saved[g.id] = { hours: g.hours, sessions: g.sessions, last: g.last, status: g.status, wrapped: g.wrapped, tear: g.tear, dust: g.dust, notes: g.notes, rating: g.rating, ach: g.ach, cats: g.cats, fmt: g.fmtPick || undefined, seasons: g.seasonPicks || undefined }; persist();
 }
-function restoreFmt(g, s) { if (s && s.fmt && DIMS[s.fmt]) g.fmtPick = s.fmt; resolveFmt(g); }
+/* a film or a season keeps the family you chose (VHS, DVD, Blu-ray); a game the case you chose */
+function restoreFmt(g, s) {
+  if (s && s.fmt && (g.video ? VIDEO_FMTS.includes(s.fmt) : DIMS[s.fmt] && !DIMS[s.fmt].video)) g.fmtPick = s.fmt;
+  if (g.video && s && s.seasons) g.seasonPicks = Object.assign({}, s.seasons);
+  resolveFmt(g);
+}
 
 /* Playnite's default completion statuses, in Spanish (replaced by the real ones inside Playnite) */
 let STATUSES = ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'];
@@ -348,6 +378,13 @@ function initDemoGames() {
     if (g.wrapped) { g.dust = 0; g.tear = g.tear || 0; }
     g.dust0 = g.dust;
     g.cats.forEach(c => { if (!prefs.cats.includes(c)) prefs.cats.push(c); });
+  });
+  /* and a small video shop: films never seen come shrink-wrapped */
+  demoVideos().forEach(g => {
+    g.wrapped = g.kind === 'movie' && !g.played && !g.pos && g.last === null; g.tear = 0; g.notes = '';
+    g.dust = g.wrapped ? 0 : dustFor(g.last !== null ? g.last : g.added);
+    const s = saved[g.id]; if (s) { for (const k of ['wrapped', 'tear', 'dust']) if (k in s) g[k] = s[k]; restoreFmt(g, s); }
+    resolveFmt(g); g.dust0 = g.dust; GAMES.push(g);
   });
 }
 
