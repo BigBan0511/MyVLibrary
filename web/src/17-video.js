@@ -186,7 +186,7 @@ function buildMultiInterior(c, parts) {
   }
   m.slots = m.sets[0];
   /* the season's episodes arrive (they may already be here); the page with the first one not seen comes up */
-  m.ready = (async () => { const eps = await videoEpisodes(g, seasonOf(g)); m.eps = eps; m.per = m.kind === 'disc' ? 4 : 6; const p = Math.floor(firstUnseen(eps) / m.per); labelSet(c, m.sets[0], p); m.page = p; m.want = p; renderEpBar(); })();
+  m.ready = (async () => { if (!seasonOf(g)) await videoSeasons(g); const eps = await videoEpisodes(g, seasonOf(g)); if (c.multi !== m) return; m.eps = eps; m.per = m.kind === 'disc' ? 4 : 6; const p = Math.floor(firstUnseen(eps) / m.per); labelSet(c, m.sets[0], p); m.page = p; m.want = p; renderEpBar(); })();
 }
 function dropMultiInterior(c) {
   const m = c.multi; if (!m) return;
@@ -299,7 +299,7 @@ const resumeEl = $('#resume');
 function askResume(it) {
   if (it.played || !(it.pos > 60 * TICKS)) return Promise.resolve(0);
   return new Promise(res => {
-    const total = it.runtime ? ` ${T('de')} ${clockOf(it.runtime * 60)}` : '';
+    const total = it.runtime && it.runtime * 60 > it.pos / TICKS ? ` ${T('de')} ${clockOf(it.runtime * 60)}` : '';
     resumeEl.innerHTML = `<div class="resume-card"><h3>${esc(it.film ? it.t : epCode(it) + ' · ' + (it.t || ''))}</h3><p>${T('Te quedaste en {0}', clockOf(it.pos / TICKS))}${total}</p>
       <div class="resume-btns"><button type="button" class="pbtn primary" data-r="go">${T('Retomar')}</button><button type="button" class="pbtn" data-r="start">${T('Desde el principio')}</button><button type="button" class="pbtn" data-r="no">${T('Cancelar')}</button></div></div>`;
     resumeEl.hidden = false; const first = resumeEl.querySelector('button'); if (first && !coarse) first.focus();

@@ -364,9 +364,9 @@ function pick(c) {
     active = c; setHovered(null); tipEl.hidden = true; c.hoverT = 0; infoEdit = false; prefs.card = prefs.cardStart;
     if (cam.view === 'browse') setView('shelf');
     setMode('busy');
-    if (c.g.real) await LIB.prepare(c.g, 1500);
     /* a series learns its seasons first: if the season comes in another case, that case leaves the shelf instead */
     if (c.g.kind === 'series') { const old = c.g.fmt; await videoSeasons(c.g); await videoEpisodes(c.g, seasonOf(c.g)); resolveVideoFmt(c.g); if (c.g.fmt !== old) { const n = replaceCase(c); c = n; active = n; } }
+    if (c.g.real) await LIB.prepare(c.g, 1500);
     if (c.g.video) setVideoMedium(c.dim.media);
     c.ensureDetail(); c.setShadow(true);
     /* the case slides out for as long as the recorded scrape lasts and comes free on its loudest moment */
