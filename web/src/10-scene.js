@@ -125,7 +125,9 @@ const MAT = {
   edge: {
     dvd: M(THREE.MeshStandardMaterial, { color: '#131418', roughness: .5, metalness: .05 }, 1),
     jewel: M(THREE.MeshPhysicalMaterial, { color: '#5d6670', roughness: .1, metalness: .15, clearcoat: 1, clearcoatRoughness: .02 }, 1.4),
-    bigjewel: M(THREE.MeshPhysicalMaterial, { color: '#3e454e', roughness: .1, metalness: .15, clearcoat: 1, clearcoatRoughness: .02 }, 1.4)
+    bigjewel: M(THREE.MeshPhysicalMaterial, { color: '#3e454e', roughness: .1, metalness: .15, clearcoat: 1, clearcoatRoughness: .02 }, 1.4),
+    vhs: M(THREE.MeshPhysicalMaterial, { color: '#0f0f11', roughness: .55, clearcoat: .2, clearcoatRoughness: .5 }, .9),
+    bluray: M(THREE.MeshPhysicalMaterial, { color: '#1c56b8', roughness: .3, metalness: .05, clearcoat: .8, clearcoatRoughness: .1 }, 1.2)
   },
   tray: {}, lid: {},
   discBottom: M(THREE.MeshStandardMaterial, { color: '#ffffff', roughness: .14, metalness: .95 }, 1.5),
@@ -134,6 +136,7 @@ const MAT = {
   strip: M(THREE.MeshStandardMaterial, { color: '#d4202c', roughness: .3, metalness: .15 }, 1),
   hit: new THREE.MeshBasicMaterial({ visible: false })
 };
+MAT.edge.dvdbox = MAT.edge.dvd; MAT.edge.bdbox = MAT.edge.bluray;
 let TEXS = {};
 function buildSharedMaterials() {
   FMTS.forEach(f => {
@@ -171,7 +174,8 @@ let FLGEO = null, CAGEO = null;
 const MEDIA_MAT = {
   shutter: M(THREE.MeshStandardMaterial, { color: '#c3c7cd', roughness: .28, metalness: .9 }, 1.3),
   hole: new THREE.MeshBasicMaterial({ color: '#0d0d10' }),
-  ridge: M(THREE.MeshStandardMaterial, { color: '#55585f', roughness: .6 }, .7)
+  ridge: M(THREE.MeshStandardMaterial, { color: '#55585f', roughness: .6 }, .7),
+  tape: M(THREE.MeshPhysicalMaterial, { color: '#141416', roughness: .5, clearcoat: .25, clearcoatRoughness: .5 }, .9)
 };
 function makeFloppy(labelMat, bodyMat) {
   const { w, h, t } = MSIZE.floppy;
@@ -199,8 +203,35 @@ function makeCart(labelMat, bodyMat) {
   grp.traverse(m => { if (m.isMesh) m.castShadow = true; });
   return grp;
 }
-/* half the media's height, so it can leave the case upwards without touching it */
-function mediaHalfH(c) { const m = c.dim.media; return m === 'disc' ? c.dim.discR : MSIZE[m].h / 2; }
+/* a VHS tape, upright in its XY plane: the flap along the top edge goes in first, the window with its
+   two reels and the label on the front, the spine label along the bottom edge */
+let TPGEO = null, TAPE_WIN = null;
+function makeTape(labelMat, spineMat) {
+  const { w, h, t } = MSIZE.tape;
+  const G = TPGEO || (TPGEO = { body: slabGeometry(w, h, t, .35, .1), win: new THREE.PlaneGeometry(9.4, 3.6), label: new THREE.PlaneGeometry(15.2, 3.4), spine: new THREE.PlaneGeometry(15.4, 1.7), flap: new THREE.BoxGeometry(w - 1.2, .9, .12) });
+  Object.values(G).forEach(q => { q.userData.shared = true; });
+  if (!TAPE_WIN) TAPE_WIN = new THREE.MeshPhysicalMaterial({ map: tex(makeTapeWindowCanvas()), roughness: .15, clearcoat: 1, clearcoatRoughness: .05 });
+  const grp = new THREE.Group();
+  const body = new THREE.Mesh(G.body, MEDIA_MAT.tape);
+  const win = new THREE.Mesh(G.win, TAPE_WIN); win.position.set(0, 1.1, t / 2 + .012);
+  const lab = new THREE.Mesh(G.label, labelMat); lab.position.set(0, -2.6, t / 2 + .012);
+  const sp = new THREE.Mesh(G.spine, spineMat || labelMat); sp.rotation.x = Math.PI / 2; sp.position.set(0, -h / 2 - .012, 0);
+  const flap = new THREE.Mesh(G.flap, MEDIA_MAT.ridge); flap.position.set(0, h / 2 - .55, t / 2 + .02);
+  grp.add(body, win, lab, sp, flap); grp.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  return grp;
+}
+function makeTapeWindowCanvas() {
+  const W = 512, H = 196, c = mkCanvas(W, H), x = c.getContext('2d');
+  x.fillStyle = '#16161a'; x.fillRect(0, 0, W, H);
+  /* the two hubs, the brown tape wound on the left one */
+  x.fillStyle = '#3a2a1e'; x.beginPath(); x.arc(W * .27, H / 2, H * .44, 0, 7); x.fill();
+  x.fillStyle = '#2a1f17'; x.beginPath(); x.arc(W * .73, H / 2, H * .22, 0, 7); x.fill();
+  [.27, .73].forEach(k => { x.fillStyle = '#e9e6df'; x.beginPath(); x.arc(W * k, H / 2, H * .16, 0, 7); x.fill(); x.fillStyle = '#16161a'; for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; x.fillRect(W * k + Math.cos(a) * H * .09 - 3, H / 2 + Math.sin(a) * H * .09 - 3, 6, 6); } });
+  x.strokeStyle = 'rgba(255,255,255,.18)'; x.lineWidth = 3; x.strokeRect(4, 4, W - 8, H - 8);
+  return c;
+}
+/* half the media's height, so it can leave the case upwards without touching it (a tape stands on its long side in its case) */
+function mediaHalfH(c) { const m = c.dim.media; return m === 'disc' ? c.dim.discR : m === 'tape' ? MSIZE.tape.w / 2 : MSIZE[m].h / 2; }
 const FLOPPY_COLS = ['#22252b', '#1d2b4a', '#55595f', '#2a2a2d', '#3b1e22'];
 const STRIP_GEO = new THREE.BoxGeometry(1, .32, .03);
 const UNIT_PLANE = new THREE.PlaneGeometry(1, 1);
@@ -258,6 +289,7 @@ class Case {
     /* where the media rests in the open case: the disc on its hub, the disks in a stack, the cartridge in its dent */
     this.discHome = D.media === 'disc' ? new V3(D.discX, 0, split + .075)
       : D.media === 'floppy' ? new V3(.6, -h * .1, split + .05 + MSIZE.floppy.t * (D.disks - .5))
+      : D.media === 'tape' ? new V3(0, 0, split + MSIZE.tape.t / 2 + .05)
       : new V3(0, -h * .13, split + MSIZE.cart.t / 2 + .05);
     this.discLabelMat = M(THREE.MeshPhysicalMaterial, { color: g.pal[0], roughness: .4, metalness: .05, clearcoat: .8, clearcoatRoughness: .1, emissive: new THREE.Color('#000000') }, 1);
     this.manMat = M(THREE.MeshStandardMaterial, { color: '#efe9dc', roughness: .7, emissive: new THREE.Color('#000000') }, .8);
@@ -319,7 +351,9 @@ class Case {
   buildInterior() {
     if (this.interior) return;
     const g = this.g, D = this.dim, { w, h, split } = D, isJ = g.fmt === 'jewel', isB = D.shell === 'card', parts = [];
-    if (!isB) {
+    /* a series' season: several discs on the leaves of the case, or six tapes in a box (17-video.js) */
+    if (D.multi) { this.thick = []; this.thickAt = .15; buildMultiInterior(this, parts); this.interior = parts; return; }
+    if (!isB && D.media === 'disc') {
       const m = isJ ? MAT.edge.jewel : MAT.edge.dvd, G = interiorGeo();
       const hub = new THREE.Mesh(G.hub, m); hub.rotation.x = Math.PI / 2; hub.position.set(D.discX, 0, split + .17); this.inner.add(hub); parts.push([this.inner, hub]);
       for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, tooth = new THREE.Mesh(G.tooth, m); tooth.position.set(D.discX + Math.cos(a) * .55, Math.sin(a) * .55, split + .2); tooth.rotation.z = a; this.inner.add(tooth); parts.push([this.inner, tooth]); }
@@ -328,7 +362,10 @@ class Case {
     /* thick media would show through a closed lid: they only appear once it has swung far enough */
     this.thick = []; this.thickAt = D.media === 'cart' ? .5 : .15;
     if (D.media === 'disc') this.disc = makeDisc(D.discR, this.discLabelMat);
-    else {
+    else if (D.media === 'tape') {
+      /* the tape stands on its long side in the clamshell, its label to the front */
+      this.disc = makeTape(this.discLabelMat); this.thick.push(this.disc); this.thickAt = .2;
+    } else {
       this.mediaMat = M(THREE.MeshPhysicalMaterial, { color: D.media === 'cart' ? '#8d9098' : FLOPPY_COLS[hash(g.id) % FLOPPY_COLS.length], roughness: .5, clearcoat: .25, clearcoatRoughness: .4 }, .9);
       this.disc = D.media === 'cart' ? makeCart(this.discLabelMat, this.mediaMat) : makeFloppy(this.discLabelMat, this.mediaMat);
       this.thick.push(this.disc);
@@ -343,15 +380,20 @@ class Case {
       }
     }
     this.disc.position.copy(this.discHome); this.inner.add(this.disc);
-    const [mw, mh] = D.man;
-    this.manual = new THREE.Mesh(manualGeo(g.fmt), [MAT.paper, MAT.paper, MAT.paper, MAT.paper, MAT.paper, this.manMat]);
-    this.manual.position.set(w / 2 - .1, 0, -.09); this.pivot.add(this.manual);
-    this.tag(this.disc, 'disc'); this.tag(this.manual, 'manual');
+    /* the tape stands on its long side in the clamshell; it comes back the same way */
+    if (D.media === 'tape') { this.disc.rotation.z = Math.PI / 2; this.discQuat = this.disc.quaternion.clone(); }
+    /* films and series come without a manual */
+    if (D.man[0]) {
+      this.manual = new THREE.Mesh(manualGeo(g.fmt), [MAT.paper, MAT.paper, MAT.paper, MAT.paper, MAT.paper, this.manMat]);
+      this.manual.position.set(w / 2 - .1, 0, -.09); this.pivot.add(this.manual); this.tag(this.manual, 'manual');
+    }
+    this.tag(this.disc, 'disc');
     this.interior = parts;
   }
   dropInterior() {
     if (!this.interior) return;
     this.interior.forEach(([p, m]) => p.remove(m));
+    if (this.multi) dropMultiInterior(this);
     if (this.disc) { this.disc.parent && this.disc.parent.remove(this.disc); this.disc.children.forEach(m => { if (m.geometry && !m.geometry.userData.shared) m.geometry.dispose(); }); }
     if (this.manual) this.pivot.remove(this.manual);
     if (this.extraLabelMats) { this.extraLabelMats.forEach(m => { if (m.map) m.map.dispose(); unM(m); }); this.extraLabelMats = null; }
@@ -465,10 +507,17 @@ class Case {
     this.tearA += (tearT - this.tearA) * (1 - Math.exp(-6 * s));
     if (!this.wrap && this.tearDone && Math.abs(this.tearA - this.tearDone) < .01) { this.tearA = 0; this.tearDone = 0; }
     const tp = this.targetPose(), k = this.fast ? 26 : this.mode === 'rest' ? (this.root.position.distanceToSquared(tp.pos) < 4 ? 40 : 6) : (this.mode === 'inspect' || this.mode === 'parked') ? 7 : 9, a = 1 - Math.exp(-k * s);
-    this.root.position.lerp(tp.pos, a); this.root.quaternion.slerp(tp.quat, a);
-    const sc = this.root.scale.x + ((this.mode === 'parked' ? PARK_SCALE : 1) * (this.vanish ? .02 : 1) - this.root.scale.x) * a; this.root.scale.setScalar(sc);
-    const o = this.openA; this.pivot.rotation.y = -Math.PI * o; this.inner.position.x = this.dim.w / 2 * o;
-    if (this.thick) { const show = o > this.thickAt; for (const m of this.thick) if (m.parent === this.inner) m.visible = show; }
+    /* (a tape case on its way back into its box is moved by hand) */
+    if (!this.pinned) {
+      this.root.position.lerp(tp.pos, a); this.root.quaternion.slerp(tp.quat, a);
+      const sc = this.root.scale.x + ((this.mode === 'parked' ? PARK_SCALE : 1) * (this.vanish ? .02 : 1) - this.root.scale.x) * a; this.root.scale.setScalar(sc);
+    }
+    const o = this.openA;
+    /* a box of tapes does not open like a book: it leans back and the tapes rise out of its open top */
+    if (this.g.fmt === 'vhsbox') { this.pivot.rotation.y = 0; this.inner.position.x = 0; this.inner.rotation.x = .9 * easeIO(o); }
+    else { this.pivot.rotation.y = -Math.PI * o; this.inner.position.x = this.dim.w / 2 * o; }
+    if (this.multi) updateMultiInterior(this, dt);
+    if (this.thick) { const show = o > this.thickAt; for (const m of this.thick) if (m.parent === this.inner || m.userData.thick) m.visible = show && !m.userData.away; }
     this.spineMat.emissiveIntensity = this.glowA * .5;
     if (this.wrap && !this.dragging && this.tear > .02) { this.dropHand(); this.updateStrip(); }
   }

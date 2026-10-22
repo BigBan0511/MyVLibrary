@@ -27,6 +27,7 @@ function imgW(i) { return i.naturalWidth || i.videoWidth || i.width; }
 function imgH(i) { return i.naturalHeight || i.videoHeight || i.height; }
 function coverFit(x, img, X, Y, W, H, fx = .5, fy = .5) { const iw = imgW(img), ih = imgH(img); if (!iw || !ih) return; const sc = Math.max(W / iw, H / ih); x.drawImage(img, X + (W - iw * sc) * fx, Y + (H - ih * sc) * fy, iw * sc, ih * sc); }
 function fmtLabel(g) {
+  if (g.video) { const s = seasonOf(g); return (s && g.seasons.length > 1 ? T('TEMPORADA {0}', s.idx) + ' · ' : '') + DIMS[g.fmt].label; }
   if (!g.real && sysOf(g) === 'PC') return T(DIMS[g.fmt].label);
   return `${g.plat} · ` + ({ jewel: 'CD', bigjewel: 'CD', big: T('CAJA'), floppy: '3½" HD', cart: T('CARTUCHO') }[g.fmt] || 'DVD');
 }
@@ -37,8 +38,9 @@ function placeholderArt(x, W, H, g) {
   let s = W * .14; x.font = titleFont(g, s); const t = titleText(g); while (x.measureText(t).width > W * .84 && s > 10) { s *= .94; x.font = titleFont(g, s); }
   x.fillStyle = g.pal[4]; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(t, W / 2, H * .3);
 }
-function coverSize(g) { return { jewel: [512, 452], bigjewel: [512, 470], big: [512, 592], floppy: [512, 694], cart: [512, 686] }[g.fmt] || [512, 720]; }
+function coverSize(g) { if (g.video) return [512, Math.round(512 * DIMS[g.fmt].h / DIMS[g.fmt].w)]; return { jewel: [512, 452], bigjewel: [512, 470], big: [512, 592], floppy: [512, 694], cart: [512, 686] }[g.fmt] || [512, 720]; }
 function spineSize(g) {
+  if (g.video) { const d = DIMS[g.fmt]; return [Math.round(1000 * d.d / d.h), 1000]; }
   const s = { big: [224, 1036], floppy: [200, 1080], cart: [192, 1060], bigjewel: [104, 760] }[g.fmt];
   if (s) return s;
   if (g.real) return g.fmt === 'jewel' ? [80, 704] : [72, 976];
@@ -125,7 +127,8 @@ function drawCover(g) {
 function finishCover(x, g, W, H, r, real) {
   const c = x.canvas;
   const band = isClear(g) ? H * .07 : isCard(g) ? H * .06 : H * .052;
-  x.fillStyle = 'rgba(10,10,14,.88)'; x.fillRect(0, 0, W, band);
+  const blue = g.fmt === 'bluray' || g.fmt === 'bdbox';
+  x.fillStyle = blue ? 'rgba(28,86,184,.95)' : 'rgba(10,10,14,.88)'; x.fillRect(0, 0, W, band);
   x.fillStyle = g.pal[2]; x.fillRect(0, band, W, 3);
   x.fillStyle = '#ffffff'; x.textBaseline = 'middle'; x.textAlign = 'left'; x.font = `800 ${Math.round(band * .56)}px ${F.saira}`; setLS(x, 1.5);
   x.fillText(fmtLabel(g).toUpperCase(), isClear(g) ? W * .11 : W * .04, band * .54);
@@ -208,6 +211,7 @@ function featureList(g) {
   return f;
 }
 function drawBack(g, coverCanvas) {
+  if (g.video) return drawVideoBack(g, coverCanvas);
   const [W, H] = coverSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal;
   const dark = lum(p[0]) < .5, base = dark ? mix(p[0], '#000000', .15) : mix(p[0], '#ffffff', .2);
   const ink = dark ? '#f6f2ea' : '#1d1a17', soft = dark ? 'rgba(246,242,234,.82)' : 'rgba(29,26,23,.8)';
@@ -281,9 +285,10 @@ function drawRealSpine(g) {
   const { base, ink, light } = spineColors(g);
   x.fillStyle = lg(x, 0, 0, W, 0, [[0, mix(base, '#000000', .22)], [.18, base], [.82, base], [1, mix(base, '#000000', .22)]]); x.fillRect(0, 0, W, H);
   const wide = isWide(g), bandH = Math.round(W * (wide ? .26 : .78));
-  x.fillStyle = light ? '#18181c' : '#0b0b0d'; x.fillRect(0, 0, W, bandH);
+  const blue = g.fmt === 'bluray' || g.fmt === 'bdbox';
+  x.fillStyle = blue ? '#1c56b8' : light ? '#18181c' : '#0b0b0d'; x.fillRect(0, 0, W, bandH);
   x.fillStyle = '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  let ls = W * (wide ? .2 : .36); const lab = (g.plat || 'PC').toUpperCase(); x.font = `800 ${Math.round(ls)}px ${F.saira}`;
+  let ls = W * (wide ? .2 : .36); const lab = (g.video ? DIMS[g.fmt].label : g.plat || 'PC').toUpperCase(); x.font = `800 ${Math.round(ls)}px ${F.saira}`;
   while (x.measureText(lab).width > W * .84 && ls > 6) { ls *= .92; x.font = `800 ${Math.round(ls)}px ${F.saira}`; }
   x.fillText(lab, W / 2, bandH * .54);
   x.fillStyle = p[2]; x.fillRect(0, bandH, W, Math.max(2, W * .04));
@@ -409,7 +414,7 @@ function drawCartLabel(g, coverCanvas) {
   x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.8)'; x.shadowBlur = 8; x.fillStyle = g.pal[4]; x.fillText(titleText(g), W / 2, H * .82); x.shadowBlur = 0;
   return c;
 }
-function drawMediaLabel(g, coverCanvas) { const m = mediaOf(g); return m === 'floppy' ? drawFloppyLabel(g, coverCanvas, 0, DIMS.floppy.disks) : m === 'cart' ? drawCartLabel(g, coverCanvas) : drawDisc(g, coverCanvas); }
+function drawMediaLabel(g, coverCanvas) { if (g.video) return drawVideoLabel(g, coverCanvas, g.ep || null); const m = mediaOf(g); return m === 'floppy' ? drawFloppyLabel(g, coverCanvas, 0, DIMS.floppy.disks) : m === 'cart' ? drawCartLabel(g, coverCanvas) : drawDisc(g, coverCanvas); }
 function drawManualCover(g, coverCanvas) {
   const W = 300, H = Math.round(300 * DIMS[g.fmt].man[1] / DIMS[g.fmt].man[0]), c = mkCanvas(W, H), x = c.getContext('2d');
   x.fillStyle = '#f3eee3'; x.fillRect(0, 0, W, H);
@@ -549,6 +554,18 @@ function makeTrayCanvas(fmt) {
       x.font = `600 15px ${F.fig}`; x.fillText(T('Guarda el cartucho aquí cuando no lo uses.'), W / 2, H * .13);
     }
     x.textAlign = 'center'; x.fillStyle = '#5a4528'; x.font = `700 13px ${F.mono}`; x.fillText('MYVLIBRARY', W / 2, H * .965);
+  } else if (d.video) {
+    /* video: a VHS clamshell with the ribs that hold the tape, or a DVD/Blu-ray tray with one hub or two */
+    const blue = fmt === 'bluray' || fmt === 'bdbox';
+    x.fillStyle = blue ? '#173f8a' : '#141518'; x.fillRect(0, 0, W, H);
+    x.strokeStyle = 'rgba(255,255,255,.07)'; x.lineWidth = 3; rr(x, 14, 14, W - 28, H - 28, 18); x.stroke();
+    if (d.media === 'tape') { x.fillStyle = '#0c0c0e'; const k = W / d.w; rr(x, W / 2 - MSIZE.tape.h / 2 * k - 6, H / 2 - MSIZE.tape.w / 2 * k - 6, MSIZE.tape.h * k + 12, MSIZE.tape.w * k + 12, 10); x.fill(); [.2, .8].forEach(v => { x.fillStyle = '#26272c'; x.fillRect(W * .12, H * v, W * .76, 8); }); }
+    else (d.multi ? [-3.6, 3.6] : [0]).forEach(dy => {
+      const yy = cy + dy / d.h * H;
+      x.fillStyle = blue ? '#123374' : '#0f1013'; x.beginPath(); x.arc(cx, yy, R * 1.03, 0, 7); x.fill();
+      x.fillStyle = blue ? '#2a5bb8' : '#2a2c32'; x.beginPath(); x.arc(cx, yy, R * .24, 0, 7); x.fill();
+    });
+    x.fillStyle = 'rgba(255,255,255,.18)'; x.font = `700 13px ${F.mono}`; x.textAlign = 'center'; x.fillText('MYVLIBRARY', W / 2, H - 30);
   } else {
     const dark = fmt === 'dvd' || fmt === 'bigjewel';
     x.fillStyle = dark ? '#18191d' : '#9aa3ad'; x.fillRect(0, 0, W, H);
@@ -563,6 +580,12 @@ function makeTrayCanvas(fmt) {
 function makeLidCanvas(fmt) {
   const d = DIMS[fmt], W = 512, H = Math.round(512 * d.h / d.w), c = mkCanvas(W, H), x = c.getContext('2d');
   if (d.shell === 'card') { x.fillStyle = fmt === 'big' ? '#e4d6b8' : '#ddd0b0'; x.fillRect(0, 0, W, H); x.fillStyle = 'rgba(90,70,40,.12)'; for (let i = 0; i < 30; i++) x.fillRect(0, i * H / 30, W, 2); }
+  else if (d.video) {
+    /* video cases: black (VHS, DVD) or Blu-ray blue, the multi-disc ones with two hubs on the lid side */
+    const blue = fmt === 'bluray' || fmt === 'bdbox'; x.fillStyle = blue ? '#163f8c' : '#18191d'; x.fillRect(0, 0, W, H);
+    x.strokeStyle = 'rgba(255,255,255,.07)'; x.lineWidth = 3; rr(x, 14, 14, W - 28, H - 28, 18); x.stroke();
+    if (d.multi) { const R = d.discR / d.w * W; [-1, 1].forEach(s => { x.fillStyle = blue ? '#123374' : '#121317'; x.beginPath(); x.arc(W * (.5 - d.discX / d.w), H / 2 + s * 3.6 / d.h * H, R * 1.03, 0, 7); x.fill(); }); }
+  }
   else { const dark = fmt === 'dvd'; x.fillStyle = dark ? '#1b1c21' : '#a7afb9'; x.fillRect(0, 0, W, H); x.fillStyle = dark ? '#26282e' : '#c3cad2'; [[.06, .1], [.06, .82]].forEach(([u, v]) => { rr(x, W * u, H * v, W * .05, H * .08, 6); x.fill(); }); x.strokeStyle = dark ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.3)'; x.lineWidth = 3; rr(x, 14, 14, W - 28, H - 28, 18); x.stroke(); }
   return c;
 }
