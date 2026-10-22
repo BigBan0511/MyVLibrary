@@ -7,7 +7,7 @@
    of six tapes or a case with a flip tray and four discs in view, with
    arrows to the next ones and a search for the exact episode. The tape
    or disc goes into a VCR or a disc player in the TV room, and the film
-   plays in Jellyfin Media Player or VLC.
+   plays in the Windows player or VLC.
    ===================================================================== */
 const VSTAT = { watched: 'Visto', partial: 'A medias', none: 'Sin ver' };
 const TICKS = 1e7;
@@ -411,7 +411,15 @@ async function caseBackInBox(n) {
   sfx.slide(); await tweenReal(.55, t => { slot.userData.lift = rise * (1 - t); }, easeIO);
   if (m) { m.taken = null; setEpFocus(b, slot); }
 }
-/* the films play outside the shelf: Jellyfin Media Player or VLC (the extension starts them) */
+/* after an episode: the case stays open in your hands with the next one ready (the same one, if it was
+   left halfway), turning to its page when it is on another */
+function backToEpisodes(c) {
+  const m = c.multi, L = VPLAY.last; if (!m) return;
+  const i = L ? m.eps.indexOf(L.it) : -1, next = i < 0 ? firstUnseen(m.eps) : L.it.played ? Math.min(i + 1, m.eps.length - 1) : i;
+  const p = Math.floor(next / m.per); if (p !== m.page) multiGo(c, p);
+  epQ.value = ''; epList.hidden = true; m.focus = next % m.per; setEpFocus(c, m.slots[m.focus]);
+}
+/* the films play outside the shelf: the Windows player or VLC (the extension starts them) */
 function startVideo(c) {
   const it = VPLAY.item; VPLAY.t0 = performance.now();
   if (PLAYNITE && c.g.real) { PN_STATE.waiting = true; PN_STATE.running = c.g.id; LIB.send('jfPlay', { id: it.id, start: Math.round(VPLAY.start), series: c.g.kind === 'series' ? c.g.jf : null }); return; }

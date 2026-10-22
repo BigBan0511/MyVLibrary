@@ -47,20 +47,6 @@ namespace MyVLibrary
         public int? RecursiveItemCount { get; set; }
     }
     public class JfItems { public List<JfItem> Items { get; set; } }
-    public class JfPlayState { public long? PositionTicks { get; set; } public bool IsPaused { get; set; } }
-    public class JfSession
-    {
-        public string Id { get; set; }
-        public string Client { get; set; }
-        public string DeviceName { get; set; }
-        public string DeviceId { get; set; }
-        public string UserId { get; set; }
-        public bool SupportsRemoteControl { get; set; }
-        public bool SupportsMediaControl { get; set; }
-        public DateTime? LastActivityDate { get; set; }
-        public JfItem NowPlayingItem { get; set; }
-        public JfPlayState PlayState { get; set; }
-    }
 
     /// <summary>
     /// Talks to the user's Jellyfin server: logging in, the video libraries, a series' seasons and episodes,
@@ -172,30 +158,12 @@ namespace MyVLibrary
 
         // ---------- playing ----------
 
-        public string StreamUrl(string itemId) => $"{Base}/Videos/{itemId}/stream?static=true&api_key={settings.JellyfinToken}&DeviceId={settings.JellyfinDeviceId}";
+        /// <summary>The file as it is; from a point in the middle (for a player that cannot be told where to start), converted on the fly by the server.</summary>
+        public string StreamUrl(string itemId, long startTicks = 0) => startTicks <= 0
+            ? $"{Base}/Videos/{itemId}/stream?static=true&api_key={settings.JellyfinToken}&DeviceId={settings.JellyfinDeviceId}"
+            : $"{Base}/Videos/{itemId}/stream.ts?static=false&StartTimeTicks={startTicks}&VideoCodec=h264&AudioCodec=aac&MediaSourceId={itemId}&api_key={settings.JellyfinToken}&DeviceId={settings.JellyfinDeviceId}";
 
-        /// <summary>The sessions this user can control (Jellyfin Desktop, Jellyfin Media Player, the web...).</summary>
-        public async Task<List<JfSession>> Sessions()
-        {
-            var json = await GetString($"/Sessions?controllableByUserId={Uid}").ConfigureAwait(false);
-            return Serialization.FromJson<List<JfSession>>(json) ?? new List<JfSession>();
-        }
-
-        private async Task<string> GetString(string path)
-        {
-            using (var res = await http.SendAsync(Request(HttpMethod.Get, path)).ConfigureAwait(false))
-            {
-                res.EnsureSuccessStatusCode();
-                return await res.Content.ReadAsStringAsync().ConfigureAwait(false);
-            }
-        }
-
-        public Task PlayOn(string sessionId, string itemId, long startTicks) =>
-            Post($"/Sessions/{sessionId}/Playing?playCommand=PlayNow&itemIds={itemId}&startPositionTicks={startTicks}");
-
-        public Task StopOn(string sessionId) => Post($"/Sessions/{sessionId}/Playing/Stop");
-
-        /// <summary>For a player that cannot tell Jellyfin itself (VLC): started, how far, stopped.</summary>
+        /// <summary>For a player that cannot tell Jellyfin itself (VLC, the system's): started, how far, stopped.</summary>
         public Task Report(string what, string itemId, long positionTicks, bool paused, string playSessionId)
         {
             var path = what == "start" ? "/Sessions/Playing" : what == "progress" ? "/Sessions/Playing/Progress" : "/Sessions/Playing/Stopped";

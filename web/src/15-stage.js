@@ -352,7 +352,15 @@ function ugcDevice(root) {
     /* the medium's own way: from where it is put down to where it stays while the game runs */
     const moveFrom = open => { pose(open, false); const a = sock(); pose(false, true); return sock().p.sub(a.p); };
     let opens = lidPivots.length > 0;
-    if (clips.open || clips.close) {
+    /* a machine that takes the medium itself (EmuVR's VCR): its insert carries the socket well inside from
+       the mouth, and its open is the way back out (it leaves the socket somewhere else), not a tray to put it on */
+    let feeds = false;
+    if (clips.insert && clips.open) {
+      pose(false, false); const a = sock().p; at(clips.insert, 1); const b = sock().p;
+      pose(false, false); at(clips.open, 1); const c = sock().p;
+      feeds = b.distanceTo(a) > 3 && c.distanceTo(a) > 3; pose(false, false);
+    }
+    if (!feeds && (clips.open || clips.close)) {
       pose(false, false); at(clips.close, 1) || at(clips.open, 0); root.updateMatrixWorld(true); const shut = sock().p;
       at(clips.open, 1) || at(clips.close, 0); root.updateMatrixWorld(true);
       if (sock().p.distanceTo(shut) > .3) opens = true;   /* a tray or a slot-loader: it carries the socket */
@@ -410,11 +418,11 @@ function ugcDevice(root) {
       per[m] = { q, s, inward, inside: ready.p.clone().addScaledVector(inward, -(H / 2 - .6) * s), H: H * s, disc };
     }
     pose(false, false);
-    return { per, opens, ready };
+    return { per, opens, feeds, ready };
   })();
   const play = (c, a, b, sec) => c ? tweenReal(sec ?? c.dur * Math.abs(b - a), t => anim.apply(c, c.dur * lerp(a, b, t)), easeIO) : Promise.resolve();
   const lids = (v0, v1, sec = .45) => lidPivots.length ? tweenReal(sec, t => setLids(dev, lerp(v0, v1, t)), easeIO) : Promise.resolve();
-  const opens = geo.opens;
+  const opens = geo.opens, feeds = geo.feeds;
   const openUp = () => { if (clips.open) { sfx.click(.7); return play(clips.open, 0, 1); } if (lidPivots.length) { sfx.click(.7); return lids(0, 1); } return Promise.resolve(); };
   const shutDown = () => { if (clips.close) { sfx.caseClose('jewel'); return play(clips.close, 0, 1); } if (lidPivots.length) { sfx.caseClose('jewel'); return lids(1, 0, .35); } return Promise.resolve(); };
   const dev = {
@@ -434,23 +442,23 @@ function ugcDevice(root) {
       return {
         kind: 'socket', m, q, s: g.s, inside, entry: inside.clone().addScaledVector(back, reach), out: inside.clone().addScaledVector(back, back2), lids: lidPivots,
         /* before the medium flies over: the lid or the tray opens */
-        prepare() { if (opens) openUp(); },
+        prepare() { if (opens) openUp(); else if (feeds) pose(false, false); },
         /* it has landed: the machine holds it, pulls it in and shuts */
         async seat(d) {
           holder.attach(d);
           if (clips.insert) { sfx.slotIn(); await play(clips.insert, 0, 1); }
-          if (opens) { await waitReal(.15); await shutDown(); }
+          if (opens || feeds) { await waitReal(.15); await shutDown(); }
           if (anim && anim.hideClosed) d.visible = false;
         },
         /* the game is over: the machine gives it back */
         async unseat(d) {
           d.visible = true;
-          if (opens) await openUp();
+          if (opens || feeds) await openUp();
           if (clips.remove) { sfx.slotOut(); await play(clips.remove, 0, 1); }
           else if (clips.insert) { sfx.slotOut(); await play(clips.insert, 1, 0); }
           scene.attach(d);
         },
-        after() { if (opens) shutDown(); },
+        after() { if (opens) shutDown(); else if (feeds) play(clips.insert, 1, 0); },
         /* the shelf reopened with a game running: the medium is already in */
         restore(d) { pose(opens, false); holder.attach(d); pose(false, true); if (anim && anim.hideClosed) d.visible = false; }
       };

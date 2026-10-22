@@ -629,10 +629,13 @@ function closeGame(o = {}) {
     const owner = c.box || c;
     owner.dirty = true; owner.refreshSpine(); if (moved) pendingRelayout = true;
     toast(msg);
-    /* it closes and goes back to its place */
+    /* a season with more episodes comes back to your hands, open at the next one; anything else closes
+       and goes back to its place */
+    const more = !!(owner.multi && owner.multi.eps.length > 1);
     await waitReal(.25);
-    const h = clamp(sfx.caseClose(g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0;
-    if (c.box) { await caseBackInBox(c); await closeCase(true); } else setView('shelf');
+    if (c.box || !more) { const h = clamp(sfx.caseClose(g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0; }
+    if (c.box) { await caseBackInBox(c); if (!more) await closeCase(true); } else setView('shelf');
+    if (more) { if (!c.box) c.mode = 'inspect'; await wait(450); backToEpisodes(owner); setMode('open'); return; }
     await waitReal(.2);
     await slideHome(owner); focus = owner; setMode('shelf');
   }).then(() => { if (pendingRelayout) { pendingRelayout = false; relayout({ follow: back }); } });

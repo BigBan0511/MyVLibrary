@@ -38,8 +38,7 @@ namespace MyVLibrary
         // ---------- Jellyfin: the video room ----------
         private string jellyfinUrl = "";
         private string jellyfinUser = "";
-        private string jellyfinPlayer = "jmp";
-        private string jellyfinPlayerPath = "";
+        private string jellyfinPlayer = "system";
         private string vlcPath = "";
 
         /// <summary>The server, e.g. http://192.168.1.10:8096</summary>
@@ -51,9 +50,8 @@ namespace MyVLibrary
         public string JellyfinDeviceId { get; set; } = Guid.NewGuid().ToString("N");
         /// <summary>The libraries that become bookcases (empty: every film and series library).</summary>
         public List<string> JellyfinLibraries { get; set; } = new List<string>();
-        /// <summary>"jmp" (Jellyfin Desktop / Jellyfin Media Player) or "vlc".</summary>
+        /// <summary>"system" (whatever plays videos in Windows) or "vlc"; anything else (the old "jmp") counts as "system".</summary>
         public string JellyfinPlayer { get => jellyfinPlayer; set => SetValue(ref jellyfinPlayer, value); }
-        public string JellyfinPlayerPath { get => jellyfinPlayerPath; set => SetValue(ref jellyfinPlayerPath, value); }
         public string VlcPath { get => vlcPath; set => SetValue(ref vlcPath, value); }
     }
 
@@ -156,8 +154,8 @@ namespace MyVLibrary
             panel.Children.Add(new TextBlock { Text = Loc.S("Sala de vídeo (Jellyfin)", "Video room (Jellyfin)"), FontSize = 16, Margin = new Thickness(0, 22, 0, 4) });
             panel.Children.Add(new TextBlock
             {
-                Text = Loc.S("Tus películas y series de Jellyfin aparecen como un videoclub: una estantería por biblioteca. Hasta 1997 salen en VHS, hasta 2014 en DVD y después en Blu-ray, y se puede cambiar cada una. Se ven en Jellyfin Desktop o en VLC.",
-                             "Your Jellyfin films and series appear as a video shop: one bookcase per library. Up to 1997 they come on VHS, up to 2014 on DVD and after that on Blu-ray, and each one can be changed. They play in Jellyfin Desktop or VLC."),
+                Text = Loc.S("Tus películas y series de Jellyfin aparecen como un videoclub: una estantería por biblioteca. Hasta 1997 salen en VHS, hasta 2014 en DVD y después en Blu-ray, y se puede cambiar cada una. Se ven en el reproductor de Windows o en VLC.",
+                             "Your Jellyfin films and series appear as a video shop: one bookcase per library. Up to 1997 they come on VHS, up to 2014 on DVD and after that on Blu-ray, and each one can be changed. They play in the Windows player or VLC."),
                 Opacity = .7, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8)
             });
 
@@ -187,13 +185,12 @@ namespace MyVLibrary
             panel.Children.Add(libs);
 
             var players = new StackPanel { Orientation = Orientation.Horizontal };
-            var jmp = new RadioButton { Content = "Jellyfin Desktop", GroupName = "mvlPlayer", Margin = new Thickness(0, 0, 16, 0) };
+            var system = new RadioButton { Content = Loc.S("El de Windows", "Windows' own"), GroupName = "mvlPlayer", Margin = new Thickness(0, 0, 16, 0) };
             var vlc = new RadioButton { Content = "VLC", GroupName = "mvlPlayer" };
-            players.Children.Add(jmp); players.Children.Add(vlc);
+            players.Children.Add(system); players.Children.Add(vlc);
             Row(Loc.S("Reproductor", "Player"), players);
-            Row(Loc.S("Jellyfin Desktop (opcional)", "Jellyfin Desktop (optional)"), Bound(nameof(ShelfSettings.JellyfinPlayerPath)));
             Row(Loc.S("VLC (opcional)", "VLC (optional)"), Bound(nameof(ShelfSettings.VlcPath)));
-            panel.Children.Add(new TextBlock { Text = Loc.S("Deja las rutas vacías para que la extensión busque los programas en sus sitios de siempre.", "Leave the paths empty and the extension looks for the programs where they are usually installed."), Opacity = .6, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(150, 0, 0, 4) });
+            panel.Children.Add(new TextBlock { Text = Loc.S("El de Windows es el que abre las listas .m3u (Reproductor multimedia, si no has cambiado nada); con él la extensión cuenta el tiempo con la ventana abierta, pausas incluidas. VLC dice exactamente por dónde vas. Deja la ruta vacía para que la extensión busque VLC en su sitio de siempre.", "Windows' own is the one that opens .m3u playlists (Media Player, unless you changed it); with it the extension counts the time its window is open, pauses included. VLC tells exactly where you are. Leave the path empty and the extension looks for VLC where it is usually installed."), Opacity = .6, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(150, 0, 0, 4) });
 
             ShelfSettingsViewModel Vm() => DataContext as ShelfSettingsViewModel;
 
@@ -229,10 +226,10 @@ namespace MyVLibrary
             Loaded += (s, e) =>
             {
                 var vm = Vm(); if (vm == null) return;
-                jmp.IsChecked = vm.Settings.JellyfinPlayer != "vlc"; vlc.IsChecked = vm.Settings.JellyfinPlayer == "vlc";
+                system.IsChecked = vm.Settings.JellyfinPlayer != "vlc"; vlc.IsChecked = vm.Settings.JellyfinPlayer == "vlc";
                 ShowLibraries();
             };
-            jmp.Checked += (s, e) => { var vm = Vm(); if (vm != null) vm.Settings.JellyfinPlayer = "jmp"; };
+            system.Checked += (s, e) => { var vm = Vm(); if (vm != null) vm.Settings.JellyfinPlayer = "system"; };
             vlc.Checked += (s, e) => { var vm = Vm(); if (vm != null) vm.Settings.JellyfinPlayer = "vlc"; };
             connect.Click += async (s, e) =>
             {

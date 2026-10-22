@@ -9,6 +9,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,8 +18,8 @@ namespace MyVLibrary
 {
     /// <summary>
     /// Plays a film or an episode from Jellyfin outside the shelf and says when it ends:
-    /// - Jellyfin Desktop / Jellyfin Media Player: started (or found running), then told to play the item
-    ///   through Jellyfin's remote control; it reports its own progress to Jellyfin.
+    /// - The system's player: Windows opens the stream with whatever plays videos; the extension counts how
+    ///   long its window stays open and tells Jellyfin.
     /// - VLC: started on the stream with its little web interface on; the extension reads how far it is
     ///   and tells Jellyfin, so "where you left off" works there too.
     /// </summary>
@@ -29,7 +30,7 @@ namespace MyVLibrary
         private readonly ShelfSettings settings;
         private CancellationTokenSource run;
         private Process vlc;
-        private string jmpSession;
+        private List<Process> sysPlayers;
 
         public VideoPlayer(JellyfinClient jf, ShelfSettings settings)
         {
@@ -50,7 +51,7 @@ namespace MyVLibrary
                 try
                 {
                     if (useVlc) await PlayVlc(itemId, startTicks, started, cts.Token).ConfigureAwait(false);
-                    else await PlayJellyfinDesktop(itemId, startTicks, started, cts.Token).ConfigureAwait(false);
+                    else await PlaySystem(itemId, startTicks, started, cts.Token).ConfigureAwait(false);
                     var final = await Final(itemId).ConfigureAwait(false);
                     stopped(final.Item1, final.Item2);
                 }
@@ -71,14 +72,14 @@ namespace MyVLibrary
             });
         }
 
-        /// <summary>Pulled out by hand: the player stops (VLC closes, Jellyfin Desktop stops playing).</summary>
+        /// <summary>Pulled out by hand: the player closes.</summary>
         public void Stop()
         {
             var cts = run; run = null;
             if (cts == null) return;
             try { cts.Cancel(); } catch { }
             try { if (vlc != null && !vlc.HasExited) vlc.Kill(); } catch { }
-            if (jmpSession != null) { var s = jmpSession; Task.Run(() => jf.StopOn(s)); }
+            foreach (var p in sysPlayers ?? new List<Process>()) { try { if (!p.HasExited) p.CloseMainWindow(); } catch { } }
         }
 
         /// <summary>Where the item ended up, as Jellyfin keeps it: position and whether it counts as watched.</summary>
@@ -96,98 +97,75 @@ namespace MyVLibrary
             }
         }
 
-        // ---------- Jellyfin Desktop / Jellyfin Media Player ----------
+        // ---------- the system's own player ----------
 
-        internal static string FindJellyfinDesktop(ShelfSettings s)
+        [DllImport("Shlwapi.dll", CharSet = CharSet.Unicode)]
+        private static extern uint AssocQueryString(uint flags, uint str, string assoc, string extra, StringBuilder outBuf, ref uint outLen);
+
+        /// <summary>The program Windows opens a kind of file with (empty for some store apps).</summary>
+        private static string AssociatedExe(string ext)
         {
-            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            var pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            var candidates = new[]
+            try
             {
-                s.JellyfinPlayerPath,
-                Path.Combine(local, "Programs", "Jellyfin Desktop", "Jellyfin Desktop.exe"),
-                Path.Combine(pf, "Jellyfin", "Jellyfin Desktop", "Jellyfin Desktop.exe"),
-                Path.Combine(pf, "Jellyfin", "Jellyfin Media Player", "JellyfinMediaPlayer.exe"),
-                Path.Combine(pf86, "Jellyfin", "Jellyfin Media Player", "JellyfinMediaPlayer.exe"),
-                Path.Combine(local, "Programs", "Jellyfin Media Player", "JellyfinMediaPlayer.exe")
-            };
-            return candidates.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p));
+                uint len = 1024; var sb = new StringBuilder((int)len);
+                return AssocQueryString(0, 2 /* ASSOCSTR_EXECUTABLE */, ext, null, sb, ref len) == 0 ? sb.ToString() : null;
+            }
+            catch { return null; }
         }
 
-        private static bool IsDesktopClient(JfSession s) =>
-            s.SupportsRemoteControl && (s.Client ?? "").IndexOf("Jellyfin", StringComparison.OrdinalIgnoreCase) >= 0 &&
-            ((s.Client ?? "").IndexOf("Desktop", StringComparison.OrdinalIgnoreCase) >= 0 || (s.Client ?? "").IndexOf("Media Player", StringComparison.OrdinalIgnoreCase) >= 0) &&
-            IsThisComputer(s.DeviceName);
+        private static bool HasWindow(Process p) { try { return !p.HasExited && p.MainWindowHandle != IntPtr.Zero; } catch { return false; } }
 
-        /// <summary>The player names the computer by its full host name; Windows' own name is cut to 15 letters.</summary>
-        private static bool IsThisComputer(string name)
+        /// <summary>
+        /// The stream goes in a small playlist that Windows opens with whatever plays videos on this computer
+        /// (Media Player, or the one chosen for playlists). Such a player says nothing about where it is, so the
+        /// position is the time its window stays open, counted from where it started; a pause counts as watching.
+        /// It is over when the window of the player that opened it closes.
+        /// </summary>
+        private async Task PlaySystem(string itemId, long startTicks, Action started, CancellationToken ct)
         {
-            if (string.IsNullOrEmpty(name)) return false;
-            string host;
-            try { host = Dns.GetHostName(); } catch { host = Environment.MachineName; }
-            return string.Equals(name, host, StringComparison.OrdinalIgnoreCase) || string.Equals(name, Environment.MachineName, StringComparison.OrdinalIgnoreCase) ||
-                   name.StartsWith(Environment.MachineName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        /// <summary>This computer's Jellyfin Desktop, the one ready to take orders and most recently active first.</summary>
-        private async Task<JfSession> DesktopSession() =>
-            (await jf.Sessions().ConfigureAwait(false)).Where(IsDesktopClient)
-                .OrderByDescending(s => s.SupportsMediaControl).ThenByDescending(s => s.LastActivityDate ?? DateTime.MinValue).FirstOrDefault();
-
-        private async Task PlayJellyfinDesktop(string itemId, long startTicks, Action started, CancellationToken ct)
-        {
-            jmpSession = null;
-            var exe = FindJellyfinDesktop(settings);
-            JfSession session = null;
-            try { session = await DesktopSession().ConfigureAwait(false); } catch { }
-            var launched = false;
-            void Launch()
+            var item = await jf.Item(itemId).ConfigureAwait(false);
+            var dir = Path.Combine(Path.GetTempPath(), "MyVLibrary");
+            Directory.CreateDirectory(dir);
+            var list = Path.Combine(dir, "jellyfin.m3u");
+            File.WriteAllText(list, "#EXTM3U\r\n#EXTINF:-1," + (item?.Name ?? "Jellyfin").Replace('\r', ' ').Replace('\n', ' ') + "\r\n" + jf.StreamUrl(itemId, startTicks) + "\r\n", Encoding.Default);
+            var before = new HashSet<int>(Process.GetProcesses().Select(p => p.Id));
+            var launchedAt = DateTime.Now;
+            var first = Process.Start(new ProcessStartInfo(list) { UseShellExecute = true });
+            /* the player's window: a program started for it, or the one that was already open and took it */
+            var watch = new List<Process>();
+            var self = Process.GetCurrentProcess().Id;
+            for (var i = 0; i < 20 && watch.Count == 0; i++)
             {
-                if (exe == null) throw new PlayerMissingException(Loc.S("No encuentro Jellyfin Desktop. Indica dónde está en los ajustes de MyVLibrary.", "Jellyfin Desktop was not found. Set its location in MyVLibrary's settings."));
-                launched = true;
-                if (Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exe)).Length > 0) return;
-                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) });
+                await Task.Delay(1000, ct).ConfigureAwait(false);
+                if (first != null && HasWindow(first)) watch.Add(first);
+                watch.AddRange(Process.GetProcesses().Where(p => !before.Contains(p.Id) && HasWindow(p) && p.Id != self));
             }
-            if (session == null) Launch();
-            /* The program shows up on the server before its player is listening, so an order sent too soon is lost:
-               it is sent again every few seconds until the episode is playing. A session left behind by a program
-               already closed does not answer either: then the program is started. */
-            var since = DateTime.Now;
-            var lastSend = DateTime.MinValue;
-            var sends = 0;
-            DateTime? appeared = null;
-            var seen = false;
-            for (var misses = 0; ; )
+            if (watch.Count == 0)
             {
-                await Task.Delay(seen ? 3000 : 1000, ct).ConfigureAwait(false);
-                JfSession now;
-                try { now = seen ? (await jf.Sessions().ConfigureAwait(false)).FirstOrDefault(s => s.Id == session.Id) : await DesktopSession().ConfigureAwait(false); misses = 0; }
-                catch { if (++misses > 5) break; continue; }
-                if (seen)
-                {
-                    /* playing until that session plays something else or nothing (or the program closes) */
-                    if (now?.NowPlayingItem?.Id != itemId) break;
-                    continue;
-                }
-                if (now != null && now.NowPlayingItem?.Id == itemId) { session = now; jmpSession = now.Id; seen = true; started(); continue; }
-                if (DateTime.Now - since > TimeSpan.FromSeconds(90))
-                {
-                    if (now == null) throw new PlayerMissingException(Loc.S("Jellyfin Desktop no se ha conectado a tu servidor con tu usuario.", "Jellyfin Desktop did not connect to your server with your user."));
-                    break;
-                }
-                if (now == null) { if (!launched) Launch(); continue; }
-                session = now; jmpSession = now.Id;
-                /* just connected: a moment for its player to load */
-                if (appeared == null) appeared = DateTime.Now;
-                if (launched && sends == 0 && DateTime.Now - appeared < TimeSpan.FromSeconds(4)) continue;
-                if (DateTime.Now - lastSend < TimeSpan.FromSeconds(6)) continue;
-                if (sends == 2 && !launched) Launch();
-                lastSend = DateTime.Now; sends++;
-                try { await jf.PlayOn(now.Id, itemId, startTicks).ConfigureAwait(false); }
-                catch (Exception e) { logger.Warn(e, "MyVLibrary: Jellyfin Desktop no ha aceptado la orden de reproducir"); }
+                var exe = AssociatedExe(".m3u");
+                if (!string.IsNullOrEmpty(exe)) watch.AddRange(Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exe)).Where(HasWindow));
             }
-            jmpSession = null;
+            if (watch.Count == 0) throw new PlayerMissingException(Loc.S("No se ha abierto ningún reproductor. Comprueba qué programa abre las listas .m3u en Windows o elige VLC.", "No player opened. Check which program opens .m3u playlists in Windows, or choose VLC."));
+            sysPlayers = watch;
+            var playSession = Guid.NewGuid().ToString("N");
+            var runtime = item?.RunTimeTicks ?? long.MaxValue;
+            long Position() => Math.Min(runtime, startTicks + (DateTime.Now - launchedAt).Ticks);
+            launchedAt = DateTime.Now;
+            started();
+            try { await jf.Report("start", itemId, startTicks, false, playSession).ConfigureAwait(false); } catch { }
+            var lastReport = DateTime.Now;
+            while (watch.Any(HasWindow) && !ct.IsCancellationRequested)
+            {
+                try { await Task.Delay(2000, ct).ConfigureAwait(false); } catch (OperationCanceledException) { break; }
+                if (DateTime.Now - lastReport > TimeSpan.FromSeconds(10))
+                {
+                    lastReport = DateTime.Now;
+                    try { await jf.Report("progress", itemId, Position(), false, playSession).ConfigureAwait(false); } catch { }
+                }
+            }
+            /* closed: Jellyfin works out from the position whether it counts as watched */
+            try { await jf.Report("stopped", itemId, Position(), false, playSession).ConfigureAwait(false); } catch (Exception e) { logger.Warn(e, "MyVLibrary: Jellyfin no ha aceptado el final de la reproducción"); }
+            sysPlayers = null;
         }
 
         // ---------- VLC ----------
