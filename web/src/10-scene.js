@@ -380,7 +380,8 @@ class Case {
       }
     }
     this.disc.position.copy(this.discHome); this.inner.add(this.disc);
-    if (D.media === 'tape') this.disc.rotation.z = Math.PI / 2;
+    /* the tape stands on its long side in the clamshell; it comes back the same way */
+    if (D.media === 'tape') { this.disc.rotation.z = Math.PI / 2; this.discQuat = this.disc.quaternion.clone(); }
     /* films and series come without a manual */
     if (D.man[0]) {
       this.manual = new THREE.Mesh(manualGeo(g.fmt), [MAT.paper, MAT.paper, MAT.paper, MAT.paper, MAT.paper, this.manMat]);

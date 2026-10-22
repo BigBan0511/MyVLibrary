@@ -520,10 +520,12 @@ function insertDisc() {
   if (!active || mode !== 'open') return;
   if (active.g.video && !VPLAY.item) { const m = active.multi; return chooseVideo(active, m ? m.slots[m.focus || 0] : null); }
   return guarded(async () => {
-    const c = active, d = c.disc, home = c.discHome, above = discAbove(c, new V3()), P = portOf(c);
+    const c = active, d = c.disc, home = c.discHome, above = c.aboveOverride ? c.aboveOverride.clone() : discAbove(c, new V3()), P = portOf(c);
     setMode('busy'); hoverPart = null; c.discLabelMat.emissive.set('#000000'); stopTrailer();
     await waitReal(sfx.mediaOut(c.g.fmt) - .005);
-    await tween(.28, t => { d.position.z = home.z + 1.4 * t; d.rotation.x = -.06 * t; });
+    /* it comes loose with a slight tilt, whatever way it was lying */
+    const qHome = d.quaternion.clone(), qTilt = new Q4();
+    await tween(.28, t => { d.position.z = home.z + 1.4 * t; d.quaternion.copy(qTilt.setFromAxisAngle(X_AXIS, -.06 * t)).multiply(qHome); });
     await tween(.6, t => { d.position.y = lerp(home.y, above.y, t); d.position.z = lerp(home.z + 1.4, above.z, t); });
     c.mode = 'parked'; setView('console'); prepareIn(P); await wait(750);
     scene.attach(d); _p0.copy(d.position); _q0.copy(d.quaternion); const s0 = d.scale.x;
@@ -588,7 +590,7 @@ function closeGame(o = {}) {
   return guarded(async () => {
     const c = active, d = c.disc, g = c.g, home = c.discHome, P = portOf(c), rest = c.mode === 'rest';
     /* into a case lying open on the table the medium drops from straight above */
-    const above = rest ? new V3(home.x, home.y, home.z + 7) : discAbove(c, new V3());
+    const above = c.aboveOverride ? c.aboveOverride.clone() : rest ? new V3(home.x, home.y, home.z + 7) : discAbove(c, new V3()), qIn = c.discQuat || new Q4();
     const mins = Math.max(1, Math.floor((performance.now() - playStart) / 1000));
     /* pulled out by hand while only the shelf was keeping track: stop counting from here */
     if (g.video && !o.auto) stopVideo();
@@ -602,15 +604,15 @@ function closeGame(o = {}) {
     afterOut(P); await wait(320); if (opened) await opened;
     _p0.copy(d.position); _q0.copy(d.quaternion);
     const tmp = new THREE.Object3D(); c.inner.add(tmp); tmp.position.copy(above); tmp.updateMatrixWorld(true);
-    tmp.getWorldPosition(_p2); tmp.getWorldQuaternion(_q2); c.inner.remove(tmp);
+    tmp.quaternion.copy(qIn); tmp.updateMatrixWorld(true); tmp.getWorldPosition(_p2); tmp.getWorldQuaternion(_q2); c.inner.remove(tmp);
     _p1.copy(_p0).lerp(_p2, .55); _p1.y = Math.max(_p0.y, _p2.y) + 22; const sT = c.root.scale.x, s0 = d.scale.x;
     await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); if (P.kind === 'cart') flapsFor(d, P); });
     if (P.kind === 'cart') setCartFlaps(0);
-    c.inner.attach(d); d.position.copy(above); d.quaternion.identity(); d.scale.set(1, 1, 1);
+    c.inner.attach(d); d.position.copy(above); d.quaternion.copy(qIn); d.scale.set(1, 1, 1);
     sfx.mediaIn(g.fmt, { hitAt: (.55 + .22) * SPEED });
     await tween(.55, t => { d.position.y = lerp(above.y, home.y, t); d.position.z = lerp(above.z, home.z + 1.4, t); });
     await tween(.22, t => { d.position.z = home.z + 1.4 * (1 - t); }); d.position.copy(home);
-    if (c.multi) putBackInSet(c);
+    if (c.multi) await putBackInSet(c);
     let msg, moved = false;
     if (g.video) msg = videoDone(c, o);
     else if (PLAYNITE) {

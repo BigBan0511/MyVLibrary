@@ -151,23 +151,25 @@ function drawTapeSpine(g, ep) {
    ===================================================================== */
 let MDISC_GEO = null;
 function buildMultiInterior(c, parts) {
-  const D = c.dim, { w, h, split } = D, g = c.g, m = c.multi = { kind: D.media, page: -1, want: 0, eps: [], slots: [], mats: [], set: 0, flipA: 0, flipT: 0, rise: 0, riseT: 0, swapping: false };
+  const D = c.dim, { w, h, split } = D, g = c.g, m = c.multi = { kind: D.media, page: -1, want: 0, eps: [], slots: [], mats: [], flipA: 0, flipT: 0, anim: null, queued: null, rise: 0, riseT: 0, swapping: false };
   const add = (p, o, thick) => { p.add(o); parts.push([p, o]); if (thick) { o.userData.thick = true; c.thick.push(o); } return o; };
   const labelMat = () => { const mt = M(THREE.MeshPhysicalMaterial, { color: '#ffffff', roughness: .4, clearcoat: .8, clearcoatRoughness: .1, emissive: new THREE.Color('#000000') }, 1); m.mats.push(mt); return mt; };
   if (D.media === 'disc') {
-    /* four leaves: the lid's inside, the two faces of the flip tray, the base. Two discs each, overlapping */
-    const R = D.discR, dy = [3.6, -3.6], leaf = (parent, x0, z0, back) => dy.map((y, k) => {
+    /* the leaves of the case, two discs each, overlapping: the lid's inside (L) with the previous discs just
+       under it (LB), the two faces of the flip tray (TF, TB) and the base under the tray (S) */
+    const R = D.discR, dy = [3.6, -3.6], leaf = (parent, x0, z0, back, dx = 0, ddy = 0) => dy.map((y, k) => {
       const mt = labelMat(), d = add(parent, makeDisc(R, mt), true);
-      d.position.set(x0, y, z0 + (back ? -1 : 1) * (.075 + k * .13)); if (back) d.rotation.y = Math.PI;
+      d.position.set(x0 + dx, y + ddy, z0 + (back ? -1 : 1) * (.075 + k * .13)); if (back) d.rotation.y = Math.PI;
       d.userData.mat = mt; c.tag(d, 'ep'); return d;
     });
-    const trayPivot = add(c.inner, new THREE.Group()); trayPivot.position.set(-w / 2, 0, split + .34);
+    const trayPivot = add(c.inner, new THREE.Group()); trayPivot.position.set(-w / 2, 0, split + .6);
     const trayMesh = new THREE.Mesh(new THREE.BoxGeometry(w - .5, h - .5, .22), MAT.tray[g.fmt]); trayMesh.position.set(w / 2, 0, 0); trayMesh.castShadow = true;
     trayPivot.add(trayMesh); trayMesh.userData.thick = true; c.thick.push(trayMesh);
     m.tray = trayPivot; m.trayMesh = trayMesh;
-    /* A: lid and tray front; B: tray back and base */
-    const L = leaf(c.pivot, w / 2 - D.discX, 0, true), TF = leaf(trayPivot, w / 2 + D.discX, .11), TB = leaf(trayPivot, w / 2 - D.discX, -.11, true), S = leaf(c.inner, D.discX, split);
-    m.sets = [[...L, ...TF], [...TB, ...S]];
+    /* (the lid is seen from inside once open: a larger x there is further left, so the previous discs peek out on the left) */
+    const LB = leaf(c.pivot, w / 2 - D.discX, -.02, true, .8, .35), L = leaf(c.pivot, w / 2 - D.discX, -.3, true);
+    const TF = leaf(trayPivot, w / 2 + D.discX, .11), TB = leaf(trayPivot, w / 2 - D.discX, -.11, true), S = leaf(c.inner, D.discX, split, false, .8, .35);
+    m.leaf = { L, LB, TF, TB, S }; m.slots = [...L, ...TF];
   } else {
     /* six tape cases standing in a row, spines to the front; the box is open on top */
     const cw = 3.2, ch = h - 1.4, cd = D.d - 1.2, geo = MDISC_GEO || (MDISC_GEO = { box: slabGeometry(cd, ch, cw, .3, .08), spine: new THREE.PlaneGeometry(cw - .3, ch - .4), hole: new THREE.PlaneGeometry(w - .8, D.d - .8) });
@@ -182,11 +184,15 @@ function buildMultiInterior(c, parts) {
       grp.position.set(x0, 0, -.15); grp.userData.base = 0; grp.userData.mat = mt;
       c.tag(grp, 'ep'); m.cases.push(grp);
     }
-    m.sets = [m.cases];
+    m.slots = m.cases;
   }
-  m.slots = m.sets[0];
   /* the season's episodes arrive (they may already be here); the page with the first one not seen comes up */
-  m.ready = (async () => { if (!seasonOf(g)) await videoSeasons(g); const eps = await videoEpisodes(g, seasonOf(g)); if (c.multi !== m) return; m.eps = eps; m.per = m.kind === 'disc' ? 4 : 6; const p = Math.floor(firstUnseen(eps) / m.per); labelSet(c, m.sets[0], p); m.page = p; m.want = p; renderEpBar(); })();
+  m.ready = (async () => {
+    if (!seasonOf(g)) await videoSeasons(g); const eps = await videoEpisodes(g, seasonOf(g)); if (c.multi !== m) return;
+    m.eps = eps; m.per = m.kind === 'disc' ? 4 : 6; m.page = m.want = Math.floor(firstUnseen(eps) / m.per);
+    if (m.kind === 'disc') restDiscs(c); else labelSet(c, m.cases, m.page);
+    renderEpBar();
+  })();
 }
 function dropMultiInterior(c) {
   const m = c.multi; if (!m) return;
@@ -195,39 +201,64 @@ function dropMultiInterior(c) {
   if (m.tape) { m.tape.parent && m.tape.parent.remove(m.tape); }
   c.multi = null;
 }
-/* paints one set of slots with the episodes of page p; slots without an episode stay out of sight */
-function labelSet(c, set, p) {
-  const m = c.multi, g = c.g, cover = c.coverCanvas;
-  set.forEach((o, k) => {
-    const ep = m.eps[p * m.per + k] || null, mt = o.userData.mat; o.userData.ep = ep; o.userData.away = !ep;
-    if (mt.map) { mt.map.dispose(); mt.map = null; }
-    if (ep) { mt.map = tex(m.kind === 'disc' ? drawVideoLabel(g, cover, ep) : drawTapeSpine(g, ep)); mt.color.set('#ffffff'); }
-    mt.needsUpdate = true;
-  });
+/* one disc or tape case shows an episode, or stays out of sight when there is none */
+function paintSlot(c, o, ep) {
+  const m = c.multi, mt = o.userData.mat; o.userData.ep = ep; o.userData.away = !ep;
+  if (mt.map) { mt.map.dispose(); mt.map = null; }
+  if (ep) { mt.map = tex(m.kind === 'disc' ? drawVideoLabel(c.g, c.coverCanvas, ep) : drawTapeSpine(c.g, ep)); mt.color.set('#ffffff'); }
+  mt.needsUpdate = true;
+}
+/* paints a set of slots with the episodes of page p */
+function labelSet(c, set, p) { const m = c.multi; set.forEach((o, k) => paintSlot(c, o, p >= 0 ? m.eps[p * m.per + k] || null : null)); }
+/* the discs of page p, half by half (two per leaf); nothing before the first page or after the last */
+function pageHalf(m, p, half) { return [0, 1].map(k => p >= 0 ? m.eps[p * 4 + half * 2 + k] || null : null); }
+function paintLeaf(c, leaf, list) { leaf.forEach((o, k) => paintSlot(c, o, list[k])); }
+/* the case at rest: this page on the lid and on the tray; under the lid the previous discs, if there are any;
+   under the tray the next ones, if there are any */
+function restDiscs(c) {
+  const m = c.multi, p = m.page, { L, LB, TF, TB, S } = m.leaf;
+  paintLeaf(c, L, pageHalf(m, p, 0)); paintLeaf(c, TF, pageHalf(m, p, 1));
+  paintLeaf(c, LB, pageHalf(m, p - 1, 1)); paintLeaf(c, S, pageHalf(m, p + 1, 0)); paintLeaf(c, TB, [null, null]);
+  m.flipA = m.flipT = 0; m.tray.rotation.y = 0;
 }
 function updateMultiInterior(c, dt) {
   const m = c.multi; if (!m) return;
   const s = dt / SPEED;
   if (m.kind === 'disc') {
-    m.flipA += (m.flipT - m.flipA) * (1 - Math.exp(-6 * s)); m.tray.rotation.y = -Math.PI * easeIO(clamp(m.flipA, 0, 1));
+    /* the tray turns at a steady pace; when it lands, the case goes back to its resting arrangement */
+    const step = s * 1.6; m.flipA += clamp(m.flipT - m.flipA, -step, step);
+    m.tray.rotation.y = -Math.PI * easeIO(clamp(m.flipA, 0, 1));
+    if (m.anim && m.flipA === m.flipT) { const a = m.anim; m.anim = null; a(); if (m.queued != null) { const q = m.queued; m.queued = null; multiGo(c, q); } }
   } else {
     /* the tapes rise with the box opening; a page change sinks them, relabels them and brings them up again */
     m.rise += (m.riseT - m.rise) * (1 - Math.exp(-7 * s));
     const up = Math.min(c.openA, m.rise) * 8.5;
-    m.cases.forEach((o, i) => { const lift = o.userData.lift || 0; o.position.y = o.userData.base + up * (1 - i * .02) + lift; });
+    m.cases.forEach((o, i) => { const lift = (o.userData.lift || 0) * c.openA; o.position.y = o.userData.base + up * (1 - i * .02) + lift; });
     if (m.swapping && m.rise < .04) { labelSet(c, m.cases, m.want); m.page = m.want; m.riseT = 1; m.swapping = false; }
   }
 }
-/* the next or previous four (or six), or the page with a given episode */
+/* the next or previous four (or six), or the page with a given episode. Later episodes always come
+   with the tray turning from right to left, earlier ones from left to right */
 function multiGo(c, p) {
   const m = c.multi; if (!m || !m.eps.length) return false;
-  const last = Math.max(0, Math.ceil(m.eps.length / m.per) - 1); p = clamp(p, 0, last); if (p === m.page) return false;
-  m.want = p;
+  const last = Math.max(0, Math.ceil(m.eps.length / m.per) - 1); p = clamp(p, 0, last);
+  if (m.anim) { m.queued = p; return true; }
+  if (p === m.page) return false;
+  const from = m.page; m.want = m.page = p;
   if (m.kind === 'disc') {
-    /* the hidden leaves get the new discs, then the tray turns over to show them */
-    const other = m.set ? 0 : 1; labelSet(c, m.sets[other], p); m.set = other; m.flipT = other; m.page = p; m.slots = m.sets[other];
+    const { L, LB, TF, TB, S } = m.leaf;
+    if (p > from) {
+      /* the new discs go on the back of the tray and under it, and the tray turns over to the left */
+      paintLeaf(c, TB, pageHalf(m, p, 0)); paintLeaf(c, S, pageHalf(m, p, 1)); m.flipT = 1;
+    } else {
+      /* the tray is laid over on the left showing what is there now (it looks the same), the earlier discs
+         go under it and on its other face, and it turns back to the right */
+      paintLeaf(c, TB, pageHalf(m, from, 0)); paintLeaf(c, S, pageHalf(m, from, 1)); m.flipA = m.flipT = 1; m.tray.rotation.y = -Math.PI;
+      paintLeaf(c, L, pageHalf(m, p, 0)); paintLeaf(c, TF, pageHalf(m, p, 1)); paintLeaf(c, LB, pageHalf(m, p - 1, 1)); m.flipT = 0;
+    }
+    m.anim = () => restDiscs(c);
     sfx.handle(c.g.fmt);
-  } else { m.swapping = true; m.riseT = 0; m.page = p; sfx.slide(); }
+  } else { m.swapping = true; m.riseT = 0; sfx.slide(); }
   m.focus = 0; setEpFocus(c, m.slots[0]); renderEpBar(); return true;
 }
 function multiOpened(c) { const m = c.multi; if (!m) return; m.riseT = 1; epQ.value = ''; epList.hidden = true; setEpFocus(c, m.slots.find(o => o.userData.ep && !o.userData.ep.played) || m.slots[0]); }
@@ -241,7 +272,11 @@ function setEpFocus(c, slot, hover) {
   m.slots.forEach((o, i) => o.userData.mat.emissive.setScalar(i === (m.focus || 0) ? .07 : 0));
   if (m.kind === 'tape') m.slots.forEach((o, i) => { if (!(m.taken && m.taken.o === o)) o.userData.lift = i === (m.focus || 0) ? 1.2 : 0; });
 }
-function multiClosing(c) { const m = c.multi; if (!m) return; m.riseT = 0; m.flipT = 0; if (m.set) { labelSet(c, m.sets[0], m.page); m.set = 0; m.slots = m.sets[0]; } }
+/* the case is closing: a turn under way ends at once, and the tapes go down */
+function multiClosing(c) {
+  const m = c.multi; if (!m) return; m.riseT = 0; m.queued = null;
+  if (m.anim) { const a = m.anim; m.anim = null; m.flipA = m.flipT; a(); }
+}
 
 /* ---------- the episode bar: page arrows and a search for the exact episode ---------- */
 const epBar = $('#epbar'), epQ = $('#epQ'), epList = $('#epList');
@@ -318,31 +353,45 @@ const VPLAY = { item: null, start: 0, t0: 0, demoT: 0 };
 async function chooseVideo(c, slot) {
   if (!c || mode !== 'open' || busy) return;
   const g = c.g, m = c.multi;
+  if (m && m.anim) return;
   const it = m ? slot && slot.userData.ep : filmItem(g); if (!it) return;
   const start = await askResume(it); if (start === null) return;
-  if (m) takeFromSet(c, slot, it);
+  busy = true;
+  try { if (m) await takeFromSet(c, slot, it); } finally { busy = false; }
   g.ep = it; VPLAY.item = it; VPLAY.start = start;
   return insertDisc();
 }
-/* the episode leaves its place: its disc comes free of the leaf, or the tape comes out of its case */
-function takeFromSet(c, slot, it) {
+/* a tape in its case: standing on end, its spine to the front, the label facing the side */
+const TAPE_IN_CASE = new Q4().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new V3(0, 1, 0), new V3(0, 0, -1), new V3(-1, 0, 0)));
+/* the episode leaves its place: its disc comes free of the leaf, or the tape slides up out of its case */
+async function takeFromSet(c, slot, it) {
   const m = c.multi;
   if (m.kind === 'disc') {
-    c.inner.attach(slot); c.disc = slot; c.discHome = slot.position.clone(); m.taken = { o: slot, parent: null };
-    c.discLabelMat = slot.userData.mat;
-  } else {
-    slot.userData.lift = 3;
-    const lm = M(THREE.MeshPhysicalMaterial, { map: tex(drawTapeLabel(c.g, c.coverCanvas, it)), roughness: .4, clearcoat: .6, emissive: new THREE.Color('#000000') }, 1); m.mats.push(lm);
-    const tape = makeTape(lm); c.inner.add(tape); tape.position.set(slot.position.x, slot.position.y + 4, slot.position.z); tape.rotation.z = Math.PI / 2;
-    m.tape = tape; c.disc = tape; c.discHome = tape.position.clone(); c.discLabelMat = lm; m.taken = { o: slot };
+    /* it stops being part of the case's inside, so it is seen all the way into the player */
+    const i = c.thick.indexOf(slot); if (i >= 0) c.thick.splice(i, 1); slot.userData.thick = false; slot.visible = true;
+    m.taken = { o: slot, parent: slot.parent };
+    c.inner.attach(slot); c.disc = slot; c.discHome = slot.position.clone(); c.discQuat = slot.quaternion.clone();
+    c.discLabelMat = slot.userData.mat; c.aboveOverride = null;
+    return;
   }
+  const lm = M(THREE.MeshPhysicalMaterial, { map: tex(drawTapeLabel(c.g, c.coverCanvas, it)), roughness: .4, clearcoat: .6, emissive: new THREE.Color('#000000') }, 1); m.mats.push(lm);
+  const tape = makeTape(lm); c.inner.add(tape); tape.position.copy(slot.position); tape.quaternion.copy(TAPE_IN_CASE);
+  m.tape = tape; m.taken = { o: slot }; c.disc = tape; c.discLabelMat = lm;
+  const y0 = slot.position.y, rise = DIMS.vhsbox.h + 1;
+  sfx.slide(); await tweenReal(.6, t => { tape.position.y = y0 + rise * t; }, easeIO);
+  c.discHome = tape.position.clone(); c.discQuat = TAPE_IN_CASE.clone(); c.aboveOverride = c.discHome.clone().add(new V3(0, 3, 0));
 }
-/* the episode is back: the disc returns to its leaf, the tape into its case */
-function putBackInSet(c) {
+/* the episode is back: the disc returns to its leaf, the tape slides down into its case */
+async function putBackInSet(c) {
   const m = c.multi; if (!m || !m.taken) return;
-  if (m.kind === 'disc') { const o = m.taken.o, leaf = m.sets[0].includes(o) ? (m.sets[0].indexOf(o) < 2 ? c.pivot : m.tray) : (m.sets[1].indexOf(o) < 2 ? m.tray : c.inner); leaf.attach(o); }
-  else { m.taken.o.userData.lift = 0; if (m.tape) { c.inner.remove(m.tape); m.tape = null; } }
-  m.taken = null; c.disc = null;
+  const o = m.taken.o;
+  if (m.kind === 'disc') { m.taken.parent.attach(o); o.userData.thick = true; c.thick.push(o); }
+  else if (m.tape) {
+    const tape = m.tape, y0 = tape.position.y, y1 = o.position.y;
+    sfx.slide(); await tweenReal(.55, t => { tape.position.y = lerp(y0, y1, t); }, easeIO);
+    c.inner.remove(tape); m.tape = null; o.userData.lift = 0;
+  }
+  m.taken = null; c.disc = null; c.discQuat = null; c.aboveOverride = null;
 }
 /* the films play outside the shelf: Jellyfin Media Player or VLC (the extension starts them) */
 function startVideo(c) {
