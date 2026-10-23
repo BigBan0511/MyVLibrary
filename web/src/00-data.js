@@ -314,10 +314,12 @@ const CAT0 = { faro: ['Partidas cortas', 'Favoritos'], turbo: ['Con amigos', 'Fa
 
 /* viewer preferences */
 const PREF_KEY = 'myvlibrary:prefs';
-const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'tarde', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'rooms', sys: 'PC', fmtCon: 'lock', room: 'salon', mfAlb: 'year', mfPl: 'cd', mfSong: 'year', mixFmt: 'cd', flip: 'off', mvol: 70, setTab: 'general', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
+const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'cine', hold: 'studio', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'rooms', sys: 'PC', fmtCon: 'lock', room: 'salon', mfAlb: 'year', mfPl: 'cd', mfSong: 'year', mixFmt: 'cd', flip: 'off', mvol: 70, setTab: 'general', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}); } catch (e) { }
 /* rooms by system arrived in 0.4: everyone starts there once; the older designs stay in Settings */
 if (prefs.layoutV !== 2) { prefs.layout = 'rooms'; prefs.layoutV = 2; }
+/* the cinema light arrived in 0.7: everyone gets it once; the other lights stay in Settings */
+if (prefs.lightV !== 2) { prefs.light = 'cine'; prefs.lightV = 2; }
 function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) { } }
 
 /* dust builds up while a game sits untouched; wiping it is remembered */

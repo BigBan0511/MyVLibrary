@@ -26,11 +26,13 @@ Cada sistema tiene su sitio. Los juegos de PC están en una balda sobre una mesa
 - **Tres diseños.** Salas por sistema (el de las imágenes), una sola balda larga sobre la mesa con la tele y la consola, o una fila de estanterías (una por estado, categoría o plataforma). Se cambia en Ajustes → Diseño.
 - **Jugar de verdad.** Al meter el disco, Playnite arranca el juego. Mientras juegas, la tele lo enseña y la caja espera cerrada junto al aparato: en la mesa, a la derecha del monitor, o en la alfombra, al lado de la consola. Al cerrar el juego, la caja se abre, el disco vuelve solo a ella y la caja vuelve a su sitio en la estantería. Si Playnite da el juego por cerrado pero sigue abierto algún programa de su carpeta, el disco se queda dentro hasta que lo cierres y ese tiempo se suma a tus horas.
 - **Tráiler.** La tele y la contraportada ponen el tráiler del juego: el de Extra Metadata Loader si lo tienes, o el vídeo que venga en la descripción.
+- **Luz de cine y estudio.** Por defecto la habitación está a oscuras, con un foco cálido desde arriba a la izquierda y un poco de grano de película. Al sacar algo de la estantería, la habitación se funde tras un fondo gris de estudio y unas ventanas de luz iluminan la caja: se gira hacia ti al abrirse y se asienta con un pequeño rebote al cerrarse, puedes arrastrarla para girarla en la mano y sus esquinas sueltan pequeños destellos. Si prefieres seguir viendo la habitación detrás, cámbialo en Ajustes → Al sacar algo de la estantería.
+- **La tele y la pizarra.** Al cambiar lo que sale en la tele hay un golpe de nieve y el número de canal en pantalla, y la pizarra escribe lo que tienes en la mano trazo a trazo, como con un rotulador.
 - **Tu idioma.** La estantería sigue el idioma de Playnite (por ahora español e inglés).
 - **Juegos sin estrenar.** Si nunca lo has abierto, llega precintado. Puedes tirar de la lengüeta roja para quitar el precinto.
 - **Polvo.** Lo que llevas tiempo sin tocar coge polvo, y se quita frotando la caja.
 - **Cambios que se guardan en Playnite.** Estado, categorías, valoración (estrellas) y notas. Nada cambia solo: solo cuando tú lo cambias.
-- **Ambientes.** Salón (el de la imagen), Nórdico, Acogedor, Cabaña, Japonés, Biblioteca, Loft, Videoclub, Gamer y Nave. También hay tres luces: noche, tarde y día.
+- **Ambientes.** Salón (el de la imagen), Nórdico, Acogedor, Cabaña, Japonés, Biblioteca, Loft, Videoclub, Gamer y Nave. También hay cuatro luces: cine, noche, tarde y día.
 
 ![Caja abierta con el disco y el manual](docs/caja-abierta.png)
 
@@ -48,6 +50,8 @@ Pasos:
 1. Descarga el último `MyVLibrary_x_y_z.pext`. Está en [Releases](../../releases) o, para la última versión en desarrollo, en la pestaña **Actions**: abre la última ejecución y baja el artefacto `MyVLibrary-pext`, que viene dentro de un .zip.
 2. Haz doble clic en el `.pext`, o arrástralo encima de la ventana de Playnite.
 3. Reinicia Playnite cuando te lo pida.
+
+**Actualizaciones.** Al arrancar Playnite, la extensión mira en GitHub si hay una versión más nueva y, si la hay, te la ofrece en una notificación de Playnite: haz clic en ella, se descarga el `.pext` y Playnite te pregunta si quieres instalarlo. También puedes mirarlo a mano en **Extensiones → MyVLibrary → Buscar actualizaciones**, y quitar el aviso en los ajustes de la extensión.
 
 ## Usar
 
@@ -87,6 +91,7 @@ Tienes tres formas de abrir la estantería:
 - LB + RB para abrir y cerrar.
 - Incluir los juegos ocultos.
 - Mantener el disco dentro mientras el juego siga abierto.
+- Avisar cuando haya una versión nueva.
 - Herramientas de desarrollo (F12).
 
 ## Qué se guarda y dónde
@@ -129,6 +134,10 @@ node build.mjs                 # web/dist/, lo que lleva la extensión
 - Página y extensión se pasan mensajes JSON con `chrome.webview.postMessage`.
 - La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory` y `release`.
 - La extensión responde con `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad` y `focus`.
+
+## Agradecimientos
+
+La luz de cine, el fondo de estudio y la forma en que la caja se abre y se cierra están inspirados en el vídeo «CD Shelf» que se compartió en r/spicetify y en el [cd-case](https://github.com/annnguyentt/vibe-coding/tree/main/cd-case) de Ann Nguyen.
 
 ## Licencia
 

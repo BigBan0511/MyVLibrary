@@ -383,7 +383,7 @@ function pick(c) {
     if (c.g.kind === 'series') { const old = c.g.fmt; await videoSeasons(c.g); await videoEpisodes(c.g, seasonOf(c.g)); resolveVideoFmt(c.g); if (c.g.fmt !== old) { const n = replaceCase(c); c = n; active = n; } }
     if (c.g.real) await LIB.prepare(c.g, 1500);
     if (c.g.video) setVideoMedium(c.dim.media);
-    c.ensureDetail(); c.setShadow(true);
+    c.ensureDetail(); c.setShadow(true); if (TV_IDLE.includes(tv.state)) tvSet('channel', c);
     /* the case slides out for as long as the recorded scrape lasts and comes free on its loudest moment */
     const h = clamp(sfx.slide(c.g.fmt), .18, .7);
     if (c.g.dust > .15) emit(spineWorld(c, _sp), Math.round(30 + c.g.dust * 70), 1.4, 1.5);
@@ -399,7 +399,13 @@ function pick(c) {
 }
 function flipCase() { if (!active || busy || mode !== 'inspect') return; active.flipT = active.flipT ? 0 : Math.PI; sfx.handle(active.g.fmt); renderPrompts(); }
 /* the lid starts to swing when the latch lets go in the recording */
-async function swingOpen(c) { const h = sfx.caseOpen(c.g.fmt); await waitReal(h - .01); await tween(.75, t => { c.openA = t; }, easeIO); }
+/* in the studio the case turns once round as the lid opens (the hinge sound lands as the lid lets go); in the room it just opens */
+/* only a case held in your hands that opens like a book spins: not a box of tapes, a season's tray or a record */
+const spinStage = c => !RM && prefs.hold !== 'room' && !!c && c.mode === 'inspect' && !c.multi && c.g.fmt !== 'vhsbox' && !c.g.music && ['keep', 'clear', 'card'].includes(c.dim.shell);
+async function swingOpen(c) {
+  if (!spinStage(c)) { const h = sfx.caseOpen(c.g.fmt); await waitReal(h - .01); await tween(.75, t => { c.openA = t; }, easeIO); return; }
+  sfx.play('caseOpen', c.g.fmt, { hitAt: .97 * SPEED }); await playMotion(c, OPEN_K, OPEN_T); c.openA = 1;
+}
 function openCase() {
   if (!active || mode !== 'inspect') return;
   if (active.wrap) { if (prefs.seal === 'manual') { toast(T('Primero quita el precinto tirando de la lengüeta roja')); return; } return unwrapAction(); }
@@ -439,7 +445,14 @@ async function finishWrap(c) {
 }
 function closeCase(internal) {
   /* the lid speeds up and lands exactly on the recorded snap */
-  const run = async () => { const c = active; if (!internal) setMode('busy'); if (c.multi) { multiClosing(c); await wait(c.multi.kind === 'tape' ? 380 : 260); } const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0; if (!internal) setMode('inspect'); };
+  const run = async () => {
+    const c = active; if (!internal) setMode('busy');
+    if (c.multi) { multiClosing(c); await wait(c.multi.kind === 'tape' ? 380 : 260); }
+    /* in the studio the lid lands with a small bounce (the recorded snap lands with it) */
+    if (!internal && spinStage(c)) { sfx.play('caseClose', c.g.fmt, { hitAt: 1.7 * SPEED }); await playMotion(c, CLOSE_K, CLOSE_T); }
+    else { const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); }
+    c.openA = 0; if (!internal) setMode('inspect');
+  };
   if (internal) return run();
   if (!active || mode !== 'open') return;
   return guarded(run);
@@ -450,7 +463,7 @@ function putBack() {
   return guarded(async () => {
     const c = active; setMode('busy');
     if (c.wrap) { c.g.tear = c.tear; saveGame(c.g); }
-    await slideHome(c); setMode('shelf');
+    await slideHome(c); if (tv.state === 'channel' || tv.state === 'trailer') tvSet('standby'); setMode('shelf');
   }).then(() => { if (pendingRelayout) { pendingRelayout = false; relayout({ follow: back }); } });
 }
 /* the case goes in front of its place and slides in */

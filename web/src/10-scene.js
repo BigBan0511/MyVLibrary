@@ -47,7 +47,7 @@ const hemi = new THREE.HemisphereLight('#c9cbff', '#4a3426', .25); scene.add(hem
 const key = new THREE.SpotLight('#ffd2a0', 1.6, 0, .62, 1, 1);
 key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -.0005; key.shadow.radius = 6; if ('normalBias' in key.shadow) key.shadow.normalBias = .02;
 key.shadow.camera.near = 120; key.shadow.camera.far = 700;
-const KEY_POS = new V3(60, 330, 230), KEY_AIM = new V3(-6, 108, -6);
+const KEY_POS0 = [60, 330, 230], KEY_AIM0 = [-6, 108, -6], KEY_POS = new V3(...KEY_POS0), KEY_AIM = new V3(...KEY_AIM0);
 key.position.copy(KEY_POS); key.target.position.copy(KEY_AIM); scene.add(key, key.target);
 const fill = new THREE.DirectionalLight('#a9b8ff', .16); fill.position.set(-260, 120, 220); scene.add(fill);
 const lampLight = new THREE.PointLight('#ffb15c', .9, 260, 2); scene.add(lampLight);
@@ -124,7 +124,8 @@ function caseGeo(fmt) {
 const MAT = {
   edge: {
     dvd: M(THREE.MeshStandardMaterial, { color: '#131418', roughness: .5, metalness: .05 }, 1),
-    jewel: M(THREE.MeshPhysicalMaterial, { color: '#5d6670', roughness: .1, metalness: .15, clearcoat: 1, clearcoatRoughness: .02 }, 1.4),
+    /* clear polystyrene: pale, glossy rails that take the softboxes' reflections */
+    jewel: M(THREE.MeshPhysicalMaterial, { color: '#a9b3bd', roughness: .06, metalness: .05, clearcoat: 1, clearcoatRoughness: .01, reflectivity: .9 }, 2.2),
     bigjewel: M(THREE.MeshPhysicalMaterial, { color: '#3e454e', roughness: .1, metalness: .15, clearcoat: 1, clearcoatRoughness: .02 }, 1.4),
     vhs: M(THREE.MeshPhysicalMaterial, { color: '#0f0f11', roughness: .55, clearcoat: .2, clearcoatRoughness: .5 }, .9),
     bluray: M(THREE.MeshPhysicalMaterial, { color: '#1c56b8', roughness: .3, metalness: .05, clearcoat: .8, clearcoatRoughness: .1 }, 1.2)
@@ -351,6 +352,8 @@ class Case {
     this.mode = 'home'; this.faceOut = false; this.hoverA = 0; this.hoverT = 0; this.flipA = 0; this.flipT = 0; this.openA = 0;
     this.tearA = 0; this.tearDone = 0; this.glowT = 0; this.glowA = 0; this.dimmed = false; this.detail = false; this.dirty = false;
     this.hand = new V3(); this.dragging = false;
+    /* c.motion: the hand-keyed open or close in progress; c.grab: how far you have turned it by dragging (springs back) */
+    this.motion = null; this.grab = { x: 0, y: 0, vx: 0, vy: 0, held: false };
     if (g.wrapped) this.makeWrap();
     this.setDust(g.dust);
   }
@@ -534,21 +537,22 @@ class Case {
     }
     /* while you play it waits closed beside the machine, lying cover up */
     if (this.mode === 'rest') { restPose(this, P, Qt); return _tp; }
-    const D = this.dim, o = easeIO(this.openA);
-    let dist, offX = 0, offY = 0, extra = 0, tx = 0, ty = 0;
+    const D = this.dim, mo = this.motion, o = mo ? mo.spread : easeIO(this.openA);
+    let dist, offX = 0, offY = 0, extra = 0, tx = 0, ty = 0, tz = 0;
     if (this.mode === 'inspect') {
-      const hk = camera.aspect < .95 ? 2.05 : 1.66;
+      const hk = camera.aspect < .95 ? 2.05 : 1.66, sw = studio.sway, gb = this.grab;
       dist = lerp(fitDist(D.w * 1.85, D.h * hk), fitDist(D.w * 2 * 1.2, D.h * hk), o);
-      if (camera.aspect > 1.25) offX = viewW(dist) * .1;
-      offY = viewH(dist) * (camera.aspect > 1 ? .015 : prefs.card === 'hide' ? .02 : -.05);
-      tx = tilt.x; ty = tilt.y;
+      /* with the card open the case moves right to leave it room; otherwise it sits in the middle */
+      if (camera.aspect > 1.25 && prefs.card !== 'hide') offX = viewW(dist) * .1;
+      offY = viewH(dist) * (camera.aspect > 1 ? .015 : prefs.card === 'hide' ? .02 : -.05) + sw.y;
+      tx = tilt.x + gb.x + sw.pitch + (mo ? mo.pitch : 0); ty = tilt.y + gb.y + sw.yaw + (mo ? mo.yaw : 0); tz = sw.roll + (mo ? mo.roll : 0);
     } else {
       dist = camera.position.distanceTo(cam.look) * .45;
       if (camera.aspect > 1) { offX = -viewW(dist) * .33; offY = viewH(dist) * .25; extra = .5; } else offY = viewH(dist) * .3;
     }
     camera.getWorldDirection(_fwd); _right.set(1, 0, 0).applyQuaternion(camera.quaternion); _up.set(0, 1, 0).applyQuaternion(camera.quaternion);
     P.copy(camera.position).addScaledVector(_fwd, dist).addScaledVector(_right, offX).addScaledVector(_up, offY);
-    _e.set(tx, ty + this.flipA + this.tearA + extra, 0); Qt.copy(camera.quaternion).multiply(_q.setFromEuler(_e));
+    _e.set(tx, ty + this.flipA + this.tearA + extra, tz); Qt.copy(camera.quaternion).multiply(_q.setFromEuler(_e));
     return _tp;
   }
   update(dt) {
@@ -568,7 +572,9 @@ class Case {
     const o = this.openA;
     /* a box of tapes does not open like a book: it leans back and the tapes rise out of its open top */
     if (this.g.fmt === 'vhsbox') { this.pivot.rotation.y = 0; this.inner.position.x = 0; this.inner.rotation.x = .9 * easeIO(o); }
-    else { this.pivot.rotation.y = -Math.PI * o; this.inner.position.x = this.dim.w / 2 * o; }
+    else { const mo = this.motion; this.pivot.rotation.y = -(mo ? mo.lid : LID_OPEN * o); this.inner.position.x = this.dim.w / 2 * (mo ? mo.spread : o); }
+    /* turned by hand, it springs back when you let go */
+    const gb = this.grab; if (!gb.held && (gb.x || gb.y)) { gb.vx += (-16 * gb.x - 5.5 * gb.vx) * dt; gb.vy += (-16 * gb.y - 5.5 * gb.vy) * dt; gb.x += gb.vx * dt; gb.y += gb.vy * dt; if (Math.abs(gb.x) + Math.abs(gb.y) + Math.abs(gb.vx) + Math.abs(gb.vy) < 1e-4) gb.x = gb.y = gb.vx = gb.vy = 0; }
     if (this.multi) updateMultiInterior(this, dt);
     if (this.thick) { const show = o > this.thickAt; for (const m of this.thick) if (m.parent === this.inner || m.userData.thick) m.visible = show && !m.userData.away; }
     this.spineMat.emissiveIntensity = this.glowA * .5;
