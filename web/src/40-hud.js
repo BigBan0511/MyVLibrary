@@ -6,7 +6,7 @@ sfx.on = prefs.sound !== 'off'; sfx.vol = clamp(prefs.vol / 100, 0, 1);
    ===================================================================== */
 let mode = 'loading', active = null, busy = false, hovered = null, focus = null, kbNav = false, pendingRelayout = false;
 let hoverPart = null, playStart = 0, lastInfoKey = '', infoEdit = false, infoOpen = false, newStatus = false;
-const pointer = { x: 0, y: 0, cx: 0, cy: 0, type: 'mouse', down: null };
+const pointer = { x: 0, y: 0, cx: 0, cy: 0, type: 'mouse', down: null, live: false, out: false };
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 const coarse = matchMedia('(pointer: coarse)').matches;
 let shelfPicks = [];
@@ -715,7 +715,8 @@ async function relayout(opts = {}) {
 
 /* ---------- keyboard / pad focus along the shelf ---------- */
 function moveFocus(dir) {
-  if (!navOrder.length) return; kbNav = true;
+  /* the mouse counts as resting until it moves again */
+  if (!navOrder.length) return; kbNav = true; pointer.live = false;
   if (inCabinet()) {
     /* the TV cabinet: two rows; left and right run along a row and turn the page at the ends, up and down change row */
     const look = c => { focus = c; setHovered(c); cam.browseX = c.home.x; cam.browseRow = c.row; setView('browse'); };

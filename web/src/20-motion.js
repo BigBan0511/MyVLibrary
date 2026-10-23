@@ -87,6 +87,46 @@ function updateCamera(dt) {
   if (typeof shelfFill !== 'undefined') shelfFill.forEach((l, i) => { _kl.set(follow ? cam.look.x + (i ? 22 : -22) : SHELF.cx + (i ? 55 : -60), follow ? cam.look.y + 6 : SHELF.board + 26, follow ? 70 : SHELF.front + 75); l.position.lerp(_kl, k); });
 }
 const _kl = new V3(), _kp = new V3(), _KOFF = new V3(66, 222, 236), _KOFF2 = new V3();
+
+/* ---------- hover zoom: the view closes in on the game under the mouse or the pad's focus ----------
+   A lens, not a camera move: only part of the picture is drawn, larger. The point under the mouse stays
+   under the mouse at every zoom, so what you point at never slips away while it closes in. */
+const lens = { k: 0, want: 0, since: 0, lost: 0, px: .5, py: .5, sx: .5, sy: .5, hitT: 0 };
+const LENS_Z = { on: 1.6, soft: 1.3 }, _lv = new V3();
+/* px/py: the point of the full picture to show (0-1 across and down); sx/sy: where on screen it goes */
+function lensApply() {
+  const W = innerWidth, H = innerHeight, Z = 1 + ((LENS_Z[prefs.zoom] || LENS_Z.on) - 1) * lens.k;
+  if (Z < 1.001) { if (camera.view && camera.view.enabled) camera.clearViewOffset(); return; }
+  const w = W / Z, h = H / Z;
+  camera.setViewOffset(W, H, clamp(lens.px * W - lens.sx * w, 0, W - w), clamp(lens.py * H - lens.sy * h, 0, H - h), w, h);
+}
+/* with the mouse, the point under it; with the pad, the case in focus, drawn a little towards the middle.
+   Without dt it jumps straight there (the mouse moving); with dt it glides (the pad, or the mouse taking over from it) */
+function lensAim(dt) {
+  let tx, ty, sx, sy;
+  if (!kbNav) { if (!pointer.live) return; tx = sx = clamp((pointer.x + 1) / 2, 0, 1); ty = sy = clamp((1 - pointer.y) / 2, 0, 1); }
+  else {
+    if (!hovered || hovered.disposed) return;
+    camera.clearViewOffset(); camera.updateMatrixWorld(); spineWorld(hovered, _lv).project(camera);
+    tx = clamp((_lv.x + 1) / 2, 0, 1); ty = clamp((1 - _lv.y) / 2, 0, 1); sx = lerp(tx, .5, .35); sy = lerp(ty, .5, .35);
+  }
+  const a = dt == null || RM ? 1 : 1 - Math.exp(-(kbNav ? 7 : 14) * dt / SPEED);
+  lens.px += (tx - lens.px) * a; lens.py += (ty - lens.py) * a; lens.sx += (sx - lens.sx) * a; lens.sy += (sy - lens.sy) * a;
+}
+function updateLens(dt, now) {
+  const can = prefs.zoom !== 'off' && mode === 'shelf' && !busy;
+  /* the pad already walks the camera up to the desk shelf and the TV cabinet: no lens on top of that */
+  const over = can && hovered && !hovered.disposed && (kbNav ? !(cam.view === 'browse' && !isCases()) : pointer.type === 'mouse');
+  /* a short wait before closing in, so crossing the shelf on the way elsewhere does not zoom,
+     and a little longer before letting go, so the gaps between spines do not either */
+  if (over) { lens.lost = 0; if (!lens.since) lens.since = now; if (now - lens.since > 160 * SPEED) lens.want = 1; }
+  else { lens.since = 0; if (!lens.lost) lens.lost = now; if (!can || now - lens.lost > 380 * SPEED) lens.want = 0; }
+  if (RM) lens.k = lens.want;
+  else { lens.k += (lens.want - lens.k) * (1 - Math.exp(-(lens.want ? 5 : 8) * dt / SPEED)); if (!lens.want && lens.k < .002) lens.k = 0; }
+  /* out of the zoom it simply waits where it will be needed */
+  lensAim(lens.k > 0 ? dt : undefined);
+  lensApply();
+}
 function updateRowLights() { }
 
 /* ---------- dust particles: puffs and ambient motes in the light ---------- */
