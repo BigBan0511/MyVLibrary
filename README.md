@@ -130,7 +130,7 @@ node build.mjs                 # web/dist/, what the extension ships
 - Build it with `dotnet build extension/MyVLibrary.csproj -c Release`, on Windows, after building the web part.
 - GitHub Actions does this on every change and keeps the `.pext` as an artifact.
 - If you push a `v*` tag (for example `v0.2.0`), it also publishes a release.
-- **Version.** It lives in `extension/extension.yaml` (and is repeated in `web/package.json`). The DLL and the shelf read it from there; you can see it at the bottom of Settings. Every PR that touches `extension/` or `web/` must raise it, or the GitHub Actions check fails. A release tag must match it.
+- **Version.** It lives in `extension/extension.yaml` (and is repeated in `web/package.json`). The DLL and the shelf read it from there; you can see it at the bottom of Settings. Every PR that touches `extension/` or `web/` must raise it, or the GitHub Actions check fails. Only numbers and dots (like `0.7.2`): Playnite refuses anything else, such as `0.7.1-hotfix`, with "The extension is not packaged properly". A release tag must be exactly `v` plus the version (`v0.7.2`).
 
 **How the two parts talk**
 
