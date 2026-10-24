@@ -306,6 +306,8 @@ function restoreFmt(g, s) {
 }
 
 /* Playnite's default completion statuses, in Spanish (replaced by the real ones inside Playnite) */
+/* Playnite's saved filters (filter presets): { id, name }; each game lists the ones it matches in g.presets */
+let PRESETS = [];
 let STATUSES = ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'];
 let STATUS_SHELF = { 'Jugando': 'Jugando', 'En espera': 'En espera', 'Planeado': 'Planeados', 'No jugado': 'Sin jugar', 'Jugado': 'Jugados', 'Superado': 'Superados', 'Completado': 'Completados', 'Abandonado': 'Abandonados' };
 const ST0 = { faro: 'Jugando', turbo: 'Completado', minas: 'Superado', pulso: 'Abandonado', orbital: 'Superado', bosque: 'Jugando', neon: 'En espera', granja: 'No jugado', km0: 'Planeado', tinta: 'Superado', relojera: 'Jugando', marea: 'Abandonado', anden: 'En espera', cumbre: 'Planeado', sauce: 'Completado', galleta: 'Superado', pixel: 'Superado', ritmo: 'Jugado', kart: 'Superado', arena: 'Superado', tranvia: 'Abandonado', torre: 'No jugado' };
@@ -314,7 +316,7 @@ const CAT0 = { faro: ['Partidas cortas', 'Favoritos'], turbo: ['Con amigos', 'Fa
 
 /* viewer preferences */
 const PREF_KEY = 'myvlibrary:prefs';
-const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'cine', hold: 'studio', zoom: 'on', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'rooms', sys: 'PC', fmtCon: 'lock', room: 'salon', mfAlb: 'year', mfPl: 'cd', mfSong: 'year', mixFmt: 'cd', flip: 'off', mvol: 70, setTab: 'general', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
+const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'cine', hold: 'studio', zoom: 'on', filter: 'all', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'rooms', sys: 'PC', fmtCon: 'lock', room: 'salon', mfAlb: 'year', mfPl: 'cd', mfSong: 'year', mixFmt: 'cd', flip: 'off', mvol: 70, setTab: 'general', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}); } catch (e) { }
 /* rooms by system arrived in 0.4: everyone starts there once; the older designs stay in Settings */
 if (prefs.layoutV !== 2) { prefs.layout = 'rooms'; prefs.layoutV = 2; }

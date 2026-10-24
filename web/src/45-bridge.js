@@ -200,7 +200,7 @@ const LIB = {
     Object.assign(g, {
       t: r.name || T('Sin título'), sort: r.sort || r.name || '', status: r.status || '', cats: (r.cats || []).slice(), genres: r.genres || [], genre: (r.genres || []).slice(0, 2).join(' / '),
       dev: (r.devs || []).slice(0, 2).join(', '), pub: (r.pubs || []).slice(0, 2).join(', '), year, release: r.release || '', plat, platName: plats.join(', '), platFull: plats[0] || 'PC',
-      hours: (r.playtime || 0) / 3600, sessions: r.playCount || 0, last: days(r.lastActivity), added: days(r.added), installed: !!r.installed, favorite: !!r.favorite,
+      hours: (r.playtime || 0) / 3600, sessions: r.playCount || 0, last: days(r.lastActivity), added: days(r.added), installed: !!r.installed, favorite: !!r.favorite, presets: r.presets || [],
       rating: r.score ? clamp(Math.round(r.score / 20), 0, 5) : 0, critic: r.critic || null, community: r.community || null, features: r.features || [], series: (r.series || []).join(', '),
       ageRating: (r.age || []).join(', '), age: (() => { const m = (r.age || []).join(' ').match(/\b(3|7|12|16|18)\b/); return m ? +m[1] : null; })(), src: r.src || '', sum: r.sum || '', hasCover: !!r.hasCover, hasBg: !!r.hasBg, hasLogo: !!r.hasLogo
     });
@@ -221,6 +221,7 @@ const LIB = {
     STATUSES = st.map(s => s.name); STATUS_SHELF = {}; STATUS_KIND = {}; STATUS_CLASS = {}; this.statusIds = {};
     st.forEach(s => { STATUS_SHELF[s.name] = s.name; STATUS_KIND[s.name] = statusKind(s.name); STATUS_CLASS[s.name] = KIND_CLASS[STATUS_KIND[s.name]]; this.statusIds[s.name] = s.id; });
     prefs.cats = (m.categories || []).map(c => c.name).sort((a, b) => a.localeCompare(b, 'es'));
+    if (m.presets) { PRESETS = m.presets.map(p => ({ id: p.id, name: p.name || '' })); renderFilter(); }
   },
   load(m) {
     this.setLists(m); PN_STATE.mode = m.mode || 'desktop'; this.hostPad = !!m.hostPad; this.running = m.running || []; if (m.lang) setLang(m.lang);
@@ -329,6 +330,8 @@ const LIB = {
   async focusGame(id) {
     const g = GAMES.find(q => q.id === id); if (!g) return;
     if (mode !== 'shelf') { this.focusId = id; return; }
+    /* a game the filter is hiding: the filter goes, so it can be shown */
+    if (!passes(g)) { prefs.filter = 'all'; savePrefs(); renderFilter(); toast(T('Sin filtro, para enseñarte este juego')); if (!isRooms() || sysOf(g) === curSysKey()) { buildGroups(); await swapShelf(() => { curGroup = 0; curPage = 0; }, true); } renderSysbar(); }
     if (isRooms() && sysOf(g) !== curSysKey()) { prefs.sys = sysOf(g); prefs.shelf = '__all'; savePrefs(); buildGroups(); await swapShelf(() => { curGroup = 0; curPage = 0; setView('shelf'); }, true); }
     const gi = groups.findIndex(gr => gr.games.includes(g)), p = gi >= 0 ? pageOf(g, gi) : -1; if (p < 0) return;
     if (gi !== curGroup || p !== curPage) await swapShelf(() => { curGroup = gi; curPage = p; }, true);
@@ -373,7 +376,7 @@ const MOCKHOST = {
     if (m.type === 'jfEpisodes') { const v = this.vsrc.get(m.id), idx = +String(m.season).split('-s').pop(), s = v && v.demoSeasons.find(x => x.idx === idx); this.post({ type: 'jfEpisodes', id: m.id, season: m.season, episodes: s ? demoEpisodes(v, s).map(e => ({ id: e.id, n: e.n, season: e.season, name: e.t, runtime: e.runtime, played: e.played, pos: e.pos })) : [] }); }
     if (m.type === 'jfPlay') { console.log('[mock] jfPlay', m); setTimeout(() => this.post({ type: 'videoStarted', id: m.id }), 1500); this.vT = setTimeout(() => this.post({ type: 'videoStopped', id: m.id, pos: 42 * 60 * TICKS, played: false, active: !document.hidden }), 9000); }
     if (m.type === 'jfStop') { clearTimeout(this.vT); console.log('[mock] jfStop'); }
-    if (m.type === 'ready') { this.lib = this.build(); this.post({ type: 'library', mode: 'desktop', statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib, running: this.runningAtStart(), video: this.videos(), music: this.music() }); }
+    if (m.type === 'ready') { this.lib = this.build(); this.lib.forEach(r => { r.presets = [...(r.installed ? ['f-inst'] : []), ...(r.cats.includes('Retro') ? ['f-retro'] : [])]; }); this.post({ type: 'library', mode: 'desktop', presets: [{ id: 'f-inst', name: 'Instalados' }, { id: 'f-retro', name: 'Retro' }], statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib, running: this.runningAtStart(), video: this.videos(), music: this.music() }); }
     if (m.type === 'detail') { const s = this.src.get(m.id); this.post({ type: 'detail', id: m.id, desc: s ? `<p>${esc(s.desc)}</p><p>${esc(s.sum)}</p><script>alert(1)<\/script>` : '', links: [{ name: 'Web oficial', url: 'https://example.com' }, { name: 'Wiki', url: 'https://example.org/wiki' }] }); }
     if (m.type === 'start') { const r = this.lib.find(q => q.id === m.id); if (r && !r.installed) { this.post({ type: 'notInstalled', id: m.id }); return; } setTimeout(() => this.post({ type: 'started', id: m.id }), 1800);
       /* ?mock&leftover: Playnite gives up after a few seconds while the game keeps running */

@@ -193,7 +193,7 @@ DICT.en = {
   'Las listas vienen en CD; se puede cambiar cada una o todas en Ajustes → Música.': 'Playlists come on CD; change each one here or all of them in Settings → Music.',
   'Por defecto: vinilo hasta 1972, casete hasta 1999 y CD después. Todas a la vez en Ajustes → Música.': 'By default: vinyl up to 1972, cassette up to 1999 and CD after that. All at once in Settings → Music.',
   /* the cinema light and the studio */
-  'Cine': 'Cinema', 'Al sacar algo de la estantería': 'When you take something out', 'Fondo de estudio': 'Studio backdrop', 'En la habitación': 'In the room', 'Zoom al pasar por encima': 'Zoom on hover', 'Suave': 'Gentle'
+  'Cine': 'Cinema', 'Al sacar algo de la estantería': 'When you take something out', 'Fondo de estudio': 'Studio backdrop', 'En la habitación': 'In the room', 'Zoom al pasar por encima': 'Zoom on hover', 'Suave': 'Gentle', 'Filtro': 'Filter', 'Todos los juegos': 'All games', 'Solo los instalados': 'Installed only', 'Filtros de Playnite': 'Playnite filters', 'Los filtros que guardes en Playnite aparecerán aquí.': 'Filters you save in Playnite show up here.', 'Ningún juego cumple ese filtro': 'No game matches that filter', 'Sin filtro, para enseñarte este juego': 'Filter removed so you can see this game'
 };
 /* the page itself was translated before the dictionary existed */
 if (document.body) applyDomLang();

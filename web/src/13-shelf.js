@@ -19,9 +19,16 @@ function isCases() { return prefs.layout === 'cases' || STAGE.name === 'video' |
 function isVideoRoom() { return isRooms() && curSysKey() === 'VIDEO'; }
 /* ---------- systems (rooms by system): the ones in your library, PC first, then by generation ---------- */
 function sysLabel(g) { const s = sysOf(g); return s === 'PC' ? 'PC' : s === 'VIDEO' ? T('Vídeo') : s === 'MUSIC' ? T('Música') : (g.platFull || g.plat || s); }
+/* the filter in the top bar: every game, only the installed ones, or one of Playnite's saved filters (films and music always pass) */
+function filterOf() { const f = prefs.filter || 'all'; return f === 'installed' || (f.startsWith('p:') && PRESETS.some(p => 'p:' + p.id === f)) ? f : 'all'; }
+function passes(g) {
+  if (g.video || g.music) return true;
+  const f = filterOf();
+  return f === 'all' ? true : f === 'installed' ? !!g.installed : (g.presets || []).includes(f.slice(2));
+}
 function systemsList() {
   const m = new Map();
-  GAMES.forEach(g => { const s = sysOf(g); if (!m.has(s)) m.set(s, { key: s, name: sysLabel(g), n: 0 }); m.get(s).n++; });
+  GAMES.forEach(g => { if (!passes(g)) return; const s = sysOf(g); if (!m.has(s)) m.set(s, { key: s, name: sysLabel(g), n: 0 }); m.get(s).n++; });
   return [...m.values()].sort((a, b) => sysRank(a.key) - sysRank(b.key) || a.name.localeCompare(b.name, LANG));
 }
 function curSysKey() { const L = systemsList(); return L.some(s => s.key === prefs.sys) ? prefs.sys : (L[0] ? L[0].key : 'PC'); }
@@ -51,7 +58,7 @@ function groupRank(k, n) {
 }
 function belongs(g, key) { return key === '__all' || keysOf(g).includes(key); }
 function buildGroups() {
-  const sys = curSysKey(), all = isRooms() ? GAMES.filter(g => sysOf(g) === sys) : GAMES.filter(g => !g.video), map = new Map();
+  const sys = curSysKey(), all = (isRooms() ? GAMES.filter(g => sysOf(g) === sys) : GAMES.filter(g => !g.video)).filter(passes), map = new Map();
   if (isRooms() && sys === 'VIDEO') {
     /* the video room: a bookcase per library, in Jellyfin's order */
     all.forEach(g => { const k = g.lib || T('Vídeo'); if (!map.has(k)) map.set(k, []); map.get(k).push(g); });

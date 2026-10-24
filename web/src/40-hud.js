@@ -37,7 +37,7 @@ function placeTip() {
 }
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), ms); }
 
-function setMode(m) { mode = m; renderMini(); renderBag(); if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
+function setMode(m) { mode = m; renderMini(); renderBag(); renderFilter(); if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
 const btn = (k, label, a, primary) => `<button class="pbtn${primary ? ' primary' : ''}" type="button" data-act="${a}"><kbd>${k}</kbd>${label}</button>`;
 function tearHintText(c) { return c.tear > .05 ? T('Precinto {0} % · sigue tirando', Math.round(100 * c.tear / c.L)) : T('Arrastra la lengüeta roja para quitar el precinto'); }
 function renderPrompts() {
@@ -69,6 +69,7 @@ function doAct(a) {
 
 /* ---------- header: brand count and the pills that choose what is on the shelf ---------- */
 function renderBrand() {
+  renderFilter();
   renderSysbar();
   const gr = groups[curGroup], n = gr ? gr.games.length : 0;
   if (STAGE.name === 'music') { const all = GAMES.filter(g => g.music).length; $('#brandCount').textContent = T(all === 1 ? '{0} de {1} elemento' : '{0} de {1} elementos', n, all); return; }
@@ -126,10 +127,11 @@ function renderSysbar() {
   el.querySelectorAll('[data-sys]').forEach(b => { b.disabled = L.length < 2; });
 }
 $('#sysbar').addEventListener('click', e => { const b = e.target.closest('[data-sys]'); if (b && !b.disabled) { sfx.init(); setSystem(+b.dataset.sys); } });
-async function setSystem(step) {
+async function setSystem(step, goTo) {
   if (!isRooms() || busy || swapBusy || mode !== 'shelf') return;
-  const L = systemsList(); if (L.length < 2) return;
-  const i = Math.max(0, L.findIndex(s => s.key === curSysKey())), sys = L[(i + step + L.length) % L.length], key = sys.key;
+  const L = systemsList(); if (!goTo && L.length < 2) return;
+  /* step through the list, or straight to one system (the filter left the current one empty) */
+  const i = Math.max(0, L.findIndex(s => s.key === curSysKey())), sys = goTo ? L.find(s => s.key === goTo) || { key: goTo, name: goTo } : L[(i + step + L.length) % L.length], key = sys.key;
   const from = STAGE.name, to = stageFor(key);
   prefs.sys = key; prefs.shelf = '__all'; savePrefs(); sfx.whoosh(); setHovered(null); kbNav = false;
   const need = UGCS.keysFor(key).filter(k => UGCS.meta()[k] && !UGCS.models.has(k));
@@ -365,6 +367,49 @@ setPop.addEventListener('click', e => {
 document.addEventListener('pointerdown', e => {
   if (!setPop.hidden && !e.target.closest('#settings') && !e.target.closest('#setBtn')) { setPop.hidden = true; setBtn.setAttribute('aria-expanded', 'false'); }
 });
+
+/* ---------- the filter: every game, only the installed ones, or one of Playnite's saved filters ---------- */
+function filterChoices() { return [['all', T('Todos los juegos')], ['installed', T('Solo los instalados')], ...PRESETS.map(p => ['p:' + p.id, p.name])]; }
+function filterName(f) { const c = filterChoices().find(c => c[0] === f); return c ? c[1] : T('Todos los juegos'); }
+function renderFilter() {
+  const b = $('#filterBtn'), pop = $('#filterPop'); if (!b) return;
+  const f = filterOf();
+  /* films and records are not filtered: the button steps aside in those rooms */
+  b.hidden = STAGE.name === 'video' || STAGE.name === 'music'; b.disabled = mode !== 'shelf' && mode !== 'loading';
+  b.classList.toggle('on', f !== 'all'); b.querySelector('span').textContent = f === 'all' ? T('Filtro') : filterName(f); b.title = T('Filtro') + ' (F)';
+  if (!pop.hidden) renderFilterPop();
+}
+function renderFilterPop() {
+  const f = filterOf(), ch = filterChoices(), item = ([v, n]) => `<button type="button" role="menuitemradio" aria-checked="${v === f}" data-filter="${esc(v)}">${esc(n)}</button>`;
+  $('#filterPop').innerHTML = ch.slice(0, 2).map(item).join('') + (PRESETS.length ? `<div class="pop-title">${T('Filtros de Playnite')}</div>` + ch.slice(2).map(item).join('') : PLAYNITE ? `<p class="filter-note">${T('Los filtros que guardes en Playnite aparecerán aquí.')}</p>` : '');
+}
+function closeFilterPop() { $('#filterPop').hidden = true; $('#filterBtn').setAttribute('aria-expanded', 'false'); }
+$('#filterBtn').addEventListener('click', () => {
+  const pop = $('#filterPop'), b = $('#filterBtn'); if (mode !== 'shelf') return;
+  if (!pop.hidden) { closeFilterPop(); return; }
+  renderFilterPop(); pop.hidden = false; b.setAttribute('aria-expanded', 'true'); sfx.tick();
+  const r = b.getBoundingClientRect(); pop.style.top = (r.bottom + 6) + 'px'; pop.style.left = clamp(r.left, 16, innerWidth - pop.offsetWidth - 16) + 'px';
+  const on = pop.querySelector('[aria-checked="true"]'); if (on) on.focus({ preventScroll: true });
+});
+$('#filterPop').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (!b) return; closeFilterPop(); setFilter(b.dataset.filter); });
+$('#filterPop').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.stopPropagation(); closeFilterPop(); $('#filterBtn').focus(); return; }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  const items = [...$('#filterPop').querySelectorAll('[data-filter]')], i = items.indexOf(document.activeElement);
+  items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); e.preventDefault(); e.stopPropagation();
+});
+document.addEventListener('pointerdown', e => { if (!$('#filterPop').hidden && !e.target.closest('#filterPop') && !e.target.closest('#filterBtn')) closeFilterPop(); });
+async function setFilter(v) {
+  if (mode !== 'shelf' || busy || swapBusy || v === filterOf()) return;
+  prefs.filter = v; prefs.shelf = '__all'; savePrefs(); renderFilter(); setHovered(null); focus = null; sfx.tick();
+  const n = GAMES.filter(g => !g.video && !g.music && passes(g)).length;
+  toast(n ? filterName(v) + ' · ' + T(n === 1 ? '{0} juego' : '{0} juegos', n) : T('Ningún juego cumple ese filtro'), 1800);
+  /* the room you are in may have nothing left: walk to the first one that has */
+  if (isRooms() && curSysKey() !== STAGE.sys) { await setSystem(0, curSysKey()); return; }
+  await relayout({ full: true, reset: true }); renderSysbar(); renderBrand();
+}
+/* F on the keyboard, Y on the pad: the next filter */
+function cycleFilter() { if (STAGE.name === 'video' || STAGE.name === 'music') return false; const ch = filterChoices(), i = ch.findIndex(c => c[0] === filterOf()); setFilter(ch[(i + 1) % ch.length][0]); return true; }
 function syncHudHeight() { document.documentElement.style.setProperty('--hud-h', $('.hud-top').offsetHeight + 'px'); }
 
 /* =====================================================================

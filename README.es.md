@@ -16,6 +16,7 @@ Cada sistema tiene su sitio. Los juegos de PC están en una balda sobre una mesa
 
 - **Tu biblioteca real.** Carátulas, fondos, descripciones, tiempo jugado, estados y categorías salen de Playnite.
 - **Estantes.** Arriba a la derecha eliges qué hay en la balda: todos los juegos o un estado (Jugando, Superados…). También puedes agruparlos por categoría, plataforma o formato. Si no caben, la balda tiene páginas («Siguiente»).
+- **Filtros.** El botón Filtro de arriba enseña todos los juegos, solo los instalados o solo los que deja pasar uno de los filtros que tengas guardados en Playnite. Con F en el teclado (Y en el mando) pasas al siguiente. Las salas que se quedan vacías no aparecen.
 - **Mirar de cerca.** Pasa el ratón por encima de un juego, o llega a él con el mando, y la vista se acerca para que leas bien los lomos; al apartarte vuelve a alejarse. Elige cuánto en Ajustes → Zoom al pasar por encima (Sí, Suave o No).
 - **El formato que quieras.** Cada juego de PC puede ir en una caja DVD, una caja de CD, una caja de CD grande (como las de PlayStation o Dreamcast PAL), una caja grande de cartón, una caja de disquetes de 3½" de finales de los 90 o una caja de cartucho de 16 bits. Lo eliges en la ficha del juego (Formato) y puedes mezclarlos en la misma balda. La caja que tienes en la mano se cambia al momento y la balda le hace sitio al devolverla. Si no eliges nada, va según el año: disquetes antes de 1994, caja de CD de 1994 a 2003 y DVD después.
 - **Cada consola, con su formato.** Los juegos de consola van en la caja y el medio de su sistema: PlayStation en caja de CD grande, PS2 y posteriores en caja DVD, Super Nintendo, Nintendo 64 o Switch en cartucho… Así la consola siempre recibe lo que espera. Si quieres cambiarlos, en Ajustes → Formato en consolas elige «Libre».
@@ -80,6 +81,7 @@ Tienes tres formas de abrir la estantería:
 | Quitar el precinto | arrastrar la lengüeta | Intro | A |
 | Abrir la caja / meter el disco | botones de abajo | Intro | A |
 | Leer el manual | clic en el manual | M | X |
+| Filtrar (todos, instalados, tus filtros de Playnite) | Botón Filtro de arriba | F | Y |
 | Cambiar de sistema (salas por sistema) | ‹ › junto al sistema | Q / E | LB / RB |
 | Cambiar de estante | pastillas de arriba | Q / E (Z / C en salas por sistema) | LB / RB (LT / RT en salas por sistema) |
 | Cambiar de página | «Siguiente» | Re Pág / Av Pág | LT / RT |
@@ -98,7 +100,7 @@ Tienes tres formas de abrir la estantería:
 ## Qué se guarda y dónde
 
 - **En Playnite:** estado de juego, categorías, puntuación de usuario (cada estrella son 20 puntos) y notas.
-- **En los datos de la extensión:** el precinto, el polvo y el formato que hayas elegido para cada caja, las preferencias de la estantería (ambiente, luz, orden, sistema), los `.ugc` que hayas elegido, las consolas leídas de la carpeta de EmuVR, la lista de películas y series de Jellyfin con su token de acceso (nunca la contraseña), la lista de música de Navidrome con su contraseña cifrada para tu usuario de Windows (su API la pide en cada petición), una caché de carátulas reducidas y otra de las últimas canciones escuchadas (hasta 1 GB). Si nunca cambias el formato de un juego, usa el que le toca por su plataforma.
+- **En los datos de la extensión:** el precinto, el polvo y el formato que hayas elegido para cada caja, las preferencias de la estantería (ambiente, luz, orden, sistema, filtro), los `.ugc` que hayas elegido, las consolas leídas de la carpeta de EmuVR, la lista de películas y series de Jellyfin con su token de acceso (nunca la contraseña), la lista de música de Navidrome con su contraseña cifrada para tu usuario de Windows (su API la pide en cada petición), una caché de carátulas reducidas y otra de las últimas canciones escuchadas (hasta 1 GB). Si nunca cambias el formato de un juego, usa el que le toca por su plataforma.
 
 ## Desarrollo
 

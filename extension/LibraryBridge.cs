@@ -116,6 +116,7 @@ namespace MyVLibrary
             Db.Games.ItemCollectionChanged += OnGamesChanged;
             Db.CompletionStatuses.ItemCollectionChanged += OnListsChanged;
             Db.Categories.ItemCollectionChanged += OnListsChanged;
+            WatchPresets(true);
             subscribed = true;
         }
 
@@ -126,6 +127,7 @@ namespace MyVLibrary
             Db.Games.ItemCollectionChanged -= OnGamesChanged;
             Db.CompletionStatuses.ItemCollectionChanged -= OnListsChanged;
             Db.Categories.ItemCollectionChanged -= OnListsChanged;
+            WatchPresets(false);
             subscribed = false;
         }
 
@@ -458,6 +460,7 @@ namespace MyVLibrary
                 ["lastActivity"] = Iso(g.LastActivity),
                 ["added"] = Iso(g.Added),
                 ["installed"] = g.IsInstalled,
+                ["presets"] = PresetsOf(g),
                 ["favorite"] = g.Favorite,
                 ["score"] = g.UserScore,
                 ["critic"] = g.CriticScore,
@@ -476,13 +479,15 @@ namespace MyVLibrary
             {
                 ["type"] = type,
                 ["statuses"] = Db.CompletionStatuses.Select(s => new Dictionary<string, object> { ["id"] = s.Id.ToString(), ["name"] = s.Name }).ToList(),
-                ["categories"] = Db.Categories.Select(c => new Dictionary<string, object> { ["id"] = c.Id.ToString(), ["name"] = c.Name }).ToList()
+                ["categories"] = Db.Categories.Select(c => new Dictionary<string, object> { ["id"] = c.Id.ToString(), ["name"] = c.Name }).ToList(),
+                ["presets"] = PresetList()
             };
         }
 
         private Dictionary<string, object> Library(ShelfHost host)
         {
             var showHidden = plugin.Settings.ShowHidden;
+            LoadPresets();
             var message = Lists("library");
             message["mode"] = host.ModeName;
             message["lang"] = api.ApplicationSettings.Language;

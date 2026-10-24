@@ -103,6 +103,7 @@ function handleKey(k) {
     if (k === 'c' || k === 'C') { if (isRooms()) setGroup(curGroup + 1); else setPage(curPage + 1); return true; }
     if (k === 'PageUp') { setPage(curPage - 1); return true; }
     if (k === 'PageDown') { setPage(curPage + 1); return true; }
+    if (k === 'f' || k === 'F') return cycleFilter();
     if (k === 'h' || k === 'H') { switchRoom(ROOM_ORDER[(ROOM_ORDER.indexOf(prefs.room) + 1) % ROOM_ORDER.length]); return true; }
     if (k === 'Escape') { if (cam.view === 'browse' || (kbNav && hovered)) { kbNav = false; setHovered(null); if (cam.view === 'browse') setView('shelf'); return true; } if (PLAYNITE && PN_STATE.mode === 'fullscreen') { LIB.send('close'); return true; } return false; }
   }

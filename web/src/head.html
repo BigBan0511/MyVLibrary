@@ -64,6 +64,18 @@ button,select,input,textarea{font:inherit;color:inherit}
 .icon-btn{flex:none;height:30px;padding:0 13px;background:rgba(20,20,20,.55);border:1px solid rgba(255,255,255,.13);border-radius:999px;cursor:pointer;font:600 12px var(--f-body);color:#e9e6e0}
 .icon-btn:hover{border-color:rgba(255,255,255,.35)}
 .icon-btn[aria-expanded="true"]{background:#f4f2ee;color:#111}
+.filter-btn{display:inline-flex;align-items:center;gap:7px;max-width:220px}
+.filter-btn svg{width:13px;height:13px;flex:none;opacity:.8}
+.filter-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filter-btn.on{border-color:var(--amber);color:var(--amber)}
+.filter-btn.on[aria-expanded="true"]{color:#111}
+.filter-btn:disabled{opacity:.45;cursor:default}
+.filter-pop{width:min(260px,calc(100vw - 32px));padding:6px;display:grid;gap:2px;max-height:min(60vh,420px);overflow:auto}
+.filter-pop button{display:block;width:100%;text-align:left;padding:8px 10px 8px 28px;border:0;border-radius:7px;background:transparent;color:var(--ink);font:600 13px var(--f-body);cursor:pointer;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filter-pop button:hover,.filter-pop button:focus-visible{background:rgba(255,255,255,.08);outline:none}
+.filter-pop button[aria-checked="true"]::before{content:"";position:absolute;left:11px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--amber)}
+.filter-pop .pop-title{margin:10px 10px 4px}
+.filter-note{margin:4px 10px 8px;font-size:12px;color:var(--ink-dim);line-height:1.4}
 #closeBtn{display:none}
 .pn-fullscreen #closeBtn{display:inline-block}
 .label-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -407,6 +419,7 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="sysbar" id="sysbar" hidden><button type="button" class="sys-nav" data-sys="-1" aria-label="Sistema anterior">‹</button><div class="sysname"><b></b><span></span></div><button type="button" class="sys-nav" data-sys="1" aria-label="Sistema siguiente">›</button></div>
   <div class="tools">
     <nav class="pills" id="pills" aria-label="Estantes"></nav>
+    <button class="icon-btn filter-btn" id="filterBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="filterPop" title="Filtro (F)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 3h11.6L9.3 8.4V13l-2.6-1.3V8.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span>Filtro</span></button>
     <div class="field">
       <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <label class="label-sr" for="q">Buscar</label>
@@ -418,6 +431,7 @@ button,select,input,textarea{font:inherit;color:inherit}
   </div>
 </header>
 
+<div class="pop filter-pop" id="filterPop" hidden role="menu" aria-label="Filtro"></div>
 <div class="pop" id="settings" hidden role="dialog" aria-label="Ajustes">
   <div class="set-tabs" role="tablist"><button type="button" role="tab" data-tab-btn="general">General</button><button type="button" role="tab" data-tab-btn="look">Ambiente</button><button type="button" role="tab" data-tab-btn="music" id="tabMusic">Música</button><button type="button" role="tab" data-tab-btn="emuvr">EmuVR</button></div>
   <div class="set-row" data-tab="general"><span>Diseño</span><div class="seg" data-pref="layout"><button type="button" data-v="rooms">Salas por sistema</button><button type="button" data-v="wall">Balda de pared</button><button type="button" data-v="cases">Estanterías</button></div></div>
