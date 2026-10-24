@@ -19,6 +19,9 @@ function onDrag(px, py) {
     drag.acc += dist / pxPerCm; if (drag.acc > 1.1) { sfx.crinkle(.8); drag.acc = 0; }
     c.updateStrip(); const th = $('#tearHint'); if (th) th.textContent = tearHintText(c);
     if (c.tear >= c.L - .01) { drag = null; c.dragging = false; canvasEl.style.cursor = 'default'; guarded(async () => { setMode('busy'); await finishWrap(c); setMode('inspect'); }); }
+  } else if (drag.kind === 'turn') {
+    /* turning the case by hand; it springs back when you let go */
+    const gb = c.grab; gb.y = clamp(gb.y + (pointer.cx - px) * .008, -.9, .9); gb.x = clamp(gb.x + (pointer.cy - py) * .006, -.45, .45); gb.vx = gb.vy = 0;
   } else if (drag.kind === 'wipe') {
     if (drag.moved < 8) return;
     const h = hit([c.shell, c.lid, c.spine]);
@@ -35,30 +38,35 @@ function endDrag() {
   if (!drag) return;
   if (active && drag.kind === 'tear' && active.wrap) { active.dragging = false; active.g.tear = active.tear; saveGame(active.g); }
   if (active && drag.kind === 'wipe') saveGame(active.g);
+  if (active) active.grab.held = false;
   drag = null; canvasEl.style.cursor = 'default';
 }
 canvasEl.addEventListener('pointermove', e => {
-  pointer.type = e.pointerType || 'mouse'; const px = pointer.cx, py = pointer.cy; setPointer(e);
+  pointer.type = e.pointerType || 'mouse'; pointer.out = false; pointer.live = true; const px = pointer.cx, py = pointer.cy; setPointer(e);
   if (drag) { onDrag(px, py); return; }
   if (pointer.type !== 'mouse' || busy) return;
   if (mode === 'shelf') {
     const moved = Math.hypot(pointer.cx - px, pointer.cy - py);
+    const wasKb = kbNav;
     if (kbNav && moved > 3) { kbNav = false; if (cam.view === 'browse') setView('shelf'); }
     if (kbNav) return;
+    /* the lens follows the mouse first, so the hit matches what is drawn under it (taking over from the pad, it glides there instead) */
+    if (lens.k > 0 && !wasKb) { lensAim(); lensApply(); }
     const h = hit(); setHovered(h ? h.case : null); canvasEl.style.cursor = h ? 'pointer' : 'default';
   }
   else if (mode === 'inspect') { const h = hit(); canvasEl.style.cursor = h && h.case === active ? (h.part === 'tab' ? 'grab' : active.g.dust > .02 ? 'crosshair' : 'pointer') : 'default'; }
   else if (mode === 'hifi') canvasEl.style.cursor = hifiHit() ? 'pointer' : 'default';
   else if (mode === 'open') { const h = hit(); hoverPart = h && h.case === active ? h.part : null; if (active.multi) setEpFocus(active, hoverPart === 'ep' ? slotOf(active, h.obj) : null, true); canvasEl.style.cursor = hoverPart === 'disc' || hoverPart === 'manual' || hoverPart === 'ep' ? 'pointer' : 'default'; }
 });
-canvasEl.addEventListener('pointerleave', () => { if (mode === 'shelf' && !kbNav) setHovered(null); });
+canvasEl.addEventListener('pointerleave', () => { pointer.out = true; if (mode === 'shelf' && !kbNav) setHovered(null); });
 canvasEl.addEventListener('pointerdown', e => {
   sfx.init(); pointer.type = e.pointerType || 'mouse'; setPointer(e); pointer.down = { x: e.clientX, y: e.clientY };
-  if (mode === 'inspect' && active && !busy) {
+  if ((mode === 'inspect' || mode === 'open') && active && !busy) {
     const h = hit();
     if (h && h.case === active) {
-      if (active.wrap && h.part === 'tab') { drag = { kind: 'tear', moved: 0, acc: 0 }; active.dragging = true; active.flipT = 0; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { } canvasEl.style.cursor = 'grabbing'; return; }
-      if (active.g.dust > .02) { drag = { kind: 'wipe', moved: 0, acc: 0 }; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { } }
+      if (mode === 'inspect' && active.wrap && h.part === 'tab') { drag = { kind: 'tear', moved: 0, acc: 0 }; active.dragging = true; active.flipT = 0; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { } canvasEl.style.cursor = 'grabbing'; return; }
+      if (mode === 'inspect' && active.g.dust > .02) { drag = { kind: 'wipe', moved: 0, acc: 0 }; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { } return; }
+      drag = { kind: 'turn', moved: 0 }; active.grab.held = true; try { canvasEl.setPointerCapture(e.pointerId); } catch (_) { }
     }
   }
 });
@@ -95,8 +103,9 @@ function handleKey(k) {
     if (k === 'c' || k === 'C') { if (isRooms()) setGroup(curGroup + 1); else setPage(curPage + 1); return true; }
     if (k === 'PageUp') { setPage(curPage - 1); return true; }
     if (k === 'PageDown') { setPage(curPage + 1); return true; }
+    if (k === 'f' || k === 'F') return cycleFilter();
     if (k === 'h' || k === 'H') { switchRoom(ROOM_ORDER[(ROOM_ORDER.indexOf(prefs.room) + 1) % ROOM_ORDER.length]); return true; }
-    if (k === 'Escape') { if (cam.view === 'browse') { kbNav = false; setHovered(null); setView('shelf'); return true; } if (PLAYNITE && PN_STATE.mode === 'fullscreen') { LIB.send('close'); return true; } return false; }
+    if (k === 'Escape') { if (cam.view === 'browse' || (kbNav && hovered)) { kbNav = false; setHovered(null); if (cam.view === 'browse') setView('shelf'); return true; } if (PLAYNITE && PN_STATE.mode === 'fullscreen') { LIB.send('close'); return true; } return false; }
   }
   if ((mode === 'inspect' || mode === 'open') && (k === 'i' || k === 'I')) { setCard(prefs.card === 'hide' ? 'show' : 'hide'); return true; }
   if (mode === 'inspect') {
@@ -155,7 +164,9 @@ function frame(now) {
   requestAnimationFrame(frame);
   if (LIB.paused || document.hidden) { lastT = now; return; }
   const dt = clamp((now - lastT) / 1000, 0, .05); lastT = now;
-  runTweens(now); updateCamera(dt); updateRoom(dt, now); pollGamepad(dt);
+  runTweens(now); updateCamera(dt); updateLens(dt, now);
+  /* while zoomed the view still drifts a little with the mouse parallax: keep the hover on what is under the mouse */
+  if (lens.k > 0 && mode === 'shelf' && !busy && !kbNav && !drag && !pointer.out && pointer.live && pointer.type === 'mouse' && now - lens.hitT > 120) { lens.hitT = now; const h = hit(); setHovered(h ? h.case : null); canvasEl.style.cursor = h ? 'pointer' : 'default'; } updateRoom(dt, now); pollGamepad(dt); updateStudio(dt, now);
   const inspecting = (mode === 'inspect' || mode === 'open') && !drag;
   tilt.tx = inspecting && pointer.type === 'mouse' && !RM ? -pointer.y * .1 : 0; tilt.ty = inspecting && pointer.type === 'mouse' && !RM ? pointer.x * .16 : 0;
   tilt.x += (tilt.tx - tilt.x) * (1 - Math.exp(-5 * dt)); tilt.y += (tilt.ty - tilt.y) * (1 - Math.exp(-5 * dt));
@@ -211,5 +222,5 @@ async function boot() {
   if (PLAYNITE && LIB.running && LIB.running.length) { const r = LIB.running[0]; setTimeout(() => restorePlaying(r.id, r.seconds), 600); }
   else if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
 }
-window.__mvl = { mus: () => ({ state: MPLAY.state, i: MPLAY.i, n: MPLAY.q.length, t: +MPLAY.time().toFixed(1), held: MUSIC.held && MUSIC.held.g.id, heldMode: MUSIC.held && MUSIC.held.mode, bag: BAG.length, flipAt: MPLAY.flipAt, side: MPLAY.side, medium: MPLAY.medium() }), musicAct, bagAdd: id => bagAdd((GAMES.find(g => g.music && g.kind === 'song' && g.track.id === id) || {}).track), playBag, songs: () => GAMES.filter(g => g.music && g.kind === 'song').slice(0, 8).map(g => g.track.id), setSysKey: k => { prefs.sys = k; prefs.shelf = '__all'; applyStage(k); buildGroups(); curGroup = 0; curPage = 0; layoutPage(); setView('shelf'); renderPills(); renderBrand(); renderSysbar(); }, dbgActive: () => active && { fmt: active.g.fmt, dim: active.dim.name, multi: active.multi ? { kind: active.multi.kind, eps: active.multi.eps.length, page: active.multi.page } : null, interior: !!active.interior, seasons: active.g.seasons ? active.g.seasons.length : null, eps: seasonOf(active.g) && seasonOf(active.g).eps ? seasonOf(active.g).eps.length : null }, room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, sys: setSystem, dbgCases: () => [...caseById.values()].filter(c => c.root.visible && (c.mode !== 'home' || c.root.position.distanceTo(c.home.pos) > 1)).map(c => [c.g.id, c.mode, c.root.position.toArray().map(v => +v.toFixed(1)), +c.root.scale.x.toFixed(2), c.openA]), cam: () => ({ pos: camera.position.toArray().map(v => +v.toFixed(1)), look: cam.look.toArray().map(v => +v.toFixed(1)), fov: camera.fov, room: tvRoom.visible, tv: tvGroup.visible, flat: flatTv.visible, con: conGroup.visible, pc: pcGroup.visible, tray: pcTray ? +pcTray.position.z.toFixed(2) : null, fmt: active && active.g.fmt, port: active && portOf(active).kind }), systems: () => systemsList().map(s => s.key), state: () => ({ mode, busy, view: cam.view, stage: STAGE.name, sys: STAGE.sys, device: DEV.cur && DEV.cur.name, screen: STAGE.screen, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB, games: () => navOrder.map(c => ({ id: c.g.id, t: c.g.t, installed: c.g.installed, fmt: c.g.fmt })), ui: () => ({ toast: $('#toast').textContent, note: $('#playNote').textContent, eyebrow: $('#playEyebrow').textContent, pn: Object.assign({}, PN_STATE, { pendingEject: !!PN_STATE.pendingEject }), playnite: PLAYNITE }) };
+window.__mvl = { lens: () => ({ k: +lens.k.toFixed(3), want: lens.want, hovered: hovered && hovered.g.title }), spinePx: i => { const c = navOrder[i]; if (!c) return null; camera.updateMatrixWorld(); const v = spineWorld(c, new V3()).project(camera); return [Math.round((v.x + 1) / 2 * innerWidth), Math.round((1 - v.y) / 2 * innerHeight)]; }, mus: () => ({ state: MPLAY.state, i: MPLAY.i, n: MPLAY.q.length, t: +MPLAY.time().toFixed(1), held: MUSIC.held && MUSIC.held.g.id, heldMode: MUSIC.held && MUSIC.held.mode, bag: BAG.length, flipAt: MPLAY.flipAt, side: MPLAY.side, medium: MPLAY.medium() }), musicAct, bagAdd: id => bagAdd((GAMES.find(g => g.music && g.kind === 'song' && g.track.id === id) || {}).track), playBag, songs: () => GAMES.filter(g => g.music && g.kind === 'song').slice(0, 8).map(g => g.track.id), setSysKey: k => { prefs.sys = k; prefs.shelf = '__all'; applyStage(k); buildGroups(); curGroup = 0; curPage = 0; layoutPage(); setView('shelf'); renderPills(); renderBrand(); renderSysbar(); }, dbgActive: () => active && { fmt: active.g.fmt, dim: active.dim.name, multi: active.multi ? { kind: active.multi.kind, eps: active.multi.eps.length, page: active.multi.page } : null, interior: !!active.interior, seasons: active.g.seasons ? active.g.seasons.length : null, eps: seasonOf(active.g) && seasonOf(active.g).eps ? seasonOf(active.g).eps.length : null }, room: n => switchRoom(n), sfxState: () => ({ ctx: !!sfx.ctx, rec: Object.fromEntries(Object.entries(sfx.rec || {}).map(([k, v]) => [k, v.map(x => +x.hit.toFixed(3))])) }), pick: i => pick(navOrder[i]), pickId: id => pick(navOrder.find(c => c.g.id === id)), act: doAct, sys: setSystem, dbgCases: () => [...caseById.values()].filter(c => c.root.visible && (c.mode !== 'home' || c.root.position.distanceTo(c.home.pos) > 1)).map(c => [c.g.id, c.mode, c.root.position.toArray().map(v => +v.toFixed(1)), +c.root.scale.x.toFixed(2), c.openA]), cam: () => ({ pos: camera.position.toArray().map(v => +v.toFixed(1)), look: cam.look.toArray().map(v => +v.toFixed(1)), fov: camera.fov, room: tvRoom.visible, tv: tvGroup.visible, flat: flatTv.visible, con: conGroup.visible, pc: pcGroup.visible, tray: pcTray ? +pcTray.position.z.toFixed(2) : null, fmt: active && active.g.fmt, port: active && portOf(active).kind }), systems: () => systemsList().map(s => s.key), state: () => ({ mode, busy, view: cam.view, stage: STAGE.name, sys: STAGE.sys, device: DEV.cur && DEV.cur.name, screen: STAGE.screen, group: groups[curGroup] && groups[curGroup].label, page: curPage, pages: groups[curGroup] && groups[curGroup].pages.length, onShelf: navOrder.length, alive: caseById.size, games: GAMES.length }), turn, openManual, closeManual, setGroup, setPage, key: handleKey, lib: LIB, games: () => navOrder.map(c => ({ id: c.g.id, t: c.g.t, installed: c.g.installed, fmt: c.g.fmt })), ui: () => ({ studio: +studio.a.toFixed(3), toast: $('#toast').textContent, note: $('#playNote').textContent, eyebrow: $('#playEyebrow').textContent, pn: Object.assign({}, PN_STATE, { pendingEject: !!PN_STATE.pendingEject }), playnite: PLAYNITE }) };
 boot();

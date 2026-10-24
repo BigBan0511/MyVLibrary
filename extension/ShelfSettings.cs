@@ -16,6 +16,7 @@ namespace MyVLibrary
         private bool showHidden = false;
         private bool devTools = false;
         private bool keepTracking = true;
+        private bool checkUpdates = true;
 
         /// <summary>Open the shelf as soon as Playnite starts in fullscreen mode.</summary>
         public bool OpenOnFullscreenStart { get => openOnFullscreenStart; set => SetValue(ref openOnFullscreenStart, value); }
@@ -31,6 +32,9 @@ namespace MyVLibrary
         /// keep the disc in and add the missing time to Playnite once it really closes.
         /// </summary>
         public bool KeepTracking { get => keepTracking; set => SetValue(ref keepTracking, value); }
+
+        /// <summary>When Playnite starts, look on GitHub for a newer MyVLibrary and offer it in a notification.</summary>
+        public bool CheckUpdates { get => checkUpdates; set => SetValue(ref checkUpdates, value); }
 
         /// <summary>Allow F12 developer tools inside the shelf (for debugging).</summary>
         public bool DevTools { get => devTools; set => SetValue(ref devTools, value); }
@@ -143,6 +147,9 @@ namespace MyVLibrary
                       "Si sigue abierto algún programa de la carpeta del juego, el disco no sale hasta que lo cierres y ese tiempo se suma a tus horas en Playnite.",
                       "Some games hand over to another program when they start, and Playnite thinks they closed after a few seconds. " +
                       "If a program from the game's folder is still open, the disc stays in until you close it, and that time is added to your Playnite playtime."));
+            Check(Loc.S("Avisar cuando haya una versión nueva", "Tell me when there is a new version"), nameof(ShelfSettings.CheckUpdates),
+                Loc.S("Al abrir Playnite mira en GitHub si hay una versión más reciente y te la ofrece en una notificación: haz clic en ella para descargarla e instalarla.",
+                      "When Playnite starts, it looks on GitHub for a newer version and offers it in a notification: click it to download and install it."));
             Check(Loc.S("Herramientas de desarrollo (F12)", "Developer tools (F12)"), nameof(ShelfSettings.DevTools),
                 Loc.S("Solo para depurar la estantería. Se aplica la próxima vez que la abras.", "Only for debugging the shelf. Applies the next time you open it."));
 

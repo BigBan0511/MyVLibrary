@@ -6,6 +6,43 @@ const tweens = [];
 function tween(dur, fn, ease = easeIO) { return new Promise(res => tweens.push({ t0: performance.now(), dur: Math.max(1, dur * 1000 * SPEED), fn, ease, res })); }
 function runTweens(now) { for (let i = tweens.length - 1; i >= 0; i--) { const tw = tweens[i], t = clamp((now - tw.t0) / tw.dur, 0, 1); tw.fn(tw.ease(t)); if (t >= 1) { tweens.splice(i, 1); tw.res(); } } }
 const wait = ms => new Promise(r => setTimeout(r, ms * SPEED));
+/* hand-keyed motion smoothed with monotone cubic splines (the way Ann Nguyen's cd-case moves) */
+function keyCurve(frames) {
+  const n = frames.length, ts = frames.map(f => f[0]), vs = frames.map(f => f[1]), d = [], m = new Array(n).fill(0);
+  for (let i = 0; i < n - 1; i++) d.push((vs[i + 1] - vs[i]) / (ts[i + 1] - ts[i]));
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+    if (s > 9) { const k = 3 / Math.sqrt(s); m[i] = k * a * d[i]; m[i + 1] = k * b * d[i]; }
+  }
+  return t => {
+    if (t <= ts[0]) return vs[0]; if (t >= ts[n - 1]) return vs[n - 1];
+    let i = 0; while (t > ts[i + 1]) i++;
+    const h = ts[i + 1] - ts[i], u = (t - ts[i]) / h, u2 = u * u, u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * vs[i] + (u3 - 2 * u2 + u) * h * m[i] + (-2 * u3 + 3 * u2) * vs[i + 1] + (u3 - u2) * h * m[i + 1];
+  };
+}
+/* opening: the case turns once round while the lid swings and the two halves spread; closing: the lid lands with a small bounce */
+/* the lid comes to rest flat, as the rest of the shelf expects; the curve overshoots a little first */
+const LID_OPEN = Math.PI, OPEN_T = 2.3, CLOSE_T = 1.95;
+const OPEN_K = {
+  yaw: keyCurve([[0, 0], [.55, .3], [1, .85], [1.2, 2], [1.41, 3.4], [1.63, 4.9], [1.85, 6.05], [2.05, 6.36], [2.3, 2 * Math.PI]]),
+  lid: keyCurve([[0, 0], [.97, 0], [1.2, .45], [1.41, 1.35], [1.63, 2.3], [1.85, 2.98], [2.05, 3.22], [2.3, LID_OPEN]]),
+  spread: keyCurve([[0, 0], [1.12, 0], [1.9, .9], [2.3, 1]]),
+  pitch: keyCurve([[0, 0], [1.35, 0], [2.3, -.1]])
+};
+const CLOSE_K = {
+  lid: keyCurve([[0, LID_OPEN], [.22, 1.75], [.48, 1.55], [1.05, 1.08], [1.42, .6], [1.6, .26], [1.7, 0], [1.78, .07], [1.88, 0]]),
+  spread: keyCurve([[0, 1], [.3, .92], [1.2, .55], [1.72, 0]]),
+  yaw: keyCurve([[0, 0], [.5, .2], [1.3, .12], [1.88, 0]]),
+  pitch: keyCurve([[0, -.1], [1.6, -.05], [1.7, .035], [1.82, -.01], [1.95, 0]]),
+  roll: keyCurve([[0, 0], [.8, -.05], [1.95, 0]])
+};
+/* runs one of those timelines on a case; the case reads c.motion every frame */
+function playMotion(c, K, T, noSpin) {
+  return tween(T, t => { const q = t * T; c.motion = { lid: K.lid(q), spread: K.spread(q), yaw: K.yaw && !noSpin ? K.yaw(q) : 0, pitch: K.pitch ? K.pitch(q) : 0, roll: K.roll ? K.roll(q) : 0 }; }, t => t).then(() => { c.motion = null; });
+}
 function bez(a, b, c, t, out) { const u = 1 - t; return out.set(u * u * a.x + 2 * u * t * b.x + t * t * c.x, u * u * a.y + 2 * u * t * b.y + t * t * c.y, u * u * a.z + 2 * u * t * b.z + t * t * c.z); }
 
 /* ---------- camera: the whole wall, a closer look along the shelf, or the console ---------- */
@@ -41,13 +78,55 @@ function updateCamera(dt) {
   camera.position.copy(cam.pos); camera.position.x += cam.par.x; camera.position.y += cam.par.y; camera.lookAt(cam.look);
   /* with the bookcases the ceiling light follows you along the room; over the wall shelf it stays put */
   const k = cam.snap ? 1 : 1 - Math.exp(-2.5 * dt / SPEED); cam.snap = false;
-  if (isCases() || STAGE.name === 'tv') { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(_KOFF); key.position.lerp(_kp, k); }
+  /* the cinema light follows you into every room that is not the desk, always from the upper left */
+  const roam = isCases() || STAGE.name === 'tv' || (LP.keyOff && (STAGE.name === 'video' || STAGE.name === 'music'));
+  if (roam) { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(LP.keyOff ? _KOFF2.fromArray(LP.keyOff) : _KOFF); key.position.lerp(_kp, k); }
   else { key.target.position.lerp(KEY_AIM, k); key.position.lerp(KEY_POS, k); }
   key.target.updateMatrixWorld();
-  const follow = isCases() || STAGE.name === 'tv';
+  const follow = roam;
   if (typeof shelfFill !== 'undefined') shelfFill.forEach((l, i) => { _kl.set(follow ? cam.look.x + (i ? 22 : -22) : SHELF.cx + (i ? 55 : -60), follow ? cam.look.y + 6 : SHELF.board + 26, follow ? 70 : SHELF.front + 75); l.position.lerp(_kl, k); });
 }
-const _kl = new V3(), _kp = new V3(), _KOFF = new V3(66, 222, 236);
+const _kl = new V3(), _kp = new V3(), _KOFF = new V3(66, 222, 236), _KOFF2 = new V3();
+
+/* ---------- hover zoom: the view closes in on the game under the mouse or the pad's focus ----------
+   A lens, not a camera move: only part of the picture is drawn, larger. The point under the mouse stays
+   under the mouse at every zoom, so what you point at never slips away while it closes in. */
+const lens = { k: 0, want: 0, since: 0, lost: 0, px: .5, py: .5, sx: .5, sy: .5, hitT: 0 };
+const LENS_Z = { on: 1.6, soft: 1.3 }, _lv = new V3();
+/* px/py: the point of the full picture to show (0-1 across and down); sx/sy: where on screen it goes */
+function lensApply() {
+  const W = innerWidth, H = innerHeight, Z = 1 + ((LENS_Z[prefs.zoom] || LENS_Z.on) - 1) * lens.k;
+  if (Z < 1.001) { if (camera.view && camera.view.enabled) camera.clearViewOffset(); return; }
+  const w = W / Z, h = H / Z;
+  camera.setViewOffset(W, H, clamp(lens.px * W - lens.sx * w, 0, W - w), clamp(lens.py * H - lens.sy * h, 0, H - h), w, h);
+}
+/* with the mouse, the point under it; with the pad, the case in focus, drawn a little towards the middle.
+   Without dt it jumps straight there (the mouse moving); with dt it glides (the pad, or the mouse taking over from it) */
+function lensAim(dt) {
+  let tx, ty, sx, sy;
+  if (!kbNav) { if (!pointer.live) return; tx = sx = clamp((pointer.x + 1) / 2, 0, 1); ty = sy = clamp((1 - pointer.y) / 2, 0, 1); }
+  else {
+    if (!hovered || hovered.disposed) return;
+    camera.clearViewOffset(); camera.updateMatrixWorld(); spineWorld(hovered, _lv).project(camera);
+    tx = clamp((_lv.x + 1) / 2, 0, 1); ty = clamp((1 - _lv.y) / 2, 0, 1); sx = lerp(tx, .5, .35); sy = lerp(ty, .5, .35);
+  }
+  const a = dt == null || RM ? 1 : 1 - Math.exp(-(kbNav ? 7 : 14) * dt / SPEED);
+  lens.px += (tx - lens.px) * a; lens.py += (ty - lens.py) * a; lens.sx += (sx - lens.sx) * a; lens.sy += (sy - lens.sy) * a;
+}
+function updateLens(dt, now) {
+  const can = prefs.zoom !== 'off' && mode === 'shelf' && !busy;
+  /* the pad already walks the camera up to the desk shelf and the TV cabinet: no lens on top of that */
+  const over = can && hovered && !hovered.disposed && (kbNav ? !(cam.view === 'browse' && !isCases()) : pointer.type === 'mouse');
+  /* a short wait before closing in, so crossing the shelf on the way elsewhere does not zoom,
+     and a little longer before letting go, so the gaps between spines do not either */
+  if (over) { lens.lost = 0; if (!lens.since) lens.since = now; if (now - lens.since > 160 * SPEED) lens.want = 1; }
+  else { lens.since = 0; if (!lens.lost) lens.lost = now; if (!can || now - lens.lost > 380 * SPEED) lens.want = 0; }
+  if (RM) lens.k = lens.want;
+  else { lens.k += (lens.want - lens.k) * (1 - Math.exp(-(lens.want ? 5 : 8) * dt / SPEED)); if (!lens.want && lens.k < .002) lens.k = 0; }
+  /* out of the zoom it simply waits where it will be needed */
+  lensAim(lens.k > 0 ? dt : undefined);
+  lensApply();
+}
 function updateRowLights() { }
 
 /* ---------- dust particles: puffs and ambient motes in the light ---------- */

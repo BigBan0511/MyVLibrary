@@ -49,6 +49,11 @@ namespace MyVLibrary
         public override void OnApplicationStarted(OnApplicationStartedEventArgs args)
         {
             Bridge.Subscribe();
+            if (Settings.CheckUpdates)
+            {
+                // a little after starting, so it never competes with Playnite's own start-up work
+                System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(15)).ContinueWith(_ => Updater.Check(PlayniteApi, false));
+            }
             if (PlayniteApi.ApplicationInfo.Mode == ApplicationMode.Fullscreen && Settings.OpenOnFullscreenStart)
             {
                 // let Playnite finish drawing its own window first
@@ -96,6 +101,12 @@ namespace MyVLibrary
                 MenuSection = "@MyVLibrary",
                 Description = Loc.S("Abrir la estantería en una ventana", "Open the shelf in a window"),
                 Action = a => OpenWindow(null)
+            };
+            yield return new MainMenuItem
+            {
+                MenuSection = "@MyVLibrary",
+                Description = Loc.S("Buscar actualizaciones", "Check for updates"),
+                Action = a => { _ = Updater.Check(PlayniteApi, true); }
             };
         }
 

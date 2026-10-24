@@ -3,7 +3,9 @@
    ===================================================================== */
 const boardCtx = boardC.getContext('2d');
 const BW = boardC.width, BH = boardC.height;
-const bd = { key: '', ghost: null };
+const bd = { key: '', ghost: null, full: null, items: [], anim: null, lastStep: 0 };
+/* every stroke of marker leaves a box; the board is revealed box by box, left to right, as if written now */
+function bdItem(x0, y0, w, h) { bd.items.push([x0, y0, w, h]); }
 const INK = '#26282e', INK2 = '#2a4f9e', INK3 = '#a3282c';
 function makeBoardGhost() {
   const c = mkCanvas(BW, BH), x = c.getContext('2d'), r = rng(77);
@@ -19,11 +21,14 @@ function makeBoardGhost() {
   return c;
 }
 function marker(x, text, X, Y, size, o = {}) {
+  x.font = `${size}px ${F.marker}`; const mw = x.measureText(text).width, al = o.align || 'left';
+  bdItem((al === 'right' ? X - mw : al === 'center' ? X - mw / 2 : X) - 8, Y - size * 1.1, mw + 18, size * 1.55);
   x.save(); x.translate(X, Y); x.rotate(o.rot ?? -.012); x.font = `${size}px ${F.marker}`; x.fillStyle = o.col || INK; x.textBaseline = 'alphabetic'; x.textAlign = o.align || 'left';
   x.globalAlpha = o.a ?? .93; x.fillText(text, 0, 0); x.restore();
   x.font = `${size}px ${F.marker}`; return x.measureText(text).width;
 }
 function scribbleLine(x, X0, X1, Y, col = INK, w = 4) {
+  bdItem(X0 - 4, Y - 9, X1 - X0 + 12, 20);
   x.save(); x.strokeStyle = col; x.lineWidth = w; x.lineCap = 'round'; x.globalAlpha = .9; x.beginPath(); x.moveTo(X0, Y);
   for (let px = X0; px <= X1; px += 18) x.lineTo(px, Y + Math.sin(px * .045) * 2.2 + (px - X0) * .004);
   x.stroke(); x.restore();
@@ -38,9 +43,9 @@ function wrapMarker(x, text, X, Y, maxW, size, lh, maxLines, col) {
   if (line) { marker(x, line, X, Y + n * lh, size, { col, rot: -.008 }); n++; }
   return n;
 }
-function discDoodle(x, cx, cy, R) { x.save(); x.strokeStyle = INK; x.lineWidth = 4; x.globalAlpha = .85; x.beginPath(); x.arc(cx, cy, R, 0, 6.1); x.stroke(); x.beginPath(); x.arc(cx, cy, R * .28, 0, 7); x.stroke(); x.beginPath(); x.arc(cx, cy, R * .62, .3, 1.4); x.stroke(); x.restore(); }
-function starsDoodle(x, X, Y, n, s) { x.save(); x.strokeStyle = INK3; x.fillStyle = INK3; x.lineWidth = 3; for (let i = 0; i < 5; i++) { const cx = X + i * s * 1.25; x.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr2 = k % 2 ? s * .22 : s * .52; x.lineTo(cx + Math.cos(a) * rr2, Y + Math.sin(a) * rr2); } x.closePath(); if (i < n) x.fill(); else x.stroke(); } x.restore(); }
-function arrowDoodle(x, X, Y) { x.save(); x.strokeStyle = INK2; x.lineWidth = 5; x.lineCap = 'round'; x.globalAlpha = .9; x.beginPath(); x.moveTo(X, Y); x.quadraticCurveTo(X - 40, Y - 60, X - 120, Y - 92); x.stroke(); x.beginPath(); x.moveTo(X - 120, Y - 92); x.lineTo(X - 92, Y - 94); x.moveTo(X - 120, Y - 92); x.lineTo(X - 106, Y - 68); x.stroke(); x.restore(); }
+function discDoodle(x, cx, cy, R) { bdItem(cx - R - 5, cy - R - 5, 2 * R + 10, 2 * R + 10); x.save(); x.strokeStyle = INK; x.lineWidth = 4; x.globalAlpha = .85; x.beginPath(); x.arc(cx, cy, R, 0, 6.1); x.stroke(); x.beginPath(); x.arc(cx, cy, R * .28, 0, 7); x.stroke(); x.beginPath(); x.arc(cx, cy, R * .62, .3, 1.4); x.stroke(); x.restore(); }
+function starsDoodle(x, X, Y, n, s) { bdItem(X - s, Y - s, s * 7.4, s * 2); x.save(); x.strokeStyle = INK3; x.fillStyle = INK3; x.lineWidth = 3; for (let i = 0; i < 5; i++) { const cx = X + i * s * 1.25; x.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr2 = k % 2 ? s * .22 : s * .52; x.lineTo(cx + Math.cos(a) * rr2, Y + Math.sin(a) * rr2); } x.closePath(); if (i < n) x.fill(); else x.stroke(); } x.restore(); }
+function arrowDoodle(x, X, Y) { bdItem(X - 128, Y - 100, 140, 110); x.save(); x.strokeStyle = INK2; x.lineWidth = 5; x.lineCap = 'round'; x.globalAlpha = .9; x.beginPath(); x.moveTo(X, Y); x.quadraticCurveTo(X - 40, Y - 60, X - 120, Y - 92); x.stroke(); x.beginPath(); x.moveTo(X - 120, Y - 92); x.lineTo(X - 92, Y - 94); x.moveTo(X - 120, Y - 92); x.lineTo(X - 106, Y - 68); x.stroke(); x.restore(); }
 
 function boardKey() {
   const g = mode === 'shelf' ? (hovered ? hovered.g : null) : (active ? active.g : null);
@@ -50,14 +55,33 @@ function boardKey() {
   if (g) return ['game', g.id, g.status, Math.round(g.hours * 10), g.last, g.rating, g.wrapped, g.cats.join(',')].join('|');
   return ['shelf', gr ? gr.key + gr.games.length : '', curPage, prefs.group, LANG].join('|');
 }
+function stepReveal(now) {
+  const a = bd.anim; if (!a || now - bd.lastStep < 30) return; bd.lastStep = now;
+  const el = (now - a.t0) / 1000 / SPEED, x = boardCtx; let t = 0, done = true;
+  x.drawImage(bd.ghost, 0, 0);
+  for (const [x0, y0, w, h] of a.items) {
+    const dur = Math.max(.07, w / 1600), p = clamp((el - t) / dur, 0, 1);
+    if (p > 0) { x.save(); x.beginPath(); x.rect(x0, y0, w * p, h); x.clip(); x.drawImage(bd.full, 0, 0); x.restore(); }
+    if (p < 1) done = false; t += dur + .025;
+  }
+  if (done) { x.drawImage(bd.full, 0, 0); bd.anim = null; }
+  boardTex.needsUpdate = true;
+}
 function drawBoard(force) {
-  const key = boardKey(); if (key === bd.key && !force) return; bd.key = key;
+  const key = boardKey(), now = performance.now();
+  if (key === bd.key && !force) { stepReveal(now); return; }
+  const was = bd.key.split('|').slice(0, 2).join('|'); bd.key = key;
   if (!bd.ghost) bd.ghost = makeBoardGhost();
-  const x = boardCtx; x.clearRect(0, 0, BW, BH); x.drawImage(bd.ghost, 0, 0);
+  if (!bd.full) bd.full = mkCanvas(BW, BH);
+  bd.items = []; const finish = () => {
+    if (!RM && key.split('|').slice(0, 2).join('|') !== was) { bd.anim = { t0: now, items: bd.items.slice() }; bd.lastStep = 0; stepReveal(now); }
+    else { bd.anim = null; boardCtx.drawImage(bd.full, 0, 0); boardTex.needsUpdate = true; }
+  };
+  const x = bd.full.getContext('2d'); x.clearRect(0, 0, BW, BH); x.drawImage(bd.ghost, 0, 0);
   const L = 70, maxW = BW - 2 * L, kind = key.split('|')[0];
   const g = mode === 'shelf' ? (hovered ? hovered.g : null) : (active ? active.g : null);
   if (kind === 'shelf') {
-    const gr = groups[curGroup]; if (!gr) { bd.key = ''; return; }
+    const gr = groups[curGroup]; if (!gr) { bd.key = ''; bd.anim = null; return; }
     discDoodle(x, L + 26, 92, 26);
     const s = fitMarker(x, gr.label.toUpperCase(), maxW - 80, 66), w = marker(x, gr.label.toUpperCase(), L + 70, 116, s);
     scribbleLine(x, L + 66, L + 74 + w, 138);
@@ -79,7 +103,7 @@ function drawBoard(force) {
       const m = Math.max(0, Math.floor((performance.now() - playStart) / 60000));
       marker(x, PN_STATE.waiting ? T('Playnite está abriendo el juego') : T('Esta sesión: {0}', m < 1 ? T('acaba de empezar') : m === 1 ? T('1 minuto') : T('{0} minutos', m)), L, y + 110, 40);
       wrapMarker(x, mediaT(g, PLAYNITE ? 'Al cerrar el juego, el disco vuelve solo a su caja' : 'Esc para sacar el disco'), L, y + 190, maxW * .9, 34, 44, 2, INK2);
-      boardTex.needsUpdate = true; return;
+      finish(); return;
     }
     if (g.music) {
       /* a record: who, when, how long; and what the hi-fi is playing */
@@ -87,17 +111,17 @@ function drawBoard(force) {
       marker(x, [musicSub(g), g.year].filter(Boolean).join(' · '), L, y, 44, { col: INK });
       marker(x, T(list.length === 1 ? '{0} canción' : '{0} canciones', list.length) + ' · ' + clockS(sumDur(list)), L, y + 62, 38);
       if (MPLAY.cur) wrapMarker(x, T('Sonando: {0}', MPLAY.cur.t), L, y + 130, maxW * .9, 34, 44, 1, INK3);
-      boardTex.needsUpdate = true; return;
+      finish(); return;
     }
     const st = g.status ? TD(g.status) : T('Sin estado');
     marker(x, `${st} · ${fmtH(g.hours)}`, L, y, 44, { col: kindOf(g) === 'playing' ? INK3 : INK });
     marker(x, T('Última vez: {0}', lastText(g.last).toLowerCase()), L, y + 62, 38);
     const meta = [g.genre, g.year].filter(Boolean).join(' · ');
     let yy = y + 120; if (meta) { wrapMarker(x, meta, L, yy, maxW, 34, 44, 1, INK2); yy += 56; }
-    if (g.wrapped) { marker(x, T('¡Precintado!'), BW - L - 250, y - 6, 44, { col: INK3, rot: .06 }); x.save(); x.strokeStyle = INK3; x.lineWidth = 4; x.globalAlpha = .8; x.beginPath(); x.ellipse(BW - L - 128, y - 22, 150, 46, .06, 0, 7); x.stroke(); x.restore(); }
+    if (g.wrapped) { marker(x, T('¡Precintado!'), BW - L - 250, y - 6, 44, { col: INK3, rot: .06 }); bdItem(BW - L - 290, y - 74, 330, 104); x.save(); x.strokeStyle = INK3; x.lineWidth = 4; x.globalAlpha = .8; x.beginPath(); x.ellipse(BW - L - 128, y - 22, 150, 46, .06, 0, 7); x.stroke(); x.restore(); }
     if (g.sum) wrapMarker(x, g.sum, L, yy + 10, maxW, 31, 42, Math.max(1, Math.floor((BH - 120 - yy) / 42)), '#3b3e46');
     if (g.rating) starsDoodle(x, L + 14, BH - 72, g.rating, 34);
     if (g.cats.length) { const t = g.cats.slice(0, 3).map(c => '#' + TD(c).replace(/\s+/g, '')).join('  '); marker(x, t, BW - L, BH - 60, fitMarker(x, t, maxW * .62, 32, 20), { col: INK2, align: 'right', rot: -.02 }); }
   }
-  boardTex.needsUpdate = true;
+  finish();
 }

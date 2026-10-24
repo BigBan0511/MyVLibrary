@@ -16,6 +16,8 @@ Each system has its own place. PC games sit on a shelf above a desk with a beige
 
 - **Your real library.** Covers, backgrounds, descriptions, playtime, completion statuses and categories come from Playnite.
 - **Shelves.** At the top right you choose what is on the shelf: all your games or one status (Playing, Beaten…). You can also group them by category, platform or format. If they don't fit, the shelf has pages ("Next").
+- **Filters.** The Filter button at the top shows every game, only the installed ones, or only the games one of your saved Playnite filters (filter presets) lets through. F on the keyboard (Y on the controller) moves to the next one. Rooms left with nothing in them are skipped.
+- **A closer look.** Point at a game with the mouse, or move to it with the controller, and the view zooms in on it so the spines are easy to read; move away and it zooms back out. Choose how much in Settings → Zoom on hover (Yes, Gentle or No).
 - **Any format you like.** Each PC game can come in a DVD case, a CD jewel case, a big CD case (like the PAL PlayStation or Dreamcast ones), a cardboard big box, a late-90s box of 3½" floppies or a 16-bit cartridge box. Pick it in the game's card (Format) and mix them on the same shelf. The case in your hands changes on the spot, and the shelf makes room when you put it back. If you don't pick one, it goes by year: floppies before 1994, a CD case from 1994 to 2003 and a DVD case after that.
 - **Each console with its own format.** Console games come in their system's case and medium: PlayStation in a big CD case, PS2 and later in a DVD case, Super Nintendo, Nintendo 64 or Switch on a cartridge… so the console always gets what it expects. To change them, set Settings → Console formats to "Free".
 - **A place per system.** The ‹ › buttons next to the system name (or Q / E, LB / RB) walk you from one system to the next. Only the systems you have in Playnite show up. PC games are on the desk; the rest are in the TV room: a CRT up to the PS2 generation and a flat TV from the PS3, Xbox 360 and Wii on.
@@ -26,11 +28,13 @@ Each system has its own place. PC games sit on a shelf above a desk with a beige
 - **Three designs.** By system (the one in the pictures), one long wall shelf above the table with the TV and the console, or a row of bookcases (one per status, category or platform). Change it in Settings → Design.
 - **Actually playing.** When you put the disc in, Playnite starts the game. While you play, the TV shows it and the case waits, closed, beside the machine: on the desk right of the monitor, or on the rug next to the console. When you close the game, the case opens, the disc goes back into it on its own and the case returns to its place on the shelf. If Playnite thinks the game has closed but a program from its folder is still open, the disc stays in until you close it, and that time is added to your playtime.
 - **Trailer.** The TV and the back cover play the game's trailer: the one from Extra Metadata Loader if you have it, or a video found in the description.
+- **Cinema light and the studio.** By default the room is dark, with one warm spot from the upper left and a little film grain. When you take something out, the room fades behind a grey studio backdrop and softboxes light the case: it turns towards you as it opens and settles with a small bounce when it closes, you can drag it to turn it in your hands, and its corners catch little stars of light. If you'd rather keep the room behind it, change it in Settings → When you take something out.
+- **The TV and the whiteboard.** Changing what's on the TV brings a burst of snow and the channel number on screen, and the whiteboard writes what you're holding stroke by stroke, as if with a marker.
 - **Your language.** The shelf follows Playnite's language (Spanish and English for now).
 - **Unplayed games.** If you have never opened a game, it arrives shrink-wrapped. Pull the red tab to peel the wrap off.
 - **Dust.** Games you haven't touched in a while gather dust, and you wipe it off by rubbing the case.
 - **Changes saved to Playnite.** Status, categories, rating (stars) and notes. Nothing changes by itself, only when you change it.
-- **Rooms.** Living room (the one in the picture), Nordic, Cosy, Cabin, Japanese, Library, Industrial loft, Video store, Gamer and Spaceship. There are also three lights: night, evening and day.
+- **Rooms.** Living room (the one in the picture), Nordic, Cosy, Cabin, Japanese, Library, Industrial loft, Video store, Gamer and Spaceship. There are also four lights: cinema, night, evening and day.
 
 ![Open case with the disc and the manual](docs/caja-abierta.png)
 
@@ -48,6 +52,8 @@ Steps:
 1. Download the latest `MyVLibrary_x_y_z.pext`. It's in [Releases](../../releases) or, for the latest development build, in the **Actions** tab: open the latest run and download the `MyVLibrary-pext` artifact, which comes inside a .zip.
 2. Double-click the `.pext`, or drag it onto the Playnite window.
 3. Restart Playnite when it asks you to.
+
+**Updates.** When Playnite starts, the extension looks on GitHub for a newer release and, if there is one, offers it in a Playnite notification: click it and it downloads the `.pext` and Playnite asks to install it. You can also check by hand in **Extensions → MyVLibrary → Check for updates**, and turn the notice off in the extension's settings.
 
 ## Use
 
@@ -75,6 +81,7 @@ There are three ways to open the shelf:
 | Peel off the shrink wrap | drag the tab | Enter | A |
 | Open the case / insert the disc | buttons at the bottom | Enter | A |
 | Read the manual | click the manual | M | X |
+| Filter (all, installed, your Playnite filters) | Filter button at the top | F | Y |
 | Change system (By system design) | ‹ › next to the system | Q / E | LB / RB |
 | Change shelf | pills at the top | Q / E (Z / C in the By system design) | LB / RB (LT / RT in the By system design) |
 | Change page | "Next" | Page Up / Page Down | LT / RT |
@@ -87,12 +94,13 @@ There are three ways to open the shelf:
 - LB + RB to open and close it.
 - Include hidden games.
 - Keep the disc in while the game is still open.
+- Tell me when there is a new version.
 - Developer tools (F12).
 
 ## What is saved, and where
 
 - **In Playnite:** completion status, categories, user score (each star is 20 points) and notes.
-- **In the extension's data:** the shrink wrap, dust and chosen format of each case, the shelf preferences (room, light, sort order, system), the `.ugc` files you picked, the EmuVR consoles read from its folder, the list of Jellyfin films and series with its access token (never the password), the Navidrome music list with its password encrypted for your Windows user (its API needs it for every request), a cache of downsized covers and another of the songs played most recently (up to 1 GB). If you never change a game's format, it uses the one its platform suggests.
+- **In the extension's data:** the shrink wrap, dust and chosen format of each case, the shelf preferences (room, light, sort order, system, filter), the `.ugc` files you picked, the EmuVR consoles read from its folder, the list of Jellyfin films and series with its access token (never the password), the Navidrome music list with its password encrypted for your Windows user (its API needs it for every request), a cache of downsized covers and another of the songs played most recently (up to 1 GB). If you never change a game's format, it uses the one its platform suggests.
 
 ## Development
 
@@ -129,6 +137,10 @@ node build.mjs                 # web/dist/, what the extension ships
 - The page and the extension exchange JSON messages with `chrome.webview.postMessage`.
 - The page sends: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory` and `release`.
 - The extension answers with `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad` and `focus`.
+
+## Thanks
+
+The cinema light, the studio backdrop and the way the case opens and closes are modelled on the "CD Shelf" video shared on r/spicetify and on Ann Nguyen's [cd-case](https://github.com/annnguyentt/vibe-coding/tree/main/cd-case).
 
 ## License
 
