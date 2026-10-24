@@ -71,8 +71,12 @@ button,select,input,textarea{font:inherit;color:inherit}
 .filter-btn.on[aria-expanded="true"]{color:#111}
 .filter-btn:disabled{opacity:.45;cursor:default}
 .filter-pop{width:min(260px,calc(100vw - 32px));padding:6px;display:grid;gap:2px;max-height:min(60vh,420px);overflow:auto}
-.filter-pop button{display:block;width:100%;text-align:left;padding:8px 10px 8px 28px;border:0;border-radius:7px;background:transparent;color:var(--ink);font:600 13px var(--f-body);cursor:pointer;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filter-pop button{display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;padding:8px 10px 8px 28px;border:0;border-radius:7px;background:transparent;color:var(--ink);font:600 13px var(--f-body);cursor:pointer;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .filter-pop button:hover,.filter-pop button:focus-visible{background:rgba(255,255,255,.08);outline:none}
+.filter-pop button b{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.filter-pop button span{font:600 11px var(--f-body);font-variant-numeric:tabular-nums;color:var(--ink-dim)}
+.filter-pop button:disabled{opacity:.4;cursor:default}
+.filter-pop button:disabled:hover{background:transparent}
 .filter-pop button[aria-checked="true"]::before{content:"";position:absolute;left:11px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--amber)}
 .filter-pop .pop-title{margin:10px 10px 4px}
 .filter-note{margin:4px 10px 8px;font-size:12px;color:var(--ink-dim);line-height:1.4}
@@ -127,7 +131,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 .st-sin{color:#c9c1b4}.st-pla{color:#c7a8ff}.st-jug{color:var(--amber)}.st-jdo{color:#7fd3d0}.st-esp{color:var(--info)}.st-aba{color:var(--bad)}.st-sup{color:var(--ok)}.st-com{color:#f2c94c}
 .frow{display:flex;align-items:center;gap:10px;margin-top:14px}
-.frow label,.cats .lbl{font:700 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);min-width:84px}
+.frow label,.cats .lbl,.acts .lbl{font:700 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);min-width:84px}
 .frow .pill{width:24px;padding:0;justify-content:center;border:0}
 .frow select{flex:1;min-width:0;height:34px;background:rgba(255,255,255,.06);border:1px solid var(--panel-line);border-radius:6px;padding:0 8px;font-weight:600}
 .frow select option{background:#221c2c}
@@ -163,6 +167,14 @@ button,select,input,textarea{font:inherit;color:inherit}
 .chip.main::before{content:"◆ ";font-size:9px}
 .chip.add{border-style:dashed;color:var(--ink-dim)}
 .chips em{font-size:13px;color:var(--ink-dim);align-self:center}
+.acts{margin-top:12px;display:grid;gap:8px}
+.act-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.inst{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--ink-dim);margin-right:4px}
+.inst::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.6}
+.inst.on{color:#9fd08a}
+.inst.on::before{opacity:1}
+.gact{height:28px;padding:0 10px;border-radius:999px;border:1px solid var(--panel-line);background:rgba(255,255,255,.05);font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}
+.gact:hover,.gact:focus-visible{border-color:rgba(255,255,255,.4);outline:none}
 .cat-edit{display:grid;gap:6px;padding:10px;border:1px solid var(--panel-line);border-radius:8px;background:rgba(0,0,0,.18)}
 .cat-edit label{display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer}
 .cat-edit input[type=checkbox]{accent-color:var(--amber);width:16px;height:16px}

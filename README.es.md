@@ -16,7 +16,8 @@ Cada sistema tiene su sitio. Los juegos de PC están en una balda sobre una mesa
 
 - **Tu biblioteca real.** Carátulas, fondos, descripciones, tiempo jugado, estados y categorías salen de Playnite.
 - **Estantes.** Arriba a la derecha eliges qué hay en la balda: todos los juegos o un estado (Jugando, Superados…). También puedes agruparlos por categoría, plataforma o formato. Si no caben, la balda tiene páginas («Siguiente»).
-- **Filtros.** El botón Filtro de arriba enseña todos los juegos, solo los instalados o solo los que deja pasar uno de los filtros que tengas guardados en Playnite. Con F en el teclado (Y en el mando) pasas al siguiente. Las salas que se quedan vacías no aparecen.
+- **Filtros.** El botón Filtro de arriba enseña todos los juegos, solo los instalados o solo los que deja pasar uno de los filtros que tengas guardados en Playnite. Con F en el teclado (Y en el mando) pasas al siguiente. Cada opción dice cuántos juegos deja, y la que no deja ninguno no se puede elegir. Las salas que se quedan vacías no aparecen, y el botón está en todas, también en la de vídeo y en la de música.
+- **Instalar desde la ficha.** Dentro de Playnite, la ficha del juego tiene una fila Instalación: instalarlo o desinstalarlo (se encargan Playnite y la tienda del juego), abrir su carpeta, verlo en Playnite o marcarlo como instalado o no instalado cuando Playnite lo tiene mal. Marcarlo solo cambia lo que Playnite tiene apuntado: no instala ni borra nada.
 - **Mirar de cerca.** Pasa el ratón por encima de un juego, o llega a él con el mando, y la vista se acerca para que leas bien los lomos; al apartarte vuelve a alejarse. Elige cuánto en Ajustes → Zoom al pasar por encima (Sí, Suave o No).
 - **El formato que quieras.** Cada juego de PC puede ir en una caja DVD, una caja de CD, una caja de CD grande (como las de PlayStation o Dreamcast PAL), una caja grande de cartón, una caja de disquetes de 3½" de finales de los 90 o una caja de cartucho de 16 bits. Lo eliges en la ficha del juego (Formato) y puedes mezclarlos en la misma balda. La caja que tienes en la mano se cambia al momento y la balda le hace sitio al devolverla. Si no eliges nada, va según el año: disquetes antes de 1994, caja de CD de 1994 a 2003 y DVD después.
 - **Cada consola, con su formato.** Los juegos de consola van en la caja y el medio de su sistema: PlayStation en caja de CD grande, PS2 y posteriores en caja DVD, Super Nintendo, Nintendo 64 o Switch en cartucho… Así la consola siempre recibe lo que espera. Si quieres cambiarlos, en Ajustes → Formato en consolas elige «Libre».
@@ -135,8 +136,8 @@ node build.mjs                 # web/dist/, lo que lleva la extensión
 
 - La extensión sirve la carpeta `web` en `https://app.myvlibrary/` y las carátulas en `https://media.myvlibrary/cover/{id}?w=…`, reducidas y guardadas en caché.
 - Página y extensión se pasan mensajes JSON con `chrome.webview.postMessage`.
-- La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory` y `release`.
-- La extensión responde con `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad` y `focus`.
+- La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory`, `release` y `game`.
+- La extensión responde con `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad`, `focus` y `notice`.
 
 ## Agradecimientos
 

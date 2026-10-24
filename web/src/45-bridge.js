@@ -233,6 +233,7 @@ const LIB = {
     this.player = m.video ? m.video.player || '' : '';
     if (m.music) this.setMusic(m.music, true);
     if (m.focusId) this.focusId = m.focusId;
+    checkFilter();
     if (this.bootRes) { this.bootRes(); this.bootRes = null; }
     else if (mode === 'shelf') relayout({ follow: null }); else pendingRelayout = true;
   },
@@ -241,18 +242,20 @@ const LIB = {
     for (const r of list || []) {
       const g = GAMES.find(q => q.id === r.id);
       if (!g) { GAMES.push(this.fromHost(r)); regroup = true; continue; }
-      const f0 = g.fmt, before = keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '');
+      const f0 = g.fmt, before = passes(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '');
       this.fromHost(r, g);
-      if (before !== keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '')) regroup = true;
+      if (before !== passes(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '')) regroup = true;
       if (g.fmt !== f0) regroup = true;
       for (const c of casesOf(g)) { c.dirty = true; c.refreshSpine(); if (c === active || c.faceOut) c.ensureDetail(); }
     }
     if (active) renderInfo(true);
+    if (checkFilter()) regroup = true;
     if (regroup) { if (mode === 'shelf' && !busy) relayout(); else pendingRelayout = true; }
   },
   remove(ids) {
     const set = new Set(ids || []); if (!set.size) return;
     for (let i = GAMES.length - 1; i >= 0; i--) if (set.has(GAMES[i].id) && !(active && active.g === GAMES[i])) GAMES.splice(i, 1);
+    checkFilter();
     if (mode === 'shelf' && !busy) relayout(); else pendingRelayout = true;
   },
   /* the game has closed: wait until the shelf is on screen again (Playnite is usually still minimised)
@@ -311,6 +314,7 @@ const LIB = {
       case 'videoFailed': if (active && active.g.video && PN_STATE.running === active.g.id) this.eject({ auto: true, video: {}, msg: m.reason || T('No se ha podido abrir el reproductor.') }, true); break;
       case 'pad': this.pad(m.button, m.state); break;
       case 'focus': this.focusGame(m.id); break;
+      case 'notice': if (m.text) toast(m.text, 2800); break;
       case 'pause': this.paused = true; break;
       case 'resume': this.paused = false; lastT = performance.now(); break;
     }
@@ -372,11 +376,17 @@ const MOCKHOST = {
   },
   receive(m) {
     if (m.type === 'ndScrobble') console.log('[mock] scrobble', m.id);
+    if (m.type === 'game') {
+      const r = this.lib.find(q => q.id === m.id); if (!r) return;
+      if (m.act === 'install' || m.act === 'markOn' || m.act === 'uninstall' || m.act === 'markOff') { r.installed = m.act === 'install' || m.act === 'markOn'; r.presets = [...(r.installed ? ['f-inst'] : []), ...(r.cats.includes('Retro') ? ['f-retro'] : [])]; setTimeout(() => this.post({ type: 'games', games: [r] }), m.act === 'install' ? 1500 : 200); }
+      if (m.act === 'folder') this.post({ type: 'notice', text: '[mock] ' + (r.installed ? 'C:\\Games\\' + r.name : 'sin carpeta') });
+      if (m.act === 'reveal') console.log('[mock] reveal', m.id);
+    }
     if (m.type === 'jfSeasons') { const v = this.vsrc.get(m.id); this.post({ type: 'jfSeasons', id: m.id, seasons: v ? v.demoSeasons.map(s => ({ id: m.id + '-s' + s.idx, idx: s.idx, name: s.name, year: s.year, count: s.count })) : [] }); }
     if (m.type === 'jfEpisodes') { const v = this.vsrc.get(m.id), idx = +String(m.season).split('-s').pop(), s = v && v.demoSeasons.find(x => x.idx === idx); this.post({ type: 'jfEpisodes', id: m.id, season: m.season, episodes: s ? demoEpisodes(v, s).map(e => ({ id: e.id, n: e.n, season: e.season, name: e.t, runtime: e.runtime, played: e.played, pos: e.pos })) : [] }); }
     if (m.type === 'jfPlay') { console.log('[mock] jfPlay', m); setTimeout(() => this.post({ type: 'videoStarted', id: m.id }), 1500); this.vT = setTimeout(() => this.post({ type: 'videoStopped', id: m.id, pos: 42 * 60 * TICKS, played: false, active: !document.hidden }), 9000); }
     if (m.type === 'jfStop') { clearTimeout(this.vT); console.log('[mock] jfStop'); }
-    if (m.type === 'ready') { this.lib = this.build(); this.lib.forEach(r => { r.presets = [...(r.installed ? ['f-inst'] : []), ...(r.cats.includes('Retro') ? ['f-retro'] : [])]; }); this.post({ type: 'library', mode: 'desktop', presets: [{ id: 'f-inst', name: 'Instalados' }, { id: 'f-retro', name: 'Retro' }], statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib, running: this.runningAtStart(), video: this.videos(), music: this.music() }); }
+    if (m.type === 'ready') { this.lib = this.build(); this.lib.forEach(r => { r.presets = [...(r.installed ? ['f-inst'] : []), ...(r.cats.includes('Retro') ? ['f-retro'] : [])]; }); this.post({ type: 'library', mode: 'desktop', presets: [{ id: 'f-inst', name: 'Instalados' }, { id: 'f-retro', name: 'Retro' }, { id: 'f-empty', name: 'Vacío' }], statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib, running: this.runningAtStart(), video: this.videos(), music: this.music() }); }
     if (m.type === 'detail') { const s = this.src.get(m.id); this.post({ type: 'detail', id: m.id, desc: s ? `<p>${esc(s.desc)}</p><p>${esc(s.sum)}</p><script>alert(1)<\/script>` : '', links: [{ name: 'Web oficial', url: 'https://example.com' }, { name: 'Wiki', url: 'https://example.org/wiki' }] }); }
     if (m.type === 'start') { const r = this.lib.find(q => q.id === m.id); if (r && !r.installed) { this.post({ type: 'notInstalled', id: m.id }); return; } setTimeout(() => this.post({ type: 'started', id: m.id }), 1800);
       /* ?mock&leftover: Playnite gives up after a few seconds while the game keeps running */
