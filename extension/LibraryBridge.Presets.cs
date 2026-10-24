@@ -36,7 +36,9 @@ namespace MyVLibrary
             List<FilterPreset> sorted = null;
             try
             {
-                sorted = api.MainView.GetSortedFilterPresets();
+                // newer Playnite versions keep the person's own order; the SDK this is built against does not know it yet
+                var m = api.MainView.GetType().GetMethod("GetSortedFilterPresets", Type.EmptyTypes);
+                sorted = m?.Invoke(api.MainView, null) as List<FilterPreset>;
             }
             catch
             {
