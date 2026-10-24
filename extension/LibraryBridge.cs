@@ -30,6 +30,8 @@ namespace MyVLibrary
         /* the video room */
         public string season { get; set; }
         public long? start { get; set; }
+        /* what to do with a game from its card: install, uninstall, markOn, markOff, folder, reveal */
+        public string act { get; set; }
     }
 
     public class MediaFile
@@ -563,6 +565,9 @@ namespace MyVLibrary
                     case "createCategory":
                         if (!string.IsNullOrWhiteSpace(m.name)) Db.Categories.Add(m.name.Trim());
                         break;
+                    case "game":
+                        GameAction(host, m);
+                        break;
                     case "jfSeasons":
                         VideoSeasons(host, m.id);
                         break;
@@ -630,6 +635,76 @@ namespace MyVLibrary
             }
 
             api.StartGame(g.Id);
+        }
+
+        /// <summary>A line for the page to show as a toast.</summary>
+        private static void Notice(ShelfHost host, string text) => host.Post(new Dictionary<string, object> { ["type"] = "notice", ["text"] = text });
+
+        /// <summary>The buttons on a game's card: Playnite installs, uninstalls, corrects what it has noted, opens the folder or shows the game.</summary>
+        private void GameAction(ShelfHost host, PageMessage m)
+        {
+            var g = Find(m.id);
+            if (g == null)
+            {
+                Notice(host, Loc.S("Ese juego ya no está en tu biblioteca.", "That game is no longer in your library."));
+                return;
+            }
+
+            switch (m.act)
+            {
+                case "install":
+                    if (g.IsInstalled)
+                    {
+                        Notice(host, Loc.S("Playnite ya lo tiene como instalado.", "Playnite already has it as installed."));
+                        return;
+                    }
+
+                    api.InstallGame(g.Id);
+                    break;
+
+                case "uninstall":
+                    if (g.IsRunning || g.IsLaunching)
+                    {
+                        Notice(host, Loc.S("Ciérralo antes de desinstalarlo.", "Close it before uninstalling it."));
+                        return;
+                    }
+
+                    if (api.Dialogs.ShowMessage(Loc.S($"¿Desinstalar {g.Name}?", $"Uninstall {g.Name}?"), "MyVLibrary", System.Windows.MessageBoxButton.YesNo) != System.Windows.MessageBoxResult.Yes) return;
+                    api.UninstallGame(g.Id);
+                    break;
+
+                case "markOn":
+                case "markOff":
+                    // only what Playnite has noted down: nothing is installed or deleted
+                    g.IsInstalled = m.act == "markOn";
+                    Db.Games.Update(g);
+                    break;
+
+                case "folder":
+                    var dir = g.InstallDirectory;
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(dir)) dir = api.ExpandGameVariables(g, dir);
+                    }
+                    catch
+                    {
+                        // keep it as it is
+                    }
+
+                    if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
+                    {
+                        Notice(host, Loc.S("Playnite no tiene una carpeta de instalación para este juego.", "Playnite has no install folder for this game."));
+                        return;
+                    }
+
+                    Process.Start("explorer.exe", "\"" + dir + "\"");
+                    break;
+
+                case "reveal":
+                    plugin.CloseHost(host);
+                    api.MainView.SelectGame(g.Id);
+                    break;
+            }
         }
 
         private void Update(PageMessage m)

@@ -157,7 +157,7 @@ function renderInfo(force) {
   tab.hidden = true;
   if (active.g.music) { const g = active.g, mk = ['m', g.id, g.fmt, BAG.length, BAG.map(t => t.id).join(',').length].join('|'); el.hidden = false; if (!force && mk === lastInfoKey) return; lastInfoKey = mk; el.classList.add('open'); renderMusicInfo(el, g); return; }
   if (active.g.video) { const g = active.g, s = seasonOf(g), vk = ['v', g.id, g.fmt, g.seasonIdx, g.seasons ? g.seasons.length : 0, s && s.eps ? s.eps.length : -1, g.pos, g.played].join('|'); el.hidden = false; if (!force && vk === lastInfoKey) return; lastInfoKey = vk; el.classList.add('open'); renderVideoInfo(el, g); return; }
-  const g = active.g, key = [g.id, g.fmt, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
+  const g = active.g, key = [g.id, g.fmt, g.installed, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
   const idle = g.last === null || g.last === undefined ? g.added : g.last;
   const dustTxt = T(g.wrapped ? 'Ninguno, está precintado' : g.dust > .6 ? 'Mucho' : g.dust > .25 ? 'Algo' : g.dust > .04 ? 'Poco' : 'Limpio');
@@ -168,12 +168,28 @@ function renderInfo(force) {
     <dl><dt>${T('Jugado')}</dt><dd>${fmtH(g.hours)}${g.sessions ? ' · ' + T(g.sessions === 1 ? '{0} vez' : '{0} veces', g.sessions) : ''}</dd><dt>${T('Última vez')}</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>${T('Logros')}</dt><dd>${T('{0} de {1}', g.ach[0], g.ach[1])}</dd>` : ''}<dt>${T('Polvo')}</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : ''}</dd></dl>
     <div class="frow"><label for="stSel">${T('Estado')}</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : `<option value="" selected>${T('Sin estado')}</option>`}${statuses.map(s => `<option value="${esc(s)}"${s === g.status ? ' selected' : ''}>${esc(TD(s))}</option>`).join('')}<option value="__new">+ ${T('Nuevo estado…')}</option></select></div>
     <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="fmt-ico" aria-hidden="true">${FMT_ICON[g.fmt] || ''}</span><select id="fmtSel"${fmtLocked(g) ? ' disabled' : ''}>${GAME_FMTS.map(f => `<option value="${f}"${f === g.fmt ? ' selected' : ''}>${esc(T(DIMS[f].name))}</option>`).join('')}</select></div>
+    ${gameActs(g)}
     ${fmtLocked(g) ? `<p class="fmt-lock">${T('El original de {0}. Se puede cambiar en Ajustes → Formato en consolas.', esc(g.platFull || g.plat))}</p>` : ''}
     ${newStatus ? `<form class="cat-new st-new"><input id="stNew" type="text" placeholder="${T('Nombre del estado nuevo')}" maxlength="40" autocomplete="off"><button type="submit">${T('Crear')}</button></form>` : ''}
     <div class="cats"><span class="lbl">${T('Categorías')}</span><div class="chips">${g.cats.length ? g.cats.map(c => `<span class="chip">${esc(TD(c))}</span>`).join('') : `<em>${T('Ninguna')}</em>`}<button type="button" class="chip add" data-edit="1">${infoEdit ? T('Listo') : '+ ' + T('Categorías')}</button></div></div>
     ${infoEdit ? `<div class="cat-edit">${prefs.cats.map(c => `<label><input type="checkbox" data-catbox="${esc(c)}"${g.cats.includes(c) ? ' checked' : ''}><span>${esc(TD(c))}</span></label>`).join('')}
       <form class="cat-new"><input id="catNew" type="text" placeholder="${T('Nueva categoría')}" maxlength="40" autocomplete="off"><button type="submit">${T('Añadir')}</button></form></div>` : ''}
     <p class="note">${note}</p>`;
+}
+/* installing, uninstalling and the rest, done by Playnite (only inside it) */
+function gameActs(g) {
+  if (!PLAYNITE || !g.real) return '';
+  const b = (act, label, tip) => `<button type="button" class="gact" data-gact="${act}"${tip ? ` title="${esc(tip)}"` : ''}>${label}</button>`, mark = T('Solo cambia lo que Playnite tiene apuntado: no instala ni borra nada.');
+  return `<div class="acts"><span class="lbl">${T('Instalación')}</span><div class="act-row"><span class="inst ${g.installed ? 'on' : ''}">${T(g.installed ? 'Instalado' : 'Sin instalar')}</span>`
+    + (g.installed ? b('uninstall', T('Desinstalar')) + b('folder', T('Abrir carpeta')) + b('markOff', T('Marcar como no instalado'), mark) : b('install', T('Instalar')) + b('markOn', T('Marcar como instalado'), mark))
+    + b('reveal', T('Ver en Playnite')) + `</div></div>`;
+}
+function gameAct(g, act) {
+  if (!PLAYNITE || !g.real) return;
+  LIB.send('game', { id: g.id, act }); sfx.tick();
+  if (act === 'install') toast(T('Playnite se encarga de instalarlo.'));
+  /* the mark shows at once; Playnite's own update follows */
+  if (act === 'markOn' || act === 'markOff') { g.installed = act === 'markOn'; renderInfo(true); pendingRelayout = true; }
 }
 function gameChanged(c, fields, regroup) {
   saveGame(c.g); c.dirty = true; c.ensureDetail(); c.refreshSpine(); if (regroup) pendingRelayout = true; renderInfo(true);
@@ -191,6 +207,7 @@ $('#info').addEventListener('click', e => {
   if (!active) return;
   if (e.target.closest('[data-more]')) { infoOpen = !infoOpen; renderInfo(true); return; }
   if (e.target.closest('[data-hide]')) { setCard('hide'); return; }
+  const ga = e.target.closest('[data-gact]'); if (ga) { gameAct(active.g, ga.dataset.gact); return; }
   if (e.target.closest('[data-edit]')) { infoEdit = !infoEdit; renderInfo(true); if (infoEdit) { const i = $('#catNew'); if (i && !coarse) i.focus(); } }
 });
 $('#info').addEventListener('submit', e => {
@@ -374,13 +391,17 @@ function filterName(f) { const c = filterChoices().find(c => c[0] === f); return
 function renderFilter() {
   const b = $('#filterBtn'), pop = $('#filterPop'); if (!b) return;
   const f = filterOf();
-  /* films and records are not filtered: the button steps aside in those rooms */
-  b.hidden = STAGE.name === 'video' || STAGE.name === 'music'; b.disabled = mode !== 'shelf' && mode !== 'loading';
+  /* always there, in the video and music rooms too, so a filter can always be undone */
+  b.disabled = mode !== 'shelf' && mode !== 'loading';
   b.classList.toggle('on', f !== 'all'); b.querySelector('span').textContent = f === 'all' ? T('Filtro') : filterName(f); b.title = T('Filtro') + ' (F)';
   if (!pop.hidden) renderFilterPop();
 }
+/* how many games a filter leaves (films and records do not count) */
+function filterCount(v) { let n = 0; for (const g of GAMES) if (!g.video && !g.music && passes(g, v)) n++; return n; }
 function renderFilterPop() {
-  const f = filterOf(), ch = filterChoices(), item = ([v, n]) => `<button type="button" role="menuitemradio" aria-checked="${v === f}" data-filter="${esc(v)}">${esc(n)}</button>`;
+  const f = filterOf(), ch = filterChoices();
+  /* each choice says how many games it leaves; one that leaves none cannot be picked */
+  const item = ([v, name]) => { const n = filterCount(v); return `<button type="button" role="menuitemradio" aria-checked="${v === f}" data-filter="${esc(v)}"${n ? '' : ' disabled'}><b>${esc(name)}</b><span>${n}</span></button>`; };
   $('#filterPop').innerHTML = ch.slice(0, 2).map(item).join('') + (PRESETS.length ? `<div class="pop-title">${T('Filtros de Playnite')}</div>` + ch.slice(2).map(item).join('') : PLAYNITE ? `<p class="filter-note">${T('Los filtros que guardes en Playnite aparecerán aquí.')}</p>` : '');
 }
 function closeFilterPop() { $('#filterPop').hidden = true; $('#filterBtn').setAttribute('aria-expanded', 'false'); }
@@ -391,25 +412,35 @@ $('#filterBtn').addEventListener('click', () => {
   const r = b.getBoundingClientRect(); pop.style.top = (r.bottom + 6) + 'px'; pop.style.left = clamp(r.left, 16, innerWidth - pop.offsetWidth - 16) + 'px';
   const on = pop.querySelector('[aria-checked="true"]'); if (on) on.focus({ preventScroll: true });
 });
-$('#filterPop').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (!b) return; closeFilterPop(); setFilter(b.dataset.filter); });
+$('#filterPop').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (!b || b.disabled) return; closeFilterPop(); setFilter(b.dataset.filter); });
 $('#filterPop').addEventListener('keydown', e => {
   if (e.key === 'Escape') { e.stopPropagation(); closeFilterPop(); $('#filterBtn').focus(); return; }
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-  const items = [...$('#filterPop').querySelectorAll('[data-filter]')], i = items.indexOf(document.activeElement);
-  items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); e.preventDefault(); e.stopPropagation();
+  const items = [...$('#filterPop').querySelectorAll('[data-filter]:not(:disabled)')], i = items.indexOf(document.activeElement);
+  if (items.length) items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); e.preventDefault(); e.stopPropagation();
 });
 document.addEventListener('pointerdown', e => { if (!$('#filterPop').hidden && !e.target.closest('#filterPop') && !e.target.closest('#filterBtn')) closeFilterPop(); });
 async function setFilter(v) {
   if (mode !== 'shelf' || busy || swapBusy || v === filterOf()) return;
+  /* a filter that would leave no games at all is not applied, so the game rooms never vanish */
+  const n = filterCount(v);
+  if (!n) { toast(T('Ningún juego cumple «{0}»', filterName(v)), 2200); return; }
   prefs.filter = v; prefs.shelf = '__all'; savePrefs(); renderFilter(); setHovered(null); focus = null; sfx.tick();
-  const n = GAMES.filter(g => !g.video && !g.music && passes(g)).length;
-  toast(n ? filterName(v) + ' · ' + T(n === 1 ? '{0} juego' : '{0} juegos', n) : T('Ningún juego cumple ese filtro'), 1800);
+  toast(filterName(v) + ' · ' + T(n === 1 ? '{0} juego' : '{0} juegos', n), 1800);
   /* the room you are in may have nothing left: walk to the first one that has */
   if (isRooms() && curSysKey() !== STAGE.sys) { await setSystem(0, curSysKey()); return; }
   await relayout({ full: true, reset: true }); renderSysbar(); renderBrand();
 }
-/* F on the keyboard, Y on the pad: the next filter */
-function cycleFilter() { if (STAGE.name === 'video' || STAGE.name === 'music') return false; const ch = filterChoices(), i = ch.findIndex(c => c[0] === filterOf()); setFilter(ch[(i + 1) % ch.length][0]); return true; }
+/* F on the keyboard, Y on the pad: the next filter that leaves some games */
+function cycleFilter() {
+  const ch = filterChoices().filter(c => c[0] === filterOf() || filterCount(c[0]) > 0), i = ch.findIndex(c => c[0] === filterOf());
+  if (ch.length > 1) setFilter(ch[(i + 1) % ch.length][0]); return true;
+}
+/* after the library changes: a filter that has been left with no games at all goes back to every game */
+function checkFilter() {
+  const f = filterOf(); if (f === 'all' || filterCount(f) > 0) return false;
+  const name = filterName(f); prefs.filter = 'all'; savePrefs(); renderFilter(); toast(T('«{0}» se ha quedado sin juegos: se quita el filtro', name), 2600); return true;
+}
 function syncHudHeight() { document.documentElement.style.setProperty('--hud-h', $('.hud-top').offsetHeight + 'px'); }
 
 /* =====================================================================
@@ -719,6 +750,8 @@ function closeGame(o = {}) {
 /* ---------- re-arranging the shelf after a change ---------- */
 async function relayout(opts = {}) {
   if (mode !== 'shelf' || busy) { pendingRelayout = true; return; }
+  /* the room you are in has been left empty (by the filter): walk to the first one that has games */
+  if (isRooms() && STAGE.sys && curSysKey() !== STAGE.sys && !swapBusy) return setSystem(0, curSysKey());
   if (layoutChanged) { layoutChanged = false; opts = Object.assign({}, opts, { full: true, layout: true }); }
   const keyNow = groups[curGroup] ? groups[curGroup].key : '__all';
   buildGroups();

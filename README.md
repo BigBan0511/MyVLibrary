@@ -16,7 +16,8 @@ Each system has its own place. PC games sit on a shelf above a desk with a beige
 
 - **Your real library.** Covers, backgrounds, descriptions, playtime, completion statuses and categories come from Playnite.
 - **Shelves.** At the top right you choose what is on the shelf: all your games or one status (Playing, Beaten…). You can also group them by category, platform or format. If they don't fit, the shelf has pages ("Next").
-- **Filters.** The Filter button at the top shows every game, only the installed ones, or only the games one of your saved Playnite filters (filter presets) lets through. F on the keyboard (Y on the controller) moves to the next one. Rooms left with nothing in them are skipped.
+- **Filters.** The Filter button at the top shows every game, only the installed ones, or only the games one of your saved Playnite filters (filter presets) lets through. F on the keyboard (Y on the controller) moves to the next one. Each choice says how many games it leaves, and one that leaves none can't be picked. Rooms left with nothing in them are skipped, and the button is there in every room, the video and music ones too.
+- **Install from the card.** Inside Playnite, a game's card has an Installation row: install or uninstall the game (Playnite and the game's store take care of it), open its folder, show it in Playnite, or mark it as installed or not installed when Playnite has it wrong. Marking only changes what Playnite has noted down: nothing is installed or deleted.
 - **A closer look.** Point at a game with the mouse, or move to it with the controller, and the view zooms in on it so the spines are easy to read; move away and it zooms back out. Choose how much in Settings → Zoom on hover (Yes, Gentle or No).
 - **Any format you like.** Each PC game can come in a DVD case, a CD jewel case, a big CD case (like the PAL PlayStation or Dreamcast ones), a cardboard big box, a late-90s box of 3½" floppies or a 16-bit cartridge box. Pick it in the game's card (Format) and mix them on the same shelf. The case in your hands changes on the spot, and the shelf makes room when you put it back. If you don't pick one, it goes by year: floppies before 1994, a CD case from 1994 to 2003 and a DVD case after that.
 - **Each console with its own format.** Console games come in their system's case and medium: PlayStation in a big CD case, PS2 and later in a DVD case, Super Nintendo, Nintendo 64 or Switch on a cartridge… so the console always gets what it expects. To change them, set Settings → Console formats to "Free".
@@ -135,8 +136,8 @@ node build.mjs                 # web/dist/, what the extension ships
 
 - The extension serves the `web` folder at `https://app.myvlibrary/` and covers at `https://media.myvlibrary/cover/{id}?w=…`, downsized and cached.
 - The page and the extension exchange JSON messages with `chrome.webview.postMessage`.
-- The page sends: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory` and `release`.
-- The extension answers with `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad` and `focus`.
+- The page sends: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory`, `release` and `game`.
+- The extension answers with `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad`, `focus` and `notice`.
 
 ## Thanks
 
