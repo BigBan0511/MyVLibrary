@@ -34,7 +34,11 @@ namespace MyVLibrary
             [SerializationPropertyName("tag_name")] public string Tag { get; set; }
             [SerializationPropertyName("html_url")] public string Page { get; set; }
             [SerializationPropertyName("assets")] public List<GhAsset> Assets { get; set; }
+            [SerializationPropertyName("draft")] public bool Draft { get; set; }
+            [SerializationPropertyName("prerelease")] public bool Prerelease { get; set; }
         }
+
+        private static bool HasPackage(GhRelease r) => r.Assets?.Any(a => a.Name != null && a.Name.EndsWith(".pext", StringComparison.OrdinalIgnoreCase)) == true;
 
         /// <summary>The version this DLL was built as (it comes from extension.yaml).</summary>
         public static Version Installed => Normalize(typeof(Updater).Assembly.GetName().Version);
@@ -50,18 +54,25 @@ namespace MyVLibrary
             return Version.TryParse(s, out var v) ? Normalize(v) : null;
         }
 
+        /// <summary>
+        /// The newest release that can actually be installed: published, not a pre-release, with a version number
+        /// and a .pext attached. A release whose build failed (no .pext) is skipped instead of being offered.
+        /// </summary>
         private static async Task<GhRelease> Latest()
         {
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-            var req = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{Repo}/releases/latest");
+            var req = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{Repo}/releases?per_page=15");
             req.Headers.TryAddWithoutValidation("User-Agent", "MyVLibrary/" + Installed);
             req.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
             using (var res = await http.SendAsync(req).ConfigureAwait(false))
             {
-                // 404: the repository has no release yet
+                // 404: no releases (or no repository) yet
                 if (res.StatusCode == HttpStatusCode.NotFound) return null;
                 res.EnsureSuccessStatusCode();
-                return Serialization.FromJson<GhRelease>(await res.Content.ReadAsStringAsync().ConfigureAwait(false));
+                var all = Serialization.FromJson<List<GhRelease>>(await res.Content.ReadAsStringAsync().ConfigureAwait(false)) ?? new List<GhRelease>();
+                return all.Where(r => r != null && !r.Draft && !r.Prerelease && Parse(r.Tag) != null && HasPackage(r))
+                          .OrderByDescending(r => Parse(r.Tag))
+                          .FirstOrDefault();
             }
         }
 
