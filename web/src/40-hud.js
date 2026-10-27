@@ -37,7 +37,7 @@ function placeTip() {
 }
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), ms); }
 
-function setMode(m) { mode = m; renderMini(); renderBag(); renderFilter(); if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
+function setMode(m) { mode = m; renderMini(); renderBag(); renderFilter(); renderRlBtn(); if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
 const btn = (k, label, a, primary) => `<button class="pbtn${primary ? ' primary' : ''}" type="button" data-act="${a}"><kbd>${k}</kbd>${label}</button>`;
 function tearHintText(c) { return c.tear > .05 ? T('Precinto {0} % · sigue tirando', Math.round(100 * c.tear / c.L)) : T('Arrastra la lengüeta roja para quitar el precinto'); }
 function renderPrompts() {
@@ -58,12 +58,13 @@ function renderPrompts() {
   else if (mode === 'open') h = btn('M', T('Leer el manual'), 'manual') + btn(T('Intro'), mediaT(active.g, active.g.real && !active.g.installed ? 'Meter el disco (instalar)' : 'Meter el disco'), 'insert', true) + btn('Esc', T('Cerrar la caja'), 'close');
   if (mode === 'playing') h = btn('Esc', active.g.video ? mediaT(active.g, 'Sacar el disco') : PLAYNITE ? mediaT(active.g, 'Sacar el disco') : T('Cerrar el juego'), 'quit', true);
   if (mode === 'hifi' || (active && active.g.music && (mode === 'inspect' || mode === 'open'))) h = musicPrompts();
+  if (mode === 'roulette') h = rlPrompts();
   el.innerHTML = h;
   if (typeof renderEpBar === 'function') renderEpBar();
 }
 $('#prompts').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) { sfx.init(); doAct(b.dataset.act); } });
 function doAct(a) {
-  const fns = { flip: flipCase, open: openCase, unwrap: unwrapAction, back: putBack, manual: openManual, insert: insertDisc, close: () => closeCase(false), quit: () => closeGame(PLAYNITE && PN_STATE.running && !PN_STATE.waiting ? { keepRunning: true } : {}), prevPage: () => setPage(curPage - 1), nextPage: () => setPage(curPage + 1), prevShelf: () => setGroup(curGroup - 1), nextShelf: () => setGroup(curGroup + 1) };
+  const fns = { flip: flipCase, open: openCase, unwrap: unwrapAction, back: putBack, manual: openManual, insert: insertDisc, close: () => closeCase(false), quit: () => closeGame(PLAYNITE && PN_STATE.running && !PN_STATE.waiting ? { keepRunning: true } : {}), prevPage: () => setPage(curPage - 1), nextPage: () => setPage(curPage + 1), prevShelf: () => setGroup(curGroup - 1), nextShelf: () => setGroup(curGroup + 1), rlSpin, rlGo, rlBack: closeRoulette };
   if (fns[a]) fns[a](); else if (a[0] === 'm') musicAct(a);
 }
 

@@ -20,6 +20,8 @@ const skirtMat = M(THREE.MeshStandardMaterial, { color: '#1c1a18', roughness: .4
 const skirt = addBox(1500, 8, .5, skirtMat, 0, 4, WALL_Z + .25);
 /* the video shop's bookcases run off to the left: the room goes on that way, a texture period at a time */
 [1, 2, 3].forEach(k => [floor, wall, skirt].forEach(o => { const m = o.clone(); m.position.x -= 1500 * k; scene.add(m); }));
+/* and to the right, where the roulette is */
+[1, 2].forEach(k => [floor, wall, skirt].forEach(o => { const m = o.clone(); m.position.x += 1500 * k; scene.add(m); }));
 const woodMat = M(THREE.MeshStandardMaterial, { map: tex(makeRealWood(1024, 512, '#5a2f1d', 1)), roughness: .42 }, .55);
 const woodDark = M(THREE.MeshStandardMaterial, { map: tex(makeRealWood(512, 256, '#2a1a12', 3)), roughness: .62 }, .45);
 const shelfMat = M(THREE.MeshStandardMaterial, { map: tex(makeRealWood(1024, 256, '#3c2216', 4)), roughness: .46 }, .5);
