@@ -49,6 +49,11 @@ function bez(a, b, c, t, out) { const u = 1 - t; return out.set(u * u * a.x + 2 
 const cam = { pos: new V3(), look: new V3(), tPos: new V3(), tLook: new V3(), view: 'shelf', par: { x: 0, y: 0 }, browseX: 0 };
 function viewPose(name, outPos, outLook) {
   const narrow = camera.aspect < .95; let box, dir;
+  if (name === 'roulette') {
+    /* the casino corner: the wheel from above, the way you lean over a table */
+    outLook.set(RL.x, RL.top + 6, RL.z + 4); dir = new V3(0, 1.2, 1).normalize();
+    outPos.copy(outLook).addScaledVector(dir, narrow ? fitDist(110, 160) : fitDist(176, 116)); return;
+  }
   const sb = typeof stageBox === 'function' ? stageBox(name) : null;
   if (sb) { sb.dir.normalize(); outLook.set(sb.box.cx, sb.box.cy, sb.box.cz ?? 0); outPos.copy(outLook).addScaledVector(sb.dir, fitDist(sb.box.w, sb.box.h)); return; }
   if (isCases() && (name === 'shelf' || name === 'browse')) {
@@ -79,7 +84,7 @@ function updateCamera(dt) {
   /* with the bookcases the ceiling light follows you along the room; over the wall shelf it stays put */
   const k = cam.snap ? 1 : 1 - Math.exp(-2.5 * dt / SPEED); cam.snap = false;
   /* the cinema light follows you into every room that is not the desk, always from the upper left */
-  const roam = isCases() || STAGE.name === 'tv' || (LP.keyOff && (STAGE.name === 'video' || STAGE.name === 'music'));
+  const roam = cam.view === 'roulette' || isCases() || STAGE.name === 'tv' || (LP.keyOff && (STAGE.name === 'video' || STAGE.name === 'music'));
   if (roam) { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(LP.keyOff ? _KOFF2.fromArray(LP.keyOff) : _KOFF); key.position.lerp(_kp, k); }
   else { key.target.position.lerp(KEY_AIM, k); key.position.lerp(KEY_POS, k); }
   key.target.updateMatrixWorld();

@@ -1,7 +1,7 @@
 {
   "name": "myvlibrary-web",
   "private": true,
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Estantería 3D de MyVLibrary (la parte web que carga la extensión de Playnite)",
   "type": "module",
   "scripts": {

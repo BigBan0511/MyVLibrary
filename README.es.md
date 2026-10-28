@@ -19,6 +19,7 @@ Cada sistema tiene su sitio. Los juegos de PC están en una balda sobre una mesa
 - **Filtros.** El botón Filtro de arriba enseña todos los juegos, solo los instalados o solo los que deja pasar uno de los filtros que tengas guardados en Playnite. Con F en el teclado (Y en el mando) pasas al siguiente. Cada opción dice cuántos juegos deja, y la que no deja ninguno no se puede elegir. Las salas que se quedan vacías no aparecen, y el botón está en todas, también en la de vídeo y en la de música.
 - **Instalar desde la ficha.** Dentro de Playnite, la ficha del juego tiene una fila Instalación: instalarlo o desinstalarlo (se encargan Playnite y la tienda del juego), abrir su carpeta, verlo en Playnite o marcarlo como instalado o no instalado cuando Playnite lo tiene mal. Marcarlo solo cambia lo que Playnite tiene apuntado: no instala ni borra nada.
 - **Mirar de cerca.** Pasa el ratón por encima de un juego, o llega a él con el mando, y la vista se acerca para que leas bien los lomos; al apartarte vuelve a alejarse. Elige cuánto en Ajustes → Zoom al pasar por encima (Sí, Suave o No).
+- **La ruleta.** El botón Ruleta de arriba (R en el teclado, Back / View en el mando) te lleva a una mesa de casino al fondo, pasada la última sala. Eliges qué juegos van en la rueda: todos, un estado, una categoría o un sistema, uno de tus filtros guardados de Playnite o los que marques a mano, y si quieres solo los instalados. Cada casilla lleva la carátula de un juego. Tiras, y cuando la bola se para, «Ir a por él» te lleva a la sala de ese juego y te lo pone en las manos.
 - **El formato que quieras.** Cada juego de PC puede ir en una caja DVD, una caja de CD, una caja de CD grande (como las de PlayStation o Dreamcast PAL), una caja grande de cartón, una caja de disquetes de 3½" de finales de los 90 o una caja de cartucho de 16 bits. Lo eliges en la ficha del juego (Formato) y puedes mezclarlos en la misma balda. La caja que tienes en la mano se cambia al momento y la balda le hace sitio al devolverla. Si no eliges nada, va según el año: disquetes antes de 1994, caja de CD de 1994 a 2003 y DVD después.
 - **Cada consola, con su formato.** Los juegos de consola van en la caja y el medio de su sistema: PlayStation en caja de CD grande, PS2 y posteriores en caja DVD, Super Nintendo, Nintendo 64 o Switch en cartucho… Así la consola siempre recibe lo que espera. Si quieres cambiarlos, en Ajustes → Formato en consolas elige «Libre».
 - **Una sala por sistema.** Con los botones ‹ › junto al nombre del sistema (o Q / E, LB / RB) vas andando de un sistema a otro. Solo salen los sistemas que tienes en Playnite. El PC va en la mesa; el resto, en la sala de la tele: tele de tubo hasta la generación de PS2 y tele plana a partir de PS3, Xbox 360 y Wii.
@@ -82,6 +83,7 @@ Tienes tres formas de abrir la estantería:
 | Quitar el precinto | arrastrar la lengüeta | Intro | A |
 | Abrir la caja / meter el disco | botones de abajo | Intro | A |
 | Leer el manual | clic en el manual | M | X |
+| Ruleta (entrar / tirar / ir a por él) | Botón Ruleta | R / Intro o Espacio / Intro | Back / A o Y / X |
 | Filtrar (todos, instalados, tus filtros de Playnite) | Botón Filtro de arriba | F | Y |
 | Cambiar de sistema (salas por sistema) | ‹ › junto al sistema | Q / E | LB / RB |
 | Cambiar de estante | pastillas de arriba | Q / E (Z / C en salas por sistema) | LB / RB (LT / RT en salas por sistema) |
@@ -101,7 +103,7 @@ Tienes tres formas de abrir la estantería:
 ## Qué se guarda y dónde
 
 - **En Playnite:** estado de juego, categorías, puntuación de usuario (cada estrella son 20 puntos) y notas.
-- **En los datos de la extensión:** el precinto, el polvo y el formato que hayas elegido para cada caja, las preferencias de la estantería (ambiente, luz, orden, sistema, filtro), los `.ugc` que hayas elegido, las consolas leídas de la carpeta de EmuVR, la lista de películas y series de Jellyfin con su token de acceso (nunca la contraseña), la lista de música de Navidrome con su contraseña cifrada para tu usuario de Windows (su API la pide en cada petición), una caché de carátulas reducidas y otra de las últimas canciones escuchadas (hasta 1 GB). Si nunca cambias el formato de un juego, usa el que le toca por su plataforma.
+- **En los datos de la extensión:** el precinto, el polvo y el formato que hayas elegido para cada caja, las preferencias de la estantería (ambiente, luz, orden, sistema, filtro, qué va en la ruleta), los `.ugc` que hayas elegido, las consolas leídas de la carpeta de EmuVR, la lista de películas y series de Jellyfin con su token de acceso (nunca la contraseña), la lista de música de Navidrome con su contraseña cifrada para tu usuario de Windows (su API la pide en cada petición), una caché de carátulas reducidas y otra de las últimas canciones escuchadas (hasta 1 GB). Si nunca cambias el formato de un juego, usa el que le toca por su plataforma.
 
 ## Desarrollo
 

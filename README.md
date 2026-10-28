@@ -19,6 +19,7 @@ Each system has its own place. PC games sit on a shelf above a desk with a beige
 - **Filters.** The Filter button at the top shows every game, only the installed ones, or only the games one of your saved Playnite filters (filter presets) lets through. F on the keyboard (Y on the controller) moves to the next one. Each choice says how many games it leaves, and one that leaves none can't be picked. Rooms left with nothing in them are skipped, and the button is there in every room, the video and music ones too.
 - **Install from the card.** Inside Playnite, a game's card has an Installation row: install or uninstall the game (Playnite and the game's store take care of it), open its folder, show it in Playnite, or mark it as installed or not installed when Playnite has it wrong. Marking only changes what Playnite has noted down: nothing is installed or deleted.
 - **A closer look.** Point at a game with the mouse, or move to it with the controller, and the view zooms in on it so the spines are easy to read; move away and it zooms back out. Choose how much in Settings → Zoom on hover (Yes, Gentle or No).
+- **The roulette.** The Roulette button at the top (R on the keyboard, Back / View on the controller) takes you to a casino table past the last room. Choose which games go on the wheel: all of them, one status, category or system, one of your saved Playnite filters, or the ones you tick by hand, and if you like only the installed ones. Each pocket holds a game's cover. Spin, and when the ball settles, *Go get it* takes you to that game's room and puts it in your hands.
 - **Any format you like.** Each PC game can come in a DVD case, a CD jewel case, a big CD case (like the PAL PlayStation or Dreamcast ones), a cardboard big box, a late-90s box of 3½" floppies or a 16-bit cartridge box. Pick it in the game's card (Format) and mix them on the same shelf. The case in your hands changes on the spot, and the shelf makes room when you put it back. If you don't pick one, it goes by year: floppies before 1994, a CD case from 1994 to 2003 and a DVD case after that.
 - **Each console with its own format.** Console games come in their system's case and medium: PlayStation in a big CD case, PS2 and later in a DVD case, Super Nintendo, Nintendo 64 or Switch on a cartridge… so the console always gets what it expects. To change them, set Settings → Console formats to "Free".
 - **A place per system.** The ‹ › buttons next to the system name (or Q / E, LB / RB) walk you from one system to the next. Only the systems you have in Playnite show up. PC games are on the desk; the rest are in the TV room: a CRT up to the PS2 generation and a flat TV from the PS3, Xbox 360 and Wii on.
@@ -82,6 +83,7 @@ There are three ways to open the shelf:
 | Peel off the shrink wrap | drag the tab | Enter | A |
 | Open the case / insert the disc | buttons at the bottom | Enter | A |
 | Read the manual | click the manual | M | X |
+| Roulette (in / spin / go get it) | Roulette button | R / Enter or Space / Enter | Back / A or Y / X |
 | Filter (all, installed, your Playnite filters) | Filter button at the top | F | Y |
 | Change system (By system design) | ‹ › next to the system | Q / E | LB / RB |
 | Change shelf | pills at the top | Q / E (Z / C in the By system design) | LB / RB (LT / RT in the By system design) |
@@ -101,7 +103,7 @@ There are three ways to open the shelf:
 ## What is saved, and where
 
 - **In Playnite:** completion status, categories, user score (each star is 20 points) and notes.
-- **In the extension's data:** the shrink wrap, dust and chosen format of each case, the shelf preferences (room, light, sort order, system, filter), the `.ugc` files you picked, the EmuVR consoles read from its folder, the list of Jellyfin films and series with its access token (never the password), the Navidrome music list with its password encrypted for your Windows user (its API needs it for every request), a cache of downsized covers and another of the songs played most recently (up to 1 GB). If you never change a game's format, it uses the one its platform suggests.
+- **In the extension's data:** the shrink wrap, dust and chosen format of each case, the shelf preferences (room, light, sort order, system, filter, what goes on the roulette), the `.ugc` files you picked, the EmuVR consoles read from its folder, the list of Jellyfin films and series with its access token (never the password), the Navidrome music list with its password encrypted for your Windows user (its API needs it for every request), a cache of downsized covers and another of the songs played most recently (up to 1 GB). If you never change a game's format, it uses the one its platform suggests.
 
 ## Development
 
