@@ -69,6 +69,8 @@ There are three ways to open the shelf:
 - From the main menu: **Extensions → MyVLibrary → Open the shelf in a window**.
 - Right-click a game: **MyVLibrary → Show on the shelf**. The shelf opens right on that game.
 
+In the sidebar the shelf covers Playnite's own window buttons, so it shows its own in the top right corner (minimise, maximise, close). Drag the top bar to move the window, and double-click it to maximise. If there are more shelves than fit in the top bar, scroll it with the mouse wheel or its scroll bar.
+
 **Fullscreen mode**
 
 - It opens on its own when Playnite starts. You can turn this off in the extension's settings.

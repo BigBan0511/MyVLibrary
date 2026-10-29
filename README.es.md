@@ -67,6 +67,8 @@ Tienes tres formas de abrir la estantería:
 - Desde el menú principal: **Extensiones → MyVLibrary → Abrir la estantería en una ventana**.
 - Con clic derecho sobre un juego: **MyVLibrary → Ver en la estantería**. Abre la estantería justo en ese juego.
 
+En la barra lateral, la estantería tapa los botones de ventana de Playnite, así que pone los suyos arriba a la derecha (minimizar, maximizar y cerrar). Arrastra la barra de arriba para mover la ventana y haz doble clic en ella para maximizarla. Si hay más estantes de los que caben arriba, se recorren con la rueda del ratón o con su barra de desplazamiento.
+
 **Modo pantalla completa**
 
 - Se abre sola al arrancar Playnite. Se puede desactivar en los ajustes de la extensión.

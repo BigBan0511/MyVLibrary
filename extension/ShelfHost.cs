@@ -4,9 +4,11 @@ using Playnite.SDK;
 using Playnite.SDK.Data;
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 
 namespace MyVLibrary
@@ -98,6 +100,52 @@ namespace MyVLibrary
         private void OnWindowActivated(object sender, EventArgs e)
         {
             if (IsOnScreen) Post(new System.Collections.Generic.Dictionary<string, object> { ["type"] = "activated" });
+            PostWindowState();
+        }
+
+        /// <summary>Whether the window is maximised, so the page's own window buttons show the right icon.</summary>
+        internal bool IsMaximized => (hostWindow ?? Window.GetWindow(this))?.WindowState == WindowState.Maximized;
+
+        private void PostWindowState() => Post(new System.Collections.Generic.Dictionary<string, object> { ["type"] = "winState", ["max"] = IsMaximized });
+
+        [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+
+        /// <summary>
+        /// The window buttons and the drag strip the page draws in the sidebar, where the web view covers
+        /// Playnite's own: minimise, maximise or restore, close, and moving the window by its top bar.
+        /// </summary>
+        internal void WindowAction(string act)
+        {
+            var w = hostWindow ?? Window.GetWindow(this);
+            if (w == null) return;
+            try
+            {
+                switch (act)
+                {
+                    case "min":
+                        w.WindowState = WindowState.Minimized;
+                        break;
+                    case "max":
+                        w.WindowState = w.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+                        break;
+                    case "close":
+                        w.Close();
+                        break;
+                    case "drag":
+                        // only while the left button is still held: the same move a title bar starts
+                        if ((GetAsyncKeyState(0x01) & 0x8000) == 0) return;
+                        var handle = new WindowInteropHelper(w).Handle;
+                        ReleaseCapture();
+                        SendMessage(handle, 0x0112 /* WM_SYSCOMMAND */, (IntPtr)0xF012 /* SC_MOVE + HTCAPTION */, IntPtr.Zero);
+                        break;
+                }
+            }
+            catch (Exception e)
+            {
+                logger.Warn(e, "MyVLibrary: no se ha podido " + act + " la ventana");
+            }
         }
 
         private static Task<CoreWebView2Environment> GetEnvironment(MyVLibraryPlugin plugin)

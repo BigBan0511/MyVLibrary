@@ -161,6 +161,13 @@ function onResize() {
 }
 window.addEventListener('resize', onResize);
 $('#closeBtn').addEventListener('click', () => LIB.send('close'));
+/* the sidebar's window buttons, and the top bar as the window's title bar: drag to move it, double-click to maximise */
+$('#winctl').addEventListener('click', e => { const b = e.target.closest('[data-win]'); if (b) LIB.send('window', { act: b.dataset.win }); });
+const winGrip = e => document.documentElement.classList.contains('pn-desktop') && (e.target.classList.contains('tools') || e.target.closest('.brand'));
+document.querySelector('.hud-top').addEventListener('mousedown', e => { if (e.button === 0 && winGrip(e)) LIB.send('window', { act: 'drag' }); });
+document.querySelector('.hud-top').addEventListener('dblclick', e => { if (winGrip(e)) LIB.send('window', { act: 'max' }); });
+/* the shelves bar: the mouse wheel scrolls it sideways */
+$('#pills').addEventListener('wheel', e => { const el = e.currentTarget; if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; el.scrollBy({ left: e.deltaY, behavior: 'auto' }); e.preventDefault(); }, { passive: false });
 
 /* =====================================================================
    LOOP
