@@ -58,7 +58,7 @@ function groupRank(k, n) {
 }
 function belongs(g, key) { return key === '__all' || keysOf(g).includes(key); }
 function buildGroups() {
-  const sys = curSysKey(), all = (isRooms() ? GAMES.filter(g => sysOf(g) === sys) : GAMES.filter(g => !g.video)).filter(g => passes(g)), map = new Map();
+  const sys = curSysKey(), all = (isRooms() ? GAMES.filter(g => sysOf(g) === sys) : GAMES.filter(g => !g.video && !g.music)).filter(g => passes(g)), map = new Map();
   if (isRooms() && sys === 'VIDEO') {
     /* the video room: a bookcase per library, in Jellyfin's order */
     all.forEach(g => { const k = g.lib || T('Vídeo'); if (!map.has(k)) map.set(k, []); map.get(k).push(g); });

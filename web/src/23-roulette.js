@@ -190,7 +190,7 @@ function rlDraw() {
 }
 
 /* ---------- which games go on the wheel ---------- */
-const RL_BY = [['all', 'Todos'], ['status', 'Estado'], ['cat', 'Categoría'], ['plat', 'Sistema'], ['preset', 'Filtro de Playnite'], ['pick', 'A mano']];
+const RL_BY = [['all', 'Todos'], ['status', 'Estado'], ['cat', 'Categoría'], ['plat', 'Sistema'], ['preset', 'Filtro de Playnite'], ['pick', 'Elegidos a mano']];
 const rlGames = () => GAMES.filter(g => !g.video && !g.music);
 function rlByList() { return RL_BY.filter(([v]) => v !== 'preset' || PRESETS.length); }
 /* the choices for a status, a category, a system or a saved filter, each with how many games it has */
@@ -437,7 +437,15 @@ function rlRenderResult() {
   el.innerHTML = `<span class="rl-eyebrow">${T('Te toca')}</span><canvas id="rlCover" width="300" height="420"></canvas><h2>${esc(g.t)}</h2><p>${esc(meta)}</p>
     <div class="rl-acts"><button type="button" class="primary" data-rl="go">${T('Ir a por él')}</button><button type="button" data-rl="again">${T('Tirar otra vez')}</button></div>`;
   el.hidden = false;
-  const paint = () => { const cv = $('#rlCover'); if (!cv || RL.result !== g) return; const x = cv.getContext('2d'); x.clearRect(0, 0, 300, 420); if (g.real) { const s = g.cover || g.coverSmall; if (s) coverFit(x, s, 0, 0, 300, 420); else placeholderArt(x, 300, 420, g); } else coverFit(x, drawCover(g), 0, 0, 300, 420); };
+  /* the whole cover, whatever its shape: a CD case or a big box is not cut down to a DVD's */
+  const paint = () => {
+    const cv = $('#rlCover'); if (!cv || RL.result !== g) return;
+    const s = g.real ? g.cover || g.coverSmall : drawCover(g), W = 300;
+    const H = Math.round(W * (s && imgW(s) ? Math.min(1.5, Math.max(.6, imgH(s) / imgW(s))) : 1.4));
+    if (cv.height !== H) { cv.height = H; cv.style.aspectRatio = `${W} / ${H}`; }
+    const x = cv.getContext('2d'); x.clearRect(0, 0, W, H);
+    if (s) coverFit(x, s, 0, 0, W, H); else placeholderArt(x, W, H, g);
+  };
   paint(); if (g.real && PLAYNITE) LIB.bigCover(g).then(paint);
 }
 $('#rlPanel').addEventListener('click', e => {
