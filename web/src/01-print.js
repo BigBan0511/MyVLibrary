@@ -113,13 +113,26 @@ function drawTitle(x, g, W, H, top) {
   x.globalAlpha = 1; x.shadowBlur = 0; setLS(x, 0);
 }
 
+/* ---------- real pictures (back, spine, disc, or a full wraparound scan), when the game has them ---------- */
+function artPic(g, kind) { return g.real && g.scanImg ? g.scanImg[kind] || null : null; }
+/* a full scan is back | spine | front, side by side: cut it where the case's own proportions say */
+function splitWrap(g, img) {
+  const D = DIMS[g.fmt] || DIMS.dvd, iw = imgW(img), ih = imgH(img); if (!iw || !ih) return;
+  const tot = 2 * D.w + D.d, ws = Math.max(2, Math.round(iw * D.d / tot)), wb = Math.round((iw - ws) / 2), wf = iw - ws - wb;
+  const cut = (x0, w) => { const c = mkCanvas(Math.max(1, w), ih); c.getContext('2d').drawImage(img, x0, 0, w, ih, 0, 0, w, ih); return c; };
+  g.scanImg.wrapBack = cut(0, wb); g.scanImg.wrapSpine = cut(wb, ws); g.scanImg.wrapFront = cut(wb + ws, wf);
+}
+/* a part's picture: its own file first, then the slice of the full scan */
+function artPart(g, kind) { return artPic(g, kind) || artPic(g, 'wrap' + kind[0].toUpperCase() + kind.slice(1)); }
 function drawCover(g) {
   if (g.music) return musicCover(g);
   const [W, H] = coverSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), r = rng(hash(g.id) + 3);
   if (g.real) {
-    const src = g.cover || g.coverSmall; if (src) coverFit(x, src, 0, 0, W, H); else placeholderArt(x, W, H, g);
+    const scan = artPart(g, 'front'), src = scan || g.cover || g.coverSmall; if (src) coverFit(x, src, 0, 0, W, H); else placeholderArt(x, W, H, g);
     /* lit like printed paper behind plastic, not like a screen */
     x.save(); x.globalCompositeOperation = 'soft-light'; x.fillStyle = lg(x, 0, 0, W * .8, H, [[0, 'rgba(255,238,215,.4)'], [.55, 'rgba(128,128,128,0)'], [1, 'rgba(0,0,0,.4)']]); x.fillRect(0, 0, W, H); x.restore();
+    /* a scan of the real cover stays as printed: no band of ours, no stickers; only the wear and the jewel case hinge */
+    if (scan) { if (g.hours >= 40) wear(x, W, H, r, clamp(g.hours / 100, .4, 1)); if (isClear(g)) jewelHinge(x, W, H); return x.canvas; }
     return finishCover(x, g, W, H, r, true);
   }
   drawArt(x, W, H, g);
@@ -159,12 +172,14 @@ function finishCover(x, g, W, H, r, real) {
     x.font = `700 ${Math.round(ph * .2)}px ${F.mono}`; x.fillText('3½" · 1,44 MB', px + ph * 1.02, py + ph * .72);
   }
   if (g.hours >= 40) wear(x, W, H, r, clamp(g.hours / 100, .4, 1));
-  if (isClear(g)) {
-    const hw = W * .085; x.fillStyle = 'rgba(16,18,22,.66)'; x.fillRect(0, 0, hw, H);
-    x.fillStyle = 'rgba(255,255,255,.13)'; for (let yy = 2; yy < H; yy += 5) x.fillRect(0, yy, hw, 1.6);
-    x.fillStyle = 'rgba(255,255,255,.3)'; x.fillRect(hw - 2, 0, 2, H); x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(hw, 0, 3, H);
-  }
+  if (isClear(g)) jewelHinge(x, W, H);
   return c;
+}
+/* the ridged hinge of a jewel case, over the left edge of the insert */
+function jewelHinge(x, W, H) {
+  const hw = W * .085; x.fillStyle = 'rgba(16,18,22,.66)'; x.fillRect(0, 0, hw, H);
+  x.fillStyle = 'rgba(255,255,255,.13)'; for (let yy = 2; yy < H; yy += 5) x.fillRect(0, yy, hw, 1.6);
+  x.fillStyle = 'rgba(255,255,255,.3)'; x.fillRect(hw - 2, 0, 2, H); x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(hw, 0, 3, H);
 }
 
 function shot(g, i, w, h) {
@@ -217,6 +232,8 @@ function drawBack(g, coverCanvas) {
   if (g.video) return drawVideoBack(g, coverCanvas);
   if (g.music) return musicBack(g, coverCanvas);
   const [W, H] = coverSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal;
+  /* the real back cover, when there is one */
+  const real = artPart(g, 'back'); if (real) { coverFit(x, real, 0, 0, W, H); return c; }
   const dark = lum(p[0]) < .5, base = dark ? mix(p[0], '#000000', .15) : mix(p[0], '#ffffff', .2);
   const ink = dark ? '#f6f2ea' : '#1d1a17', soft = dark ? 'rgba(246,242,234,.82)' : 'rgba(29,26,23,.8)';
   x.fillStyle = base; x.fillRect(0, 0, W, H);
@@ -286,6 +303,13 @@ function spineColors(g) {
 }
 function drawRealSpine(g) {
   const [W, H] = spineSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal, r = rng(hash(g.id) + 11);
+  /* the real spine: stood upright if the picture came lying down */
+  const sp = artPart(g, 'spine');
+  if (sp) {
+    if (imgW(sp) > imgH(sp)) { x.save(); x.translate(W, 0); x.rotate(Math.PI / 2); coverFit(x, sp, 0, 0, H, W); x.restore(); } else coverFit(x, sp, 0, 0, W, H);
+    if (g.hours >= 40) wear(x, W, H, r, clamp(g.hours / 100, .4, 1));
+    return c;
+  }
   const { base, ink, light } = spineColors(g);
   x.fillStyle = lg(x, 0, 0, W, 0, [[0, mix(base, '#000000', .22)], [.18, base], [.82, base], [1, mix(base, '#000000', .22)]]); x.fillRect(0, 0, W, H);
   const wide = isWide(g), bandH = Math.round(W * (wide ? .26 : .78));
@@ -361,6 +385,8 @@ function drawSpine(g) {
 
 function drawDisc(g, coverCanvas) {
   const S = 512, c = mkCanvas(S, S), x = c.getContext('2d'), p = g.pal, R = S / 2;
+  /* the real disc, scanned or photographed: it fills the label */
+  const dk = artPic(g, 'disc'); if (dk) { x.save(); x.beginPath(); x.arc(R, R, R, 0, 7); x.clip(); coverFit(x, dk, 0, 0, S, S); x.restore(); return c; }
   x.save(); x.beginPath(); x.arc(R, R, R, 0, 7); x.clip();
   if (g.real) { if (coverCanvas) coverFit(x, coverCanvas, 0, 0, S, S, .5, .3); else placeholderArt(x, S, S, g); }
   else { const art = mkCanvas(S, S), ax = art.getContext('2d'); drawArt(ax, S, S, g, 2); gradeArt(ax, S, S, rng(hash(g.id) + 9)); x.drawImage(art, 0, 0); }
@@ -409,6 +435,7 @@ function drawFloppyLabel(g, coverCanvas, i, n) {
 /* a cartridge label: the art edge to edge, a dark band on top and the title along the foot */
 function drawCartLabel(g, coverCanvas) {
   const W = 512, H = 266, c = mkCanvas(W, H), x = c.getContext('2d');
+  const lab = artPic(g, 'disc'); if (lab) { coverFit(x, lab, 0, 0, W, H); return c; }
   labelArt(x, g, coverCanvas, 0, 0, W, H, 4, .25);
   const tb = H * .17; x.fillStyle = '#141418'; x.fillRect(0, 0, W, tb);
   ['#d83a3a', '#e3a02f', '#3aa655', '#3a7bd5'].forEach((cl, i) => { x.fillStyle = cl; x.fillRect(0, tb + i * 3, W, 3); });

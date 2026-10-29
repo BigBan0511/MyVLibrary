@@ -232,6 +232,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 .inst.on::before{opacity:1}
 .gact{height:28px;padding:0 10px;border-radius:999px;border:1px solid var(--panel-line);background:rgba(255,255,255,.05);font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}
 .gact:hover,.gact:focus-visible{border-color:rgba(255,255,255,.4);outline:none}
+.gact.on{border-color:rgba(159,208,138,.6);color:#cfe9c4}
+.gact.x{width:28px;padding:0;margin-left:-4px;color:var(--ink-dim)}
+.art-note{margin:0;font-size:11.5px;line-height:1.4;color:var(--ink-dim)}
 .cat-edit{display:grid;gap:6px;padding:10px;border:1px solid var(--panel-line);border-radius:8px;background:rgba(0,0,0,.18)}
 .cat-edit label{display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer}
 .cat-edit input[type=checkbox]{accent-color:var(--amber);width:16px;height:16px}
@@ -504,6 +507,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 
 <div class="pop filter-pop" id="filterPop" hidden role="menu" aria-label="Filtro"></div>
 <aside class="rl-panel" id="rlPanel" hidden aria-label="Ruleta"></aside>
+<input type="file" id="artFile" accept="image/png,image/jpeg,image/webp" hidden>
 <aside class="rl-result" id="rlResult" hidden aria-live="polite"></aside>
 <div class="pop" id="settings" hidden role="dialog" aria-label="Ajustes">
   <div class="set-tabs" role="tablist"><button type="button" role="tab" data-tab-btn="general">General</button><button type="button" role="tab" data-tab-btn="look">Ambiente</button><button type="button" role="tab" data-tab-btn="music" id="tabMusic">Música</button><button type="button" role="tab" data-tab-btn="emuvr">EmuVR</button></div>
@@ -518,7 +522,10 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="set-row" data-tab="look"><span>Sonido</span><div class="seg" data-pref="sound"><button type="button" data-v="on">Sí</button><button type="button" data-v="off">No</button></div></div>
   <div class="set-row" data-tab="look"><span>Volumen de los efectos <b id="volVal" class="vol-val"></b></span><input id="volRange" class="vol" type="range" min="0" max="100" step="5"></div>
   <div class="set-row" data-tab="look"><span>Tráiler</span><div class="seg" data-pref="trailer"><button type="button" data-v="on">Con sonido</button><button type="button" data-v="mute">Sin sonido</button><button type="button" data-v="off">No</button></div></div>
-  <div class="set-row" data-tab="look"><span>Zoom al pasar por encima</span><div class="seg" data-pref="zoom"><button type="button" data-v="on">Sí</button><button type="button" data-v="soft">Suave</button><button type="button" data-v="off">No</button></div></div>
+  <div class="set-row" data-tab="look"><span>Zoom al pasar por encima</span><div class="seg" data-pref="zoom"><button type="button" data-v="soft">Suave</button><button type="button" data-v="on">Normal</button><button type="button" data-v="big">Mucho</button><button type="button" data-v="off">No</button></div></div>
+  <div class="set-row" data-tab="look"><span>Vista de la estantería</span><div class="seg" data-pref="near"><button type="button" data-v="off">Normal</button><button type="button" data-v="on">Más cerca</button></div></div>
+  <div class="set-row" data-tab="look"><span>Rueda del ratón</span><div class="seg" data-pref="wheel"><button type="button" data-v="page">Pasa página</button><button type="button" data-v="zoom">Acerca y aleja</button></div></div>
+  <div class="set-row" data-tab="look"><span>Esquinas de las cajas</span><div class="seg" data-pref="corners"><button type="button" data-v="real">Como las reales</button><button type="button" data-v="round">Redondeadas</button></div></div>
   <div class="set-row" data-tab="look"><span>Al sacar algo de la estantería</span><div class="seg" data-pref="hold"><button type="button" data-v="studio">Fondo de estudio</button><button type="button" data-v="room">En la habitación</button></div></div>
   <div class="set-row" data-tab="general"><span>Ficha al sacar un juego</span><div class="seg" data-pref="cardStart"><button type="button" data-v="hide">Plegada</button><button type="button" data-v="show">Abierta</button></div></div>
   <div class="set-row" data-tab="music"><span>Álbumes</span><div class="seg" data-pref="mfAlb"><button type="button" data-v="year">Por año</button><button type="button" data-v="lp">Vinilo</button><button type="button" data-v="cass">Casete</button><button type="button" data-v="cd">CD</button></div></div>

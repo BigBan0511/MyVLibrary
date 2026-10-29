@@ -214,6 +214,16 @@ namespace MyVLibrary
                 core.Settings.AreBrowserAcceleratorKeysEnabled = plugin.Settings.DevTools;
                 core.SetVirtualHostNameToFolderMapping(AppHost, plugin.WebDir, CoreWebView2HostResourceAccessKind.Deny);
                 // trailers and logos from Extra Metadata Loader, and pictures downloaded from descriptions
+                // (made if it is not there yet, so pictures saved from the card can be shown straight away)
+                try
+                {
+                    Directory.CreateDirectory(plugin.Bridge.ExtraRoot);
+                }
+                catch (Exception e)
+                {
+                    logger.Warn(e, "MyVLibrary: no se ha podido crear la carpeta ExtraMetadata");
+                }
+
                 if (Directory.Exists(plugin.Bridge.ExtraRoot))
                 {
                     core.SetVirtualHostNameToFolderMapping("extra.myvlibrary", plugin.Bridge.ExtraRoot, CoreWebView2HostResourceAccessKind.Allow);

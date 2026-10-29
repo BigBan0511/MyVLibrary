@@ -18,7 +18,9 @@ Cada sistema tiene su sitio. Los juegos de PC están en una balda sobre una mesa
 - **Estantes.** Arriba a la derecha eliges qué hay en la balda: todos los juegos o un estado (Jugando, Superados…). También puedes agruparlos por categoría, plataforma o formato. Si no caben, la balda tiene páginas («Siguiente»).
 - **Filtros.** El botón Filtro de arriba enseña todos los juegos, solo los instalados o solo los que deja pasar uno de los filtros que tengas guardados en Playnite. Con F en el teclado (Y en el mando) pasas al siguiente. Cada opción dice cuántos juegos deja, y la que no deja ninguno no se puede elegir. Las salas que se quedan vacías no aparecen, y el botón está en todas, también en la de vídeo y en la de música.
 - **Instalar desde la ficha.** Dentro de Playnite, la ficha del juego tiene una fila Instalación: instalarlo o desinstalarlo (se encargan Playnite y la tienda del juego), abrir su carpeta, verlo en Playnite o marcarlo como instalado o no instalado cuando Playnite lo tiene mal. Marcarlo solo cambia lo que Playnite tiene apuntado: no instala ni borra nada.
-- **Mirar de cerca.** Pasa el ratón por encima de un juego, o llega a él con el mando, y la vista se acerca para que leas bien los lomos; al apartarte vuelve a alejarse. Elige cuánto en Ajustes → Zoom al pasar por encima (Sí, Suave o No).
+- **Mirar de cerca.** Pasa el ratón por encima de un juego, o llega a él con el mando, y la vista se acerca para que leas bien los lomos; al apartarte vuelve a alejarse. Elige cuánto en Ajustes → Zoom al pasar por encima (Suave, Normal, Mucho o No). Para más: Vista de la estantería → Más cerca deja la vista acercada siempre, y Rueda del ratón → Acerca y aleja hace que la rueda acerque hacia donde apuntas (entonces las páginas se pasan con los botones y las flechas). En el teclado, + y − acercan y alejan, y 0 vuelve.
+- **Escaneos reales: contraportada, lomo, disco.** Cada caja puede llevar la contraportada, el lomo y el disco (o la etiqueta del cartucho) reales de tu copia, y una portada escaneada sale tal cual está impresa. Se añaden desde la ficha de la caja (Imágenes de la caja): un escaneo completo (contraportada, lomo y portada en una sola imagen, que se corta según las proporciones de la caja) o cada parte por separado. Se guardan en la carpeta ExtraMetadata del juego (`ExtraMetadata\games\<id del juego>\`), y también se usan las que otras herramientas dejen ahí con los nombres habituales: `Back`, `Box - Back`, `Spine`, `Box - Spine`, `Disc`, `Cart - Front`, `Full`, `Box - Full`… en PNG, JPG o WebP.
+- **Esquinas de las cajas.** Como las reales por defecto (una caja de DVD apenas está redondeada y una de cartón es cuadrada), o el aspecto más suave y redondeado: Ajustes → Esquinas de las cajas.
 - **La ruleta.** El botón Ruleta de arriba (R en el teclado, Back / View en el mando) te lleva a una mesa de casino al fondo, pasada la última sala. Eliges qué juegos van en la rueda: todos, un estado, una categoría o un sistema, uno de tus filtros guardados de Playnite o los que marques a mano, y si quieres solo los instalados. Cada casilla lleva la carátula de un juego. Tiras, y cuando la bola se para, «Ir a por él» te lleva a la sala de ese juego y te lo pone en las manos.
 - **El formato que quieras.** Cada juego de PC puede ir en una caja DVD, una caja de CD, una caja de CD grande (como las de PlayStation o Dreamcast PAL), una caja grande de cartón, una caja de disquetes de 3½" de finales de los 90 o una caja de cartucho de 16 bits. Lo eliges en la ficha del juego (Formato) y puedes mezclarlos en la misma balda. La caja que tienes en la mano se cambia al momento y la balda le hace sitio al devolverla. Si no eliges nada, va según el año: disquetes antes de 1994, caja de CD de 1994 a 2003 y DVD después.
 - **Cada consola, con su formato.** Los juegos de consola van en la caja y el medio de su sistema: PlayStation en caja de CD grande, PS2 y posteriores en caja DVD, Super Nintendo, Nintendo 64 o Switch en cartucho… Así la consola siempre recibe lo que espera. Si quieres cambiarlos, en Ajustes → Formato en consolas elige «Libre».
@@ -85,6 +87,7 @@ En la barra lateral, la estantería tapa los botones de ventana de Playnite, as�
 | Quitar el precinto | arrastrar la lengüeta | Intro | A |
 | Abrir la caja / meter el disco | botones de abajo | Intro | A |
 | Leer el manual | clic en el manual | M | X |
+| Acercar la estantería | rueda (si está para acercar) | + / − / 0 | |
 | Ruleta (entrar / tirar / ir a por él) | Botón Ruleta | R / Intro o Espacio / Intro | Back / A o Y / X |
 | Filtrar (todos, instalados, tus filtros de Playnite) | Botón Filtro de arriba | F | Y |
 | Cambiar de sistema (salas por sistema) | ‹ › junto al sistema | Q / E | LB / RB |
@@ -104,7 +107,7 @@ En la barra lateral, la estantería tapa los botones de ventana de Playnite, as�
 
 ## Qué se guarda y dónde
 
-- **En Playnite:** estado de juego, categorías, puntuación de usuario (cada estrella son 20 puntos) y notas.
+- **En Playnite:** estado de juego, categorías, puntuación de usuario (cada estrella son 20 puntos) y notas. Las imágenes de la caja que añadas desde la ficha van a la carpeta ExtraMetadata del juego.
 - **En los datos de la extensión:** el precinto, el polvo y el formato que hayas elegido para cada caja, las preferencias de la estantería (ambiente, luz, orden, sistema, filtro, qué va en la ruleta), los `.ugc` que hayas elegido, las consolas leídas de la carpeta de EmuVR, la lista de películas y series de Jellyfin con su token de acceso (nunca la contraseña), la lista de música de Navidrome con su contraseña cifrada para tu usuario de Windows (su API la pide en cada petición), una caché de carátulas reducidas y otra de las últimas canciones escuchadas (hasta 1 GB). Si nunca cambias el formato de un juego, usa el que le toca por su plataforma.
 
 ## Desarrollo
@@ -140,7 +143,7 @@ node build.mjs                 # web/dist/, lo que lleva la extensión
 
 - La extensión sirve la carpeta `web` en `https://app.myvlibrary/` y las carátulas en `https://media.myvlibrary/cover/{id}?w=…`, reducidas y guardadas en caché.
 - Página y extensión se pasan mensajes JSON con `chrome.webview.postMessage`.
-- La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory`, `release` y `game`.
+- La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory`, `release`, `game`, `setArt` y `window`.
 - La extensión responde con `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad`, `focus` y `notice`.
 
 ## Agradecimientos

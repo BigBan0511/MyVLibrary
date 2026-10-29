@@ -96,11 +96,17 @@ const _kl = new V3(), _kp = new V3(), _KOFF = new V3(66, 222, 236), _KOFF2 = new
 /* ---------- hover zoom: the view closes in on the game under the mouse or the pad's focus ----------
    A lens, not a camera move: only part of the picture is drawn, larger. The point under the mouse stays
    under the mouse at every zoom, so what you point at never slips away while it closes in. */
-const lens = { k: 0, want: 0, since: 0, lost: 0, px: .5, py: .5, sx: .5, sy: .5, hitT: 0 };
-const LENS_Z = { on: 1.6, soft: 1.3 }, _lv = new V3();
+const lens = { k: 0, want: 0, since: 0, lost: 0, px: .5, py: .5, sx: .5, sy: .5, hitT: 0, manual: 1, base: 1 };
+const LENS_Z = { soft: 1.3, on: 1.6, big: 2.4 }, _lv = new V3();
+/* the zoom kept on the shelf whatever you point at: the closer view, times what the wheel has added */
+function lensBaseWant() { return mode === 'shelf' ? (prefs.near === 'on' ? 1.7 : 1) * lens.manual : 1; }
+/* how much is magnified right now: the hover zoom or the kept one, whichever is more */
+function lensZoomNow() { return Math.min(4.5, Math.max(1 + ((LENS_Z[prefs.zoom] || LENS_Z.on) - 1) * lens.k, lens.base)); }
+/* the wheel (or + and -): a zoom that stays until you take it back */
+function zoomBy(f) { lens.manual = clamp(lens.manual * f, 1, 3.2); if (lens.manual < 1.03 && f < 1) lens.manual = 1; }
 /* px/py: the point of the full picture to show (0-1 across and down); sx/sy: where on screen it goes */
 function lensApply() {
-  const W = innerWidth, H = innerHeight, Z = 1 + ((LENS_Z[prefs.zoom] || LENS_Z.on) - 1) * lens.k;
+  const W = innerWidth, H = innerHeight, Z = lensZoomNow();
   if (Z < 1.001) { if (camera.view && camera.view.enabled) camera.clearViewOffset(); return; }
   const w = W / Z, h = H / Z;
   camera.setViewOffset(W, H, clamp(lens.px * W - lens.sx * w, 0, W - w), clamp(lens.py * H - lens.sy * h, 0, H - h), w, h);
@@ -128,8 +134,9 @@ function updateLens(dt, now) {
   else { lens.since = 0; if (!lens.lost) lens.lost = now; if (!can || now - lens.lost > 380 * SPEED) lens.want = 0; }
   if (RM) lens.k = lens.want;
   else { lens.k += (lens.want - lens.k) * (1 - Math.exp(-(lens.want ? 5 : 8) * dt / SPEED)); if (!lens.want && lens.k < .002) lens.k = 0; }
+  lens.base = RM ? lensBaseWant() : lens.base + (lensBaseWant() - lens.base) * (1 - Math.exp(-6 * dt / SPEED)); if (Math.abs(lens.base - 1) < .002 && lensBaseWant() === 1) lens.base = 1;
   /* out of the zoom it simply waits where it will be needed */
-  lensAim(lens.k > 0 ? dt : undefined);
+  lensAim(lensZoomNow() > 1.001 ? dt : undefined);
   lensApply();
 }
 function updateRowLights() { }

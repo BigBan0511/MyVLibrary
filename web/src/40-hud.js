@@ -162,7 +162,7 @@ function renderInfo(force) {
   tab.hidden = true;
   if (active.g.music) { const g = active.g, mk = ['m', g.id, g.fmt, BAG.length, BAG.map(t => t.id).join(',').length].join('|'); el.hidden = false; if (!force && mk === lastInfoKey) return; lastInfoKey = mk; el.classList.add('open'); renderMusicInfo(el, g); return; }
   if (active.g.video) { const g = active.g, s = seasonOf(g), vk = ['v', g.id, g.fmt, g.seasonIdx, g.seasons ? g.seasons.length : 0, s && s.eps ? s.eps.length : -1, g.pos, g.played].join('|'); el.hidden = false; if (!force && vk === lastInfoKey) return; lastInfoKey = vk; el.classList.add('open'); renderVideoInfo(el, g); return; }
-  const g = active.g, key = [g.id, g.fmt, g.installed, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
+  const g = active.g, key = [g.id, g.fmt, g.installed, g.scanKey, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
   const idle = g.last === null || g.last === undefined ? g.added : g.last;
   const dustTxt = T(g.wrapped ? 'Ninguno, está precintado' : g.dust > .6 ? 'Mucho' : g.dust > .25 ? 'Algo' : g.dust > .04 ? 'Poco' : 'Limpio');
@@ -187,8 +187,32 @@ function gameActs(g) {
   const b = (act, label, tip) => `<button type="button" class="gact" data-gact="${act}"${tip ? ` title="${esc(tip)}"` : ''}>${label}</button>`, mark = T('Solo cambia lo que Playnite tiene apuntado: no instala ni borra nada.');
   return `<div class="acts"><span class="lbl">${T('Instalación')}</span><div class="act-row"><span class="inst ${g.installed ? 'on' : ''}">${T(g.installed ? 'Instalado' : 'Sin instalar')}</span>`
     + (g.installed ? b('uninstall', T('Desinstalar')) + b('folder', T('Abrir carpeta')) + b('markOff', T('Marcar como no instalado'), mark) : b('install', T('Instalar')) + b('markOn', T('Marcar como instalado'), mark))
-    + b('reveal', T('Ver en Playnite')) + `</div></div>`;
+    + b('reveal', T('Ver en Playnite')) + `</div></div>` + artActs(g);
 }
+/* real pictures for the case: a full scan, or the back, the spine and the disc one by one */
+function artActs(g) {
+  const art = g.scans || {}, med = mediaOf(g), disc = med === 'cart' ? T('Etiqueta') : med === 'disc' ? T('Disco') : '';
+  const one = (k, label) => art[k] ? `<button type="button" class="gact on" data-art="${k}" title="${esc(T('Cambiar'))}">✓ ${label}</button><button type="button" class="gact x" data-artx="${k}" aria-label="${esc(T('Quitar') + ': ' + label)}" title="${esc(T('Quitar'))}">×</button>` : `<button type="button" class="gact" data-art="${k}">+ ${label}</button>`;
+  return `<div class="acts"><span class="lbl">${T('Imágenes de la caja')}</span><div class="act-row">${one('full', T('Escaneo completo'))}${one('back', T('Contraportada'))}${one('spine', T('Lomo'))}${disc ? one('disc', disc) : ''}</div>`
+    + `<p class="art-note">${T('Escaneos reales de tu copia: el completo es contraportada, lomo y portada en una sola imagen. Se guardan en la carpeta de metadatos del juego.')}</p></div>`;
+}
+/* the picture chosen for a part: made no bigger than it needs to be, then handed to the extension to keep */
+let artKind = null;
+function pickArt(kind) { artKind = kind; const f = $('#artFile'); f.value = ''; f.click(); }
+$('#artFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0], g = active && active.g, kind = artKind; if (!file || !g || !kind) return;
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    const max = kind === 'full' ? 4096 : 2400, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)), c = mkCanvas(Math.round(img.naturalWidth * k), Math.round(img.naturalHeight * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    /* a disc keeps its see-through edges; the rest go as JPEG */
+    const data = kind === 'disc' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', .92);
+    LIB.send('setArt', { id: g.id, kind, data }); toast(T('Imagen guardada'));
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast(T('No se ha podido leer esa imagen')); };
+  img.src = url;
+});
 function gameAct(g, act) {
   if (!PLAYNITE || !g.real) return;
   LIB.send('game', { id: g.id, act }); sfx.tick();
@@ -213,6 +237,8 @@ $('#info').addEventListener('click', e => {
   if (e.target.closest('[data-more]')) { infoOpen = !infoOpen; renderInfo(true); return; }
   if (e.target.closest('[data-hide]')) { setCard('hide'); return; }
   const ga = e.target.closest('[data-gact]'); if (ga) { gameAct(active.g, ga.dataset.gact); return; }
+  const ar = e.target.closest('[data-art]'); if (ar && PLAYNITE) { pickArt(ar.dataset.art); return; }
+  const ax = e.target.closest('[data-artx]'); if (ax && PLAYNITE) { LIB.send('setArt', { id: active.g.id, kind: ax.dataset.artx, data: '' }); return; }
   if (e.target.closest('[data-edit]')) { infoEdit = !infoEdit; renderInfo(true); if (infoEdit) { const i = $('#catNew'); if (i && !coarse) i.focus(); } }
 });
 $('#info').addEventListener('submit', e => {
@@ -385,6 +411,9 @@ setPop.addEventListener('click', e => {
   if (k === 'mfAlb' || k === 'mfPl' || k === 'mfSong') setMusicBulk([{ mfAlb: 'album', mfPl: 'playlist', mfSong: 'song' }[k]], prefs[k]);
   if (k === 'mixFmt') renderBag();
   if (k === 'group') { prefs.shelf = '__all'; savePrefs(); relayout({ full: true, reset: true }); }
+  if (k === 'wheel' && prefs.wheel !== 'zoom') lens.manual = 1;
+  /* the cases are built once with their corners: the shelf reloads to build them again */
+  if (k === 'corners') { toast(T('Cambiando las esquinas…')); setTimeout(() => location.reload(), 350); }
 });
 document.addEventListener('pointerdown', e => {
   if (!setPop.hidden && !e.target.closest('#settings') && !e.target.closest('#setBtn')) { setPop.hidden = true; setBtn.setAttribute('aria-expanded', 'false'); }

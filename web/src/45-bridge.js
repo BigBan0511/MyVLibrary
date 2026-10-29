@@ -59,10 +59,18 @@ const LIB = {
     this.imgs.set(url, p); if (this.imgs.size > 900) { const k = this.imgs.keys().next().value; this.imgs.delete(k); }
     return p;
   },
+  /* the game's real pictures, from its ExtraMetadata folder (or, in the pretend Playnite, kept in memory) */
+  scanUrl(g, kind) { const v = g.scans && g.scans[kind]; if (!v) return null; return /^(data|mock):/.test(v) ? v : `https://extra.myvlibrary/${encodeURIComponent(g.id)}/${v}`; },
+  scansFor(g, kinds) {
+    if (!g.real || !g.scans) return Promise.resolve(false);
+    const key = g.scanKey, jobs = kinds.filter(k => g.scans[k] && !g.scanLoaded[k]).map(k => { g.scanLoaded[k] = true; return this.img(this.scanUrl(g, k)).then(img => { if (!img || g.scanKey !== key) return; g.scanImg[k] = img; if (k === 'full') splitWrap(g, img); }); });
+    return jobs.length ? Promise.all(jobs).then(() => true) : Promise.resolve(false);
+  },
+  needsSpineArt(g) { return !!g.scans && ((g.scans.spine && !g.scanLoaded.spine) || (g.scans.full && !g.scanLoaded.full)); },
   /* spines need a small cover each: load them a few at a time, nearest first */
   pageShown(list) {
     if (!PLAYNITE) return;
-    this.queue = list.filter(g => g.real && ((g.hasCover && !g.coverSmall) || (g.hasLogo && !g.logo)));
+    this.queue = list.filter(g => g.real && ((g.hasCover && !g.coverSmall) || (g.hasLogo && !g.logo) || this.needsSpineArt(g)));
     for (let k = 0; k < 6; k++) this.pump();
     /* the face-out ones show their front: load it straight away */
     navOrder.filter(c => c.faceOut).forEach(c => this.bigCover(c.g));
@@ -72,6 +80,7 @@ const LIB = {
     const jobs = [];
     if (g.hasCover && !g.coverSmall) jobs.push(this.img(this.coverUrl(g, 200)).then(img => { if (img) { g.coverSmall = img; if (!g.palFromCover) { const p = paletteOf(img); if (p) { g.pal = p; g.palFromCover = true; } } } }));
     if (g.hasLogo && !g.logo) jobs.push(this.img(this.logoUrl(g)).then(img => { if (img) g.logo = img; }));
+    if (this.needsSpineArt(g)) jobs.push(this.scansFor(g, ['spine', 'full']));
     Promise.all(jobs).then(() => { this.loading--; this.refresh(g, false); this.pump(); });
   },
   refresh(g, detail) {
@@ -86,7 +95,7 @@ const LIB = {
   /* everything the case needs in your hands: the big cover, the background, the description.
      Picking waits a moment for it; whatever arrives later still gets painted on */
   prepare(g, timeout = 1500) {
-    const jobs = [this.bigCover(g)];
+    const jobs = [this.bigCover(g), this.scansFor(g, ['full', 'back', 'spine', 'disc'])];
     if (g.hasBg && !g.bg) jobs.push(this.img(this.bgUrl(g, 1280)).then(i => { if (i) g.bg = i; }));
     if (!g.detailLoaded && !g.video && !g.music) jobs.push(g.detailLoading || this.detail(g));
     const all = Promise.all(jobs).then(() => { this.refresh(g, true); this.media(g); });
@@ -205,6 +214,9 @@ const LIB = {
       ageRating: (r.age || []).join(', '), age: (() => { const m = (r.age || []).join(' ').match(/\b(3|7|12|16|18)\b/); return m ? +m[1] : null; })(), src: r.src || '', sum: r.sum || '', hasCover: !!r.hasCover, hasBg: !!r.hasBg, hasLogo: !!r.hasLogo
     });
     if ('notes' in r) g.notes = r.notes || '';
+    /* real pictures for the back, spine and disc: when they change, what was loaded goes */
+    const ak = JSON.stringify(r.scans || {});
+    if (ak !== g.scanKey) { g.scanNew = g.scanKey !== undefined || ak !== '{}'; g.scans = r.scans || {}; g.scanKey = ak; g.scanImg = {}; g.scanLoaded = {}; }
     if (old && old.ver !== r.ver) { g.cover = g.coverSmall = g.bg = null; g.palFromCover = false; }
     g.ver = r.ver || '';
     if (!g.pal) g.pal = defaultPal(g.id);
@@ -235,6 +247,7 @@ const LIB = {
     this.player = m.video ? m.video.player || '' : '';
     if (m.music) this.setMusic(m.music, true);
     if (m.focusId) this.focusId = m.focusId;
+    GAMES.forEach(g => { g.scanNew = false; });
     checkFilter();
     if (this.bootRes) { this.bootRes(); this.bootRes = null; }
     else if (mode === 'shelf') relayout({ follow: null }); else pendingRelayout = true;
@@ -246,6 +259,8 @@ const LIB = {
       if (!g) { GAMES.push(this.fromHost(r)); regroup = true; continue; }
       const f0 = g.fmt, before = passes(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '');
       this.fromHost(r, g);
+      /* new or changed real pictures: load them and repaint every copy of the case */
+      if (g.scanNew) { g.scanNew = false; for (const c of casesOf(g)) c.dirty = true; this.scansFor(g, ['full', 'back', 'spine', 'disc']).then(() => this.refresh(g, true)); }
       if (before !== passes(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '')) regroup = true;
       if (g.fmt !== f0) regroup = true;
       for (const c of casesOf(g)) { c.dirty = true; c.refreshSpine(); if (c === active || c.faceOut) c.ensureDetail(); }
@@ -379,6 +394,7 @@ const MOCKHOST = {
   },
   receive(m) {
     if (m.type === 'ndScrobble') console.log('[mock] scrobble', m.id);
+    if (m.type === 'setArt') { const r = this.lib.find(q => q.id === m.id); if (!r) return; r.scans = Object.assign({}, r.scans); if (m.data) r.scans[m.kind] = m.data; else delete r.scans[m.kind]; this.post({ type: 'games', games: [r] }); return; }
     if (m.type === 'game') {
       const r = this.lib.find(q => q.id === m.id); if (!r) return;
       if (m.act === 'install' || m.act === 'markOn' || m.act === 'uninstall' || m.act === 'markOff') { r.installed = m.act === 'install' || m.act === 'markOn'; r.presets = [...(r.installed ? ['f-inst'] : []), ...(r.cats.includes('Retro') ? ['f-retro'] : [])]; setTimeout(() => this.post({ type: 'games', games: [r] }), m.act === 'install' ? 1500 : 200); }

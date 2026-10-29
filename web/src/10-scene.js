@@ -115,7 +115,9 @@ function pgeo(fmt, kind) {
 function caseGeo(fmt) {
   if (GEO[fmt]) return GEO[fmt];
   const { w, h, d, split, shell } = DIMS[fmt], shellD = split + d / 2, lidD = d / 2 - split;
-  const rc = shell === 'card' ? .3 : shell === 'clear' ? .25 : .6, b = shell === 'card' ? .12 : shell === 'clear' ? .06 : .15;
+  /* corners like real cases (a keep case is barely rounded, a cardboard box is square), or the softer look from before */
+  const soft = prefs.corners === 'round';
+  const rc = shell === 'card' ? (soft ? .3 : .05) : shell === 'clear' ? (soft ? .25 : .1) : (soft ? .6 : .28), b = shell === 'card' ? (soft ? .12 : .03) : shell === 'clear' ? (soft ? .06 : .035) : (soft ? .15 : .07);
   GEO[fmt] = { shell: slabGeometry(w, h, shellD, rc, Math.min(b, shellD * .3)), lid: slabGeometry(w, h, lidD, rc, Math.min(b, lidD * .3)), wrap: slabGeometry(w + .1, h + .1, d + .1, rc + .05, .03), bevel: b };
   return GEO[fmt];
 }
