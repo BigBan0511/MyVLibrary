@@ -28,12 +28,13 @@ function applyDomLang() {
     const o = domOrig.get(n), k = o.trim(); if (!k) continue;
     n.nodeValue = o.replace(k, T(k));
   }
-  document.querySelectorAll('[placeholder],[aria-label]').forEach(el => {
+  document.querySelectorAll('[placeholder],[aria-label],[title]').forEach(el => {
     if (el.closest('#info,#prompts,#book')) return;
-    if (!attrOrig.has(el)) attrOrig.set(el, { placeholder: el.getAttribute('placeholder'), label: el.getAttribute('aria-label') });
+    if (!attrOrig.has(el)) attrOrig.set(el, { placeholder: el.getAttribute('placeholder'), label: el.getAttribute('aria-label'), title: el.getAttribute('title') });
     const o = attrOrig.get(el);
     if (o.placeholder) el.setAttribute('placeholder', T(o.placeholder));
     if (o.label) el.setAttribute('aria-label', T(o.label));
+    if (o.title) el.setAttribute('title', T(o.title));
   });
   document.documentElement.lang = LANG;
 }

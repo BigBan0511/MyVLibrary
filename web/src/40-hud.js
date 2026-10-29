@@ -81,7 +81,11 @@ function renderPills() {
   const el = $('#pills');
   el.innerHTML = groups.map((gr, i) => `<button type="button" class="pill-btn${i === curGroup ? ' on' : ''}" data-group="${i}" aria-pressed="${i === curGroup}">${esc(gr.label)}<span>${gr.games.length}</span></button>`).join('');
   const on = el.querySelector('.on'); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { }
+  pillEdges();
 }
+/* fade whichever edge has more shelves beyond it */
+function pillEdges() { const el = $('#pills'); if (!el) return; el.classList.toggle('more-l', el.scrollLeft > 2); el.classList.toggle('more-r', el.scrollLeft + el.clientWidth < el.scrollWidth - 2); }
+$('#pills').addEventListener('scroll', pillEdges, { passive: true }); window.addEventListener('resize', pillEdges);
 $('#pills').addEventListener('click', e => { const b = e.target.closest('[data-group]'); if (b) setGroup(+b.dataset.group); });
 
 /* switching shelf contents goes through a short dip to black, then the new cases settle in a wave */

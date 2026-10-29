@@ -495,6 +495,7 @@ namespace MyVLibrary
             message["lang"] = api.ApplicationSettings.Language;
             message["running"] = running.Select(r => new Dictionary<string, object> { ["id"] = r.Key.ToString(), ["seconds"] = (int)(DateTime.Now - r.Value).TotalSeconds }).ToList();
             message["hostPad"] = host.Kind == ShelfHost.HostKind.Fullscreen;
+            message["maximized"] = host.IsMaximized;
             message["games"] = Db.Games.Where(g => showHidden || !g.Hidden).Select(Record).ToList();
             /* films and series: the kept list now, Jellyfin's fresh one when it answers */
             var video = CachedVideo();
@@ -567,6 +568,9 @@ namespace MyVLibrary
                         break;
                     case "game":
                         GameAction(host, m);
+                        break;
+                    case "window":
+                        host.WindowAction(m.act);
                         break;
                     case "jfSeasons":
                         VideoSeasons(host, m.id);

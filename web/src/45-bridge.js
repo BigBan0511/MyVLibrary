@@ -226,6 +226,8 @@ const LIB = {
   load(m) {
     this.setLists(m); PN_STATE.mode = m.mode || 'desktop'; this.hostPad = !!m.hostPad; this.running = m.running || []; if (m.lang) setLang(m.lang);
     document.documentElement.classList.toggle('pn-fullscreen', PN_STATE.mode === 'fullscreen');
+    /* in the sidebar the page covers Playnite's own window buttons: it draws its own */
+    document.documentElement.classList.toggle('pn-desktop', PN_STATE.mode === 'desktop'); document.documentElement.classList.toggle('pn-max', !!m.maximized);
     const old = new Map(GAMES.map(g => [g.id, g]));
     GAMES.length = 0; (m.games || []).forEach(r => GAMES.push(this.fromHost(r, old.get(r.id))));
     /* the video room exists only when Jellyfin is linked and has something to show */
@@ -315,6 +317,7 @@ const LIB = {
       case 'pad': this.pad(m.button, m.state); break;
       case 'focus': this.focusGame(m.id); break;
       case 'notice': if (m.text) toast(m.text, 2800); break;
+      case 'winState': document.documentElement.classList.toggle('pn-max', !!m.max); break;
       case 'pause': this.paused = true; break;
       case 'resume': this.paused = false; lastT = performance.now(); break;
     }
