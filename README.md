@@ -8,6 +8,8 @@ Every game is a case. You take it down, peel off the shrink wrap, open it and pu
 
 Each system has its own place. PC games sit on a shelf above a desk with a beige 90s PC (CD-ROM drive, floppy drive and a CRT monitor) and a whiteboard that writes down in marker whatever you are holding. Each console's games are kept in the low TV cabinet: you sit on the rug, with the TV at eye height and the console on the floor in front of it.
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/T4Y129OF2M)
+
 ![The PC desk](docs/mesa-pc.png)
 
 ![The TV room](docs/sala-tv.png)
