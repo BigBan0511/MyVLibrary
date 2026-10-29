@@ -32,6 +32,9 @@ namespace MyVLibrary
         public long? start { get; set; }
         /* what to do with a game from its card: install, uninstall, markOn, markOff, folder, reveal */
         public string act { get; set; }
+        /* a picture for the case: full, back, spine or disc, and the picture itself as a data address */
+        public string kind { get; set; }
+        public string data { get; set; }
     }
 
     public class MediaFile
@@ -470,6 +473,7 @@ namespace MyVLibrary
                 ["hasCover"] = !string.IsNullOrEmpty(g.CoverImage),
                 ["hasBg"] = !string.IsNullOrEmpty(g.BackgroundImage),
                 ["hasLogo"] = File.Exists(Extra(g.Id, "Logo.png")),
+                ["scans"] = ArtOf(g.Id),
                 ["ver"] = Version(g),
                 ["sum"] = Summary(g.Description)
             };
@@ -571,6 +575,9 @@ namespace MyVLibrary
                         break;
                     case "window":
                         host.WindowAction(m.act);
+                        break;
+                    case "setArt":
+                        SetArt(host, m);
                         break;
                     case "jfSeasons":
                         VideoSeasons(host, m.id);
