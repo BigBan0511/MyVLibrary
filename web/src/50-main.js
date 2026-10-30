@@ -184,7 +184,8 @@ $('#pills').addEventListener('wheel', e => { const el = e.currentTarget; if (el.
 let lastT = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  if (LIB.paused || document.hidden) { lastT = now; return; }
+  /* the room waits behind the open manual (and leaves the page free to draw a real manual's pages) */
+  if (LIB.paused || document.hidden || (mode === 'manual' && !book.anim && !$('#manual').hidden)) { lastT = now; return; }
   const dt = clamp((now - lastT) / 1000, 0, .05); lastT = now;
   runTweens(now); updateCamera(dt); updateLens(dt, now); if (RL.group.visible) updateRoulette(dt, now);
   /* while zoomed the view still drifts a little with the mouse parallax: keep the hover on what is under the mouse */

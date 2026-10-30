@@ -7,6 +7,8 @@
    against a pretend Playnite, for testing in a normal browser.
    ===================================================================== */
 const MEDIA = 'https://media.myvlibrary/';
+/* Playnite's platforms, to move a game to another one from its card */
+let PLATFORMS = [];
 const PLAT_SHORT = [
   [/playstation 5|ps5/i, 'PS5'], [/playstation 4|ps4/i, 'PS4'], [/playstation 3|ps3/i, 'PS3'], [/playstation 2|ps2/i, 'PS2'], [/playstation vita|psvita|ps vita/i, 'VITA'], [/psp|playstation portable/i, 'PSP'], [/playstation|psx|ps1/i, 'PS1'],
   [/xbox series/i, 'XSX'], [/xbox one/i, 'XONE'], [/xbox 360/i, 'X360'], [/xbox/i, 'XBOX'],
@@ -60,6 +62,7 @@ const LIB = {
     return p;
   },
   /* the game's real pictures, from its ExtraMetadata folder (or, in the pretend Playnite, kept in memory) */
+  manualUrl(g) { return MOCK && /^blob:/.test(g.manualVer) ? g.manualVer : `${MEDIA}manual/${g.id}?v=${encodeURIComponent(g.manualVer)}`; },
   scanUrl(g, kind) { const v = g.scans && g.scans[kind]; if (!v) return null; return /^(data|mock):/.test(v) ? v : `https://extra.myvlibrary/${encodeURIComponent(g.id)}/${v}`; },
   scansFor(g, kinds) {
     if (!g.real || !g.scans) return Promise.resolve(false);
@@ -95,7 +98,7 @@ const LIB = {
   /* everything the case needs in your hands: the big cover, the background, the description.
      Picking waits a moment for it; whatever arrives later still gets painted on */
   prepare(g, timeout = 1500) {
-    const jobs = [this.bigCover(g), this.scansFor(g, SCAN_KINDS)];
+    const jobs = [this.bigCover(g), this.scansFor(g, SCAN_KINDS), manualCoverFor(g)];
     if (g.hasBg && !g.bg) jobs.push(this.img(this.bgUrl(g, 1280)).then(i => { if (i) g.bg = i; }));
     if (!g.detailLoaded && !g.video && !g.music) jobs.push(g.detailLoading || this.detail(g));
     const all = Promise.all(jobs).then(() => { this.refresh(g, true); this.media(g); });
@@ -198,6 +201,7 @@ const LIB = {
     if (fields.includes('cats')) m.cats = g.cats.slice();
     if (fields.includes('rating')) m.score = g.rating ? g.rating * 20 : null;
     if (fields.includes('notes')) m.notes = g.notes || '';
+    if (fields.includes('platform')) m.platform = g.platId || '';
     this.send('update', m);
   },
 
@@ -223,6 +227,11 @@ const LIB = {
     const fk = JSON.stringify(r.scanFit || {});
     if (fk !== g.fitKey) { g.fitNew = g.fitKey !== undefined; g.scanFit = r.scanFit || {}; g.fitKey = fk; }
     g.coverVer = r.coverVer || '';
+    /* the game's real manual (a PDF): a new one is read again, and its first page becomes the manual's cover */
+    const mv = (r.manual && r.manual.v) || '';
+    if (mv !== (g.manualVer || '')) { if (g.pdfDoc) g.pdfDoc.then(d => d.destroy()).catch(() => { }); g.pdfDoc = null; g.manualCover = null; g.manualNew = !!old; }
+    g.manualVer = mv;
+    g.manualOwn = !!(r.manual && r.manual.own);
     if (old && old.ver !== r.ver) { g.cover = g.coverSmall = g.bg = null; g.palFromCover = false; }
     g.ver = r.ver || '';
     if (!g.pal) g.pal = defaultPal(g.id);
@@ -240,6 +249,7 @@ const LIB = {
     st.forEach(s => { STATUS_SHELF[s.name] = s.name; STATUS_KIND[s.name] = statusKind(s.name); STATUS_CLASS[s.name] = KIND_CLASS[STATUS_KIND[s.name]]; this.statusIds[s.name] = s.id; });
     prefs.cats = (m.categories || []).map(c => c.name).sort((a, b) => a.localeCompare(b, 'es'));
     if (m.presets) { PRESETS = m.presets.map(p => ({ id: p.id, name: p.name || '' })); renderFilter(); }
+    if (m.platforms) PLATFORMS = m.platforms.map(p => ({ id: p.id, name: p.name || '' })).filter(p => p.name).sort((a, b) => a.name.localeCompare(b.name, LANG));
   },
   load(m) {
     this.setLists(m); PN_STATE.mode = m.mode || 'desktop'; this.hostPad = !!m.hostPad; this.running = m.running || []; if (m.lang) setLang(m.lang);
@@ -263,13 +273,14 @@ const LIB = {
     for (const r of list || []) {
       const g = GAMES.find(q => q.id === r.id);
       if (!g) { GAMES.push(this.fromHost(r)); regroup = true; continue; }
-      const f0 = g.fmt, before = passes(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '');
+      const f0 = g.fmt, before = passes(g) + '|' + sysOf(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '');
       this.fromHost(r, g);
       /* new or changed real pictures: load them and repaint every copy of the case */
       if (g.scanNew && FIT.open && FIT.g === g) closeFit(false);
       if (g.scanNew) { g.scanNew = false; g.fitNew = false; for (const c of casesOf(g)) c.dirty = true; this.scansFor(g, SCAN_KINDS).then(() => this.refresh(g, true)); }
       else if (g.fitNew) { g.fitNew = false; if (g.scanImg && g.scanImg.full) splitWrap(g, g.scanImg.full); }
-      if (before !== passes(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '')) regroup = true;
+      if (g.manualNew) { g.manualNew = false; if (active && active.g === g) manualCoverFor(g).then(() => this.refresh(g, true)); }
+      if (before !== passes(g) + '|' + sysOf(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '')) regroup = true;
       if (g.fmt !== f0) regroup = true;
       for (const c of casesOf(g)) { c.dirty = true; c.refreshSpine(); if (c === active || c.faceOut) c.ensureDetail(); }
     }
@@ -373,8 +384,11 @@ if (HOST) HOST.addEventListener('message', e => LIB.onMessage(e.data));
 /* ---------- a pretend Playnite for testing in a browser (?mock) ---------- */
 const MOCKHOST = {
   lib: null,
+  plats: ['PC (Windows)', 'Sony PlayStation', 'Sony PlayStation 2', 'Nintendo Switch', 'Sega Dreamcast', 'Nintendo GameCube', 'Microsoft Xbox 360'],
   post(m) { setTimeout(() => LIB.onMessage(JSON.parse(JSON.stringify(m))), 40); },
   iso(days) { return days === null || days === undefined ? null : new Date(Date.now() - days * 864e5).toISOString(); },
+  /* a PDF chosen in the card stands for the one Playnite would copy into the game's folder */
+  pickManual(id, file) { const r = this.lib.find(q => q.id === id); if (!r) return; r.manual = { v: URL.createObjectURL(file), own: true }; this.post({ type: 'games', games: [r] }); },
   /* ?mock&running=id: the shelf opens while that game is already running */
   runningAtStart() { const id = new URLSearchParams(location.search).get('running'); return id ? [{ id, seconds: 300 }] : []; },
   build() {
@@ -414,13 +428,14 @@ const MOCKHOST = {
     if (m.type === 'jfEpisodes') { const v = this.vsrc.get(m.id), idx = +String(m.season).split('-s').pop(), s = v && v.demoSeasons.find(x => x.idx === idx); this.post({ type: 'jfEpisodes', id: m.id, season: m.season, episodes: s ? demoEpisodes(v, s).map(e => ({ id: e.id, n: e.n, season: e.season, name: e.t, runtime: e.runtime, played: e.played, pos: e.pos })) : [] }); }
     if (m.type === 'jfPlay') { console.log('[mock] jfPlay', m); setTimeout(() => this.post({ type: 'videoStarted', id: m.id }), 1500); this.vT = setTimeout(() => this.post({ type: 'videoStopped', id: m.id, pos: 42 * 60 * TICKS, played: false, active: !document.hidden }), 9000); }
     if (m.type === 'jfStop') { clearTimeout(this.vT); console.log('[mock] jfStop'); }
-    if (m.type === 'ready') { this.lib = this.build(); this.lib.forEach(r => { r.presets = [...(r.installed ? ['f-inst'] : []), ...(r.cats.includes('Retro') ? ['f-retro'] : [])]; }); this.post({ type: 'library', mode: 'desktop', presets: [{ id: 'f-inst', name: 'Instalados' }, { id: 'f-retro', name: 'Retro' }, { id: 'f-empty', name: 'Vacío' }], statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), games: this.lib, running: this.runningAtStart(), video: this.videos(), music: this.music() }); }
+    if (m.type === 'ready') { this.lib = this.build(); this.lib.forEach(r => { r.presets = [...(r.installed ? ['f-inst'] : []), ...(r.cats.includes('Retro') ? ['f-retro'] : [])]; }); this.post({ type: 'library', mode: 'desktop', presets: [{ id: 'f-inst', name: 'Instalados' }, { id: 'f-retro', name: 'Retro' }, { id: 'f-empty', name: 'Vacío' }], statuses: ['Jugando', 'En espera', 'Planeado', 'No jugado', 'Jugado', 'Superado', 'Completado', 'Abandonado'].map((n, i) => ({ id: 's' + i, name: n })), categories: ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'].map((n, i) => ({ id: 'c' + i, name: n })), platforms: this.plats.map((n, i) => ({ id: 'p' + i, name: n })), games: this.lib, running: this.runningAtStart(), video: this.videos(), music: this.music() }); }
     if (m.type === 'detail') { const s = this.src.get(m.id); this.post({ type: 'detail', id: m.id, desc: s ? `<p>${esc(s.desc)}</p><p>${esc(s.sum)}</p><script>alert(1)<\/script>` : '', links: [{ name: 'Web oficial', url: 'https://example.com' }, { name: 'Wiki', url: 'https://example.org/wiki' }] }); }
     if (m.type === 'start') { const r = this.lib.find(q => q.id === m.id); if (r && !r.installed) { this.post({ type: 'notInstalled', id: m.id }); return; } setTimeout(() => this.post({ type: 'started', id: m.id }), 1800);
       /* ?mock&leftover: Playnite gives up after a few seconds while the game keeps running */
       const left = /leftover/.test(location.search); if (left) setTimeout(() => this.post({ type: 'tracking', id: m.id }), 5000);
       this.stopT = setTimeout(() => { this.post({ type: 'stopped', id: m.id, seconds: 754, active: !document.hidden }); if (r) { r.playtime += 754; r.playCount++; r.lastActivity = new Date().toISOString(); this.post({ type: 'games', games: [r] }); } }, left ? 45000 : 14000); }
-    if (m.type === 'update') { const r = this.lib.find(q => q.id === m.id); if (r) { if ('status' in m) r.status = m.status; if (m.cats) r.cats = m.cats; if ('score' in m) r.score = m.score; if ('notes' in m) r.notes = m.notes; this.post({ type: 'games', games: [r] }); } console.log('[mock] update', m); }
+    if (m.type === 'manual') { const r = this.lib.find(q => q.id === m.id); if (r && m.act === 'remove') { r.manual = null; this.post({ type: 'games', games: [r] }); } return; }
+    if (m.type === 'update') { const r = this.lib.find(q => q.id === m.id); if (r) { if (m.platform !== undefined) { const p = this.plats[+String(m.platform).slice(1)]; if (p) r.plats = [p]; } if ('status' in m) r.status = m.status; if (m.cats) r.cats = m.cats; if ('score' in m) r.score = m.score; if ('notes' in m) r.notes = m.notes; this.post({ type: 'games', games: [r] }); } console.log('[mock] update', m); }
     if (m.type === 'release') { clearTimeout(this.stopT); console.log('[mock] release', m.id); }
     if (m.type === 'openUrl' || m.type === 'close') console.log('[mock]', m.type, m.url || '');
   },
