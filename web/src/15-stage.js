@@ -607,8 +607,8 @@ const UGCS = {
     await this.load([key]);
   },
   async remove(key) { await this.tx('readwrite', st => st.delete(key)); this.drop(key); delete this.meta()[key]; savePrefs(); },
-  adopt(key, root) { if (/^(box|med):/.test(key)) { skinPrepare(key, root); this.models.set(key, root); return; } root.userData.dev = ugcDevice(root); root.visible = false; this.group.add(root); this.models.set(key, root); },
-  drop(key) { const m = this.models.get(key); if (m) { const wb = m.userData.wornBy; if (wb) { if (key.startsWith('box:')) skinOff(wb); else skinMediumOff(wb); } if (m.parent) m.parent.remove(m); UGC.dispose(m); this.models.delete(key); } },
+  adopt(key, root) { if (/^(box|med):/.test(key)) { skinPrepare(key, root); this.models.set(key, root); if (key.startsWith('box:')) cases.forEach(c => { if (c.dim.skin === key) skinShelf(c); }); return; } root.userData.dev = ugcDevice(root); root.visible = false; this.group.add(root); this.models.set(key, root); },
+  drop(key) { const m = this.models.get(key); if (m) { const wb = m.userData.wornBy; if (wb) { if (key.startsWith('box:')) skinOff(wb); else skinMediumOff(wb); } cases.forEach(c => { if (c.dim.skin === key) skinShelfOff(c); }); if (m.parent) m.parent.remove(m); UGC.dispose(m); this.models.delete(key); } },
   ready(key) { return this.meta()[key] ? this.models.get(key) || null : null; },
   showOnly(list) { this.models.forEach(m => { if (!m.userData.skinKey) m.visible = list.includes(m); }); },
   /* reads the models this room needs; resolves when they are built (or could not be) */

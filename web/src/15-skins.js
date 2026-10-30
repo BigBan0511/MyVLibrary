@@ -4,10 +4,12 @@
    a socket for the medium and the renderers that take the box image, one
    picture holding back, spine and front. A box is measured once: which
    faces take the art (its normals and UVs say which is the front, which
-   way is up) and how big it is. On the shelf a game keeps the plain case,
-   at the box's size, because only its spine shows; in your hands the real
-   box takes over, with the game's art painted on it. Only one of each
-   model exists: whoever holds it first wears it.
+   way is up) and how big it is. In your hands the real box takes over,
+   with the game's art painted on it; only one such working model exists,
+   and whoever holds it first wears it. On the shelf each game stands in a
+   light copy of the box, closed: it shares the model's geometry and shows
+   the game's own spine (or front, face out), so a full bookcase costs no
+   more pictures than plain cases do.
    A medium (a cartridge, a disk) brings its label and its male socket: it
    sits in EmuVR's machines exactly where EmuVR would put it.
    ===================================================================== */
@@ -73,6 +75,7 @@ function skinPlace(root, right, up, n, maxW, maxH, keepAll) {
 function skinFitBox(root) {
   skinClosed(root);
   const list = (root.userData.art || []).length ? root.userData.art : root.userData.meshes;
+  list.forEach(m => { m.userData.artFace = true; });
   const F = skinFaces(root, list), big = F[0]; if (!big) return null;
   const opposite = F.find(f => f.key.slice(0, 1) === big.key[0] && f.key !== big.key);
   /* one picture usually wraps round the box: back on the left, spine, front on the right. Some boxes give the
@@ -87,7 +90,7 @@ function skinFitBox(root) {
   const right = up.clone().cross(axis).normalize();
   const spine = F.filter(f => f !== front && f !== back && f.key[0] !== front.key[0]).sort((a, b) => b.area - a.area).find(f => !back || (uMid(f) > Math.min(uMid(front), uMid(back)) - .05 && uMid(f) < Math.max(uMid(front), uMid(back)) + .05));
   const flipOf = f => { const c = new V3().crossVectors(f.gu, f.gv); return c.dot(f.n) < 0; };
-  root.userData.rects = { front: front && { u0: front.u0, u1: front.u1, v0: front.v0, v1: front.v1, flip: flipOf(front) }, back: back && { u0: back.u0, u1: back.u1, v0: back.v0, v1: back.v1, flip: flipOf(back) }, spine: spine && { u0: spine.u0, u1: spine.u1, v0: spine.v0, v1: spine.v1, flip: flipOf(spine), turn: spine.v1 - spine.v0 < spine.u1 - spine.u0 } };
+  root.userData.rects = { front: front && { u0: front.u0, u1: front.u1, v0: front.v0, v1: front.v1, flip: flipOf(front) }, back: back && { u0: back.u0, u1: back.u1, v0: back.v0, v1: back.v1, flip: flipOf(back) }, spine: spine && { u0: spine.u0, u1: spine.u1, v0: spine.v0, v1: spine.v1, flip: back ? flipOf(front) : flipOf(spine), turn: spine.v1 - spine.v0 < spine.u1 - spine.u0 } };
   const size = skinPlace(root, right, up, axis, SKIN_MAX.w, SKIN_MAX.h);
   return { w: +size.x.toFixed(2), h: +size.y.toFixed(2), d: +size.z.toFixed(2) };
 }
@@ -112,6 +115,48 @@ function skinPrepare(key, root) {
   const box = key.startsWith('box:');
   root.userData.skinKey = key;
   root.userData.dim = box ? skinFitBox(root) : (skinFitMedium(root), null);
+  if (box) root.userData.closed = skinCopy(root);
+}
+/* a closed copy of the model: the same geometry and materials, nothing that moves */
+function skinCopy(o) {
+  const n = o.isMesh ? new THREE.Mesh(o.geometry, o.material) : new THREE.Group();
+  n.position.copy(o.position); n.quaternion.copy(o.quaternion); n.scale.copy(o.scale); n.visible = o.visible; n.castShadow = o.castShadow; n.receiveShadow = o.receiveShadow;
+  if (o.isMesh && o.userData.artFace) n.userData.artFace = true;
+  o.children.forEach(k => n.add(skinCopy(k))); return n;
+}
+/* the texture transform that lays a whole picture (a spine, a cover) over one face of the box's image */
+function skinFaceMatrix(t, r) {
+  const du = r.u1 - r.u0, dv = r.v1 - r.v0; t.matrixAutoUpdate = false;
+  if (r.turn) { if (r.flip) t.matrix.set(0, -1 / dv, r.v1 / dv, -1 / du, 0, r.u1 / du, 0, 0, 1); else t.matrix.set(0, -1 / dv, r.v1 / dv, 1 / du, 0, -r.u0 / du, 0, 0, 1); }
+  else if (r.flip) t.matrix.set(-1 / du, 0, r.u1 / du, 0, 1 / dv, -r.v0 / dv, 0, 0, 1);
+  else t.matrix.set(1 / du, 0, -r.u0 / du, 0, 1 / dv, -r.v0 / dv, 0, 0, 1);
+}
+function skinShelfMap(c) {
+  const s = c.shelfSkin; if (!s) return; const R = s.rects, cover = c.faceOut && c.coverTex;
+  const t = cover ? c.coverTex : c.spineTex, r = cover ? R.front : R.spine; if (!r) return;
+  skinFaceMatrix(t, r); s.mats.forEach(m => { if (m.map !== t) { m.map = t; m.color.set('#ffffff'); m.needsUpdate = true; } });
+}
+function skinShelfOff(c) {
+  const s = c.shelfSkin; if (!s) return; c.shelfSkin = null;
+  if (s.obj.parent) s.obj.parent.remove(s.obj); s.mats.forEach(m => m.dispose());
+  [c.spineTex, c.coverTex].forEach(t => { if (t) { t.matrixAutoUpdate = true; t.matrix.identity(); } });
+  if (!c.skin) { [c.shell, c.lid, c.spine].forEach(m => { m.visible = true; }); c.dustMeshes.forEach(m => { m.visible = c.g.dust > .01; }); }
+}
+/* the game on the shelf, in its box */
+function skinShelf(c) {
+  const key = c.dim.skin; if (!key || c.disposed || c.shelfSkin) { if (c.shelfSkin) skinShelfMap(c); return; }
+  const root = UGCS.models.get(key), R = root && root.userData.rects; if (!root || !root.userData.closed || !R) return;
+  const obj = skinCopy(root.userData.closed), mats = [], made = new Map();
+  obj.traverse(o => {
+    if (!o.isMesh) return; o.userData.case = c;
+    if (!o.userData.artFace) return;
+    const list = Array.isArray(o.material) ? o.material.slice() : [o.material], first = list[0];
+    if (!made.has(first)) { const m = first.clone(); m.userData.envBase = first.userData.envBase; m.envMapIntensity = first.envMapIntensity; made.set(first, m); mats.push(m); }
+    list[0] = made.get(first); o.material = list.length > 1 ? list : list[0];
+  });
+  c.shelfSkin = { obj, mats, rects: R }; c.inner.add(obj);
+  [c.shell, c.lid, c.spine, ...c.dustMeshes].forEach(m => { m.visible = false; });
+  obj.visible = !c.skin; skinShelfMap(c);
 }
 
 /* ---------- wearing it ---------- */
@@ -136,6 +181,7 @@ function skinWear(c) {
   if (root.userData.wornBy && root.userData.wornBy !== c) return;
   if (c.skin) { skinPaint(c, root); return; }
   root.userData.wornBy = c; root.visible = true; c.inner.add(root);
+  if (c.shelfSkin) c.shelfSkin.obj.visible = false;
   c.skin = { root, o: -1 }; root.traverse(o => { if (o.isMesh) { o.userData.case = c; o.userData.part = null; } });
   [c.shell, c.lid, c.spine, ...c.dustMeshes].forEach(m => { m.visible = false; });
   (c.interior || []).forEach(([, o]) => { o.visible = false; });
@@ -157,7 +203,8 @@ function skinOff(c) {
   const s = c.skin; if (!s) return; c.skin = null;
   s.root.userData.wornBy = null; if (s.root.parent) s.root.parent.remove(s.root);
   s.root.traverse(o => { if (o.isMesh) o.userData.case = null; });
-  [c.shell, c.lid, c.spine].forEach(m => { m.visible = true; }); c.dustMeshes.forEach(m => { m.visible = c.g.dust > .01; });
+  if (c.shelfSkin) c.shelfSkin.obj.visible = true;
+  else { [c.shell, c.lid, c.spine].forEach(m => { m.visible = true; }); c.dustMeshes.forEach(m => { m.visible = c.g.dust > .01; }); }
   (c.interior || []).forEach(([, o]) => { o.visible = true; });
 }
 /* the medium of a game whose system has one chosen; null keeps our own */

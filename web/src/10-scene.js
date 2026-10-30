@@ -474,7 +474,7 @@ class Case {
     return this.stand;
   }
   dispose() {
-    this.dropInterior(); if (this.wrap) this.removeWrapNow(true);
+    this.dropInterior(); skinShelfOff(this); if (this.wrap) this.removeWrapNow(true);
     [this.root, this.foot, this.contact, this.web, this.stand].forEach(o => { if (o) scene.remove(o); });
     if (this.stand) this.stand.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
     [this.spineTex, this.coverTex, this.backTex, this.discTex, this.manTex].forEach(t => t && t.dispose());
@@ -509,6 +509,7 @@ class Case {
     if (this.coverTex) this.coverTex.dispose();
     this.coverCanvas = drawCover(this.g); this.coverTex = tex(this.coverCanvas);
     this.frontMat.map = this.coverTex; this.frontMat.color.set('#ffffff'); this.frontMat.needsUpdate = true;
+    skinShelfMap(this);
   }
   ensureDetail() {
     this.buildInterior();
@@ -592,6 +593,7 @@ class Case {
   }
   setDim(on) {
     if (this.dimmed === on) return; this.dimmed = on; const v = on ? .22 : 1;
+    if (this.shelfSkin) this.shelfSkin.mats.forEach(m => m.color.setScalar(v));
     this.spineMat.color.setScalar(v); this.frontMat.color.copy(this.frontMat.map ? new THREE.Color(1, 1, 1) : new THREE.Color(this.g.pal[0])).multiplyScalar(v);
   }
 }

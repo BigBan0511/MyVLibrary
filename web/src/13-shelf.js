@@ -123,6 +123,7 @@ function placeCase(c, xc, fo, by = SHELF.board, front = SHELF.front, innerH = SH
   if (fo) { const lean = .12; c.home.pos.set(xc, by + (h / 2) * Math.cos(lean) + (d / 2) * Math.sin(lean) + .05, front - 4.6 - (h / 2) * Math.sin(lean)); c.home.quat.setFromEuler(new EU(-lean, 0, 0)); }
   /* a record sleeve is deeper than the bookcase: it stands out at the front */
   else { c.home.pos.set(xc, by + h / 2 + .03, front - .6 - w / 2 + Math.max(0, w - 28)); c.home.quat.setFromEuler(new EU(0, Math.PI / 2, 0)); }
+  skinShelf(c);
 }
 function settle(c) { if (c.fresh) { c.root.position.copy(c.home.pos); c.root.quaternion.copy(c.home.quat); c.fresh = false; } }
 function layoutPage() {
