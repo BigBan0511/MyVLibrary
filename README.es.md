@@ -30,6 +30,7 @@ Cada sistema tiene su sitio. Los juegos de PC están en una balda sobre una mesa
 - **El formato que quieras.** Cada juego de PC puede ir en una caja DVD, una caja de CD, una caja de CD grande (como las de PlayStation o Dreamcast PAL), una caja grande de cartón, una caja de disquetes de 3½" de finales de los 90 o una caja de cartucho de 16 bits. Lo eliges en la ficha del juego (Formato) y puedes mezclarlos en la misma balda. Si no eliges nada, va según el año: disquetes antes de 1994, caja de CD de 1994 a 2003 y DVD después.
 - **Cada consola, con su formato.** Los juegos de consola van en la caja y el medio de su sistema: PlayStation en caja de CD grande, PS2 y posteriores en caja DVD, Super Nintendo, Nintendo 64 o Switch en cartucho… Así la consola siempre recibe lo que espera. Si quieres cambiarlos, en Ajustes → Formato en consolas elige «Libre».
 - **Escaneos reales: contraportada, lomo, disco.** Cada caja puede llevar la contraportada, el lomo y el disco (o la etiqueta del cartucho) reales de tu copia, y una portada escaneada sale tal cual está impresa. Se añaden desde la ficha de la caja (Imágenes de la caja): un escaneo completo (contraportada, lomo y portada en una sola imagen, que se corta según las proporciones de la caja) o cada parte por separado. Se guardan en la carpeta ExtraMetadata del juego (`ExtraMetadata\games\<id del juego>\`), y también se usan las que otras herramientas dejen ahí con los nombres habituales: `Back`, `Box - Back`, `Spine`, `Box - Spine`, `Disc`, `Cart - Front`, `Full`, `Box - Full`… en PNG, JPG o WebP.
+- **Encuadre.** Si una imagen se corta o se pasa (el borde blanco del escáner, un lomo más ancho de lo que espera la caja, una foto del disco), **Ajustar encuadre** en la ficha la abre entera con un recuadro encima. Lo que queda dentro del recuadro va a esa cara de la caja: arrastra el recuadro o sus bordes, acerca y aleja con la rueda y, en un escaneo completo, lleva las dos líneas a los cantos del lomo. **Detectar bordes** quita el borde del escáner solo (y en un escaneo completo busca también el lomo), **Rellenar** y **Entera** lo encuadran sin estirarlo, **Toda la imagen** la estira entera a la cara y **Girar 90°** pone de pie una imagen que venía tumbada. Una vista previa enseña cada cara tal como va a quedar, y la caja que tienes en las manos cambia mientras ajustas. También sirve para la portada normal de Playnite. El encuadre se guarda junto a las imágenes (`MyVLibrary.json` en la misma carpeta); si cambias una imagen, su encuadre se olvida.
 - **Esquinas como las reales.** Una caja de DVD apenas está redondeada y una de cartón es cuadrada. Si prefieres el aspecto más suave: Ajustes → Esquinas de las cajas → Redondeadas.
 - **Precinto y polvo.** Un juego que nunca has abierto llega precintado: tira de la lengüeta roja para quitar el precinto. Lo que llevas tiempo sin tocar coge polvo, y se quita frotando la caja.
 
@@ -114,6 +115,7 @@ En la barra lateral, la estantería tapa los botones de ventana de Playnite, as�
 | Cambiar de sistema (salas por sistema) | ‹ › junto al sistema | Q / E | LB / RB |
 | Cambiar de estante | los botones de arriba | Q / E (Z / C en salas por sistema) | LB / RB (LT / RT en salas por sistema) |
 | Cambiar de página | «Siguiente» | Re Pág / Av Pág | LT / RT |
+| Encuadrar una imagen (Ajustar encuadre en la ficha) | arrastrar el recuadro, sus bordes o las líneas del lomo; la rueda acerca y aleja | flechas mover · Q / E otro borde · Z / C zoom · F girar · M otra cara · Intro guardar · Esc cancelar | cruceta · LB / RB · LT / RT · Y · X · A / B |
 | Volver | | Esc | B |
 | Cambiar de ambiente | Ajustes | H | |
 
@@ -132,7 +134,7 @@ En la barra lateral, la estantería tapa los botones de ventana de Playnite, as�
 
 ## Qué se guarda y dónde
 
-- **En Playnite:** estado de juego, categorías, puntuación de usuario (cada estrella son 20 puntos) y notas. Las imágenes de la caja que añadas desde la ficha van a la carpeta ExtraMetadata del juego.
+- **En Playnite:** estado de juego, categorías, puntuación de usuario (cada estrella son 20 puntos) y notas. Las imágenes de la caja que añadas desde la ficha, y cómo las encuadres, van a la carpeta ExtraMetadata del juego.
 - **En los datos de la extensión:** el precinto, el polvo y el formato que hayas elegido para cada caja, las preferencias de la estantería (ambiente, luz, orden, sistema, filtro, zoom, qué va en la ruleta), los `.ugc` que hayas elegido, las consolas leídas de la carpeta de EmuVR, la lista de películas y series de Jellyfin con su token de acceso (nunca la contraseña), la lista de música de Navidrome con su contraseña cifrada para tu usuario de Windows (su API la pide en cada petición), una caché de carátulas reducidas y otra de las últimas canciones escuchadas (hasta 1 GB). Si nunca cambias el formato de un juego, usa el que le toca por su plataforma.
 
 ## Desarrollo
@@ -155,7 +157,7 @@ node build.mjs                 # web/dist/, lo que lleva la extensión
 ```
 
 - Abre `web/dist/index.html` desde un servidor estático (por ejemplo `npx serve web`) para ver la biblioteca de muestra.
-- Añade `?mock` al final de la dirección y la página hace como si estuviera dentro de Playnite. Así se prueba el camino real: carátulas, colores sacados de la carátula, arrancar y cerrar un juego, filtros guardados, los botones de la ficha y los cambios que se devuelven. Con `?mock&running=<id>` la estantería se abre con ese juego ya en marcha.
+- Añade `?mock` al final de la dirección y la página hace como si estuviera dentro de Playnite. Así se prueba el camino real: carátulas, colores sacados de la carátula, arrancar y cerrar un juego, filtros guardados, los botones de la ficha y los cambios que se devuelven. Con `?mock&running=<id>` la estantería se abre con ese juego ya en marcha, y con `?mock&real` los juegos de mentira cuentan como reales, para probar las imágenes de la caja y su encuadre.
 
 **La extensión**
 
@@ -168,7 +170,7 @@ node build.mjs                 # web/dist/, lo que lleva la extensión
 
 - La extensión sirve la carpeta `web` en `https://app.myvlibrary/`, las carátulas en `https://media.myvlibrary/cover/{id}?w=…` (reducidas y en caché) y la carpeta ExtraMetadata (logos, tráileres, imágenes de las cajas) en `https://extra.myvlibrary/`.
 - La página y la extensión se mandan mensajes JSON con `chrome.webview.postMessage`.
-- La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory`, `release`, `game`, `setArt` y `window`, además de los `jf…` y `nd…` de Jellyfin y Navidrome.
+- La página pide: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory`, `release`, `game`, `setArt`, `setFit` y `window`, además de los `jf…` y `nd…` de Jellyfin y Navidrome.
 - La extensión responde con `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad`, `focus`, `notice` y `winState`, además de los de vídeo y música.
 
 ## Agradecimientos

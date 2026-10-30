@@ -30,6 +30,7 @@ Each system has its own place. PC games sit on a shelf above a desk with a beige
 - **Any format you like.** Each PC game can come in a DVD case, a CD jewel case, a big CD case (like the PAL PlayStation or Dreamcast ones), a cardboard big box, a late-90s box of 3½" floppies or a 16-bit cartridge box. Pick it in the game's card (Format) and mix them on the same shelf. If you don't pick one, it goes by year: floppies before 1994, a CD case from 1994 to 2003 and a DVD case after that.
 - **Each console with its own format.** Console games come in their system's case and medium: PlayStation in a big CD case, PS2 and later in a DVD case, Super Nintendo, Nintendo 64 or Switch on a cartridge… so the console always gets what it expects. To change them, set Settings → Console formats to "Free".
 - **Real scans: back, spine, disc.** Each case can show the real back cover, spine and disc (or cartridge label) of your copy, and a scanned front shows exactly as printed. Add them from the case's card (Case pictures): a full wraparound scan (back, spine and front in one picture, cut by the case's own proportions) or each part on its own. They are kept in the game's ExtraMetadata folder (`ExtraMetadata\games\<game id>\`), and pictures other tools put there under the usual names are picked up too: `Back`, `Box - Back`, `Spine`, `Box - Spine`, `Disc`, `Cart - Front`, `Full`, `Box - Full`… as PNG, JPG or WebP.
+- **Framing.** If a picture comes out cut short or spills over (a scanner's white border, a spine that is wider than the case expects, a photo of a disc), **Adjust framing** in the card opens it whole with a frame over it. What is inside the frame goes on that face of the case: drag the frame or its edges, zoom with the wheel, and on a full scan drag the two lines to the edges of the spine. **Find the edges** removes the scanner's border by itself (and in a full scan also looks for the spine), **Fill** and **Show it all** frame it without stretching, **The whole picture** stretches all of it onto the face, and **Rotate 90°** stands up a picture that came lying down. A preview shows each face as it will be, and the case in your hands changes as you go. It also works on the normal Playnite cover. The framing is kept next to the pictures (`MyVLibrary.json` in the same folder); if a picture is replaced, its framing is forgotten.
 - **Corners like real ones.** A keep case is barely rounded and a cardboard box is square. If you prefer the softer look: Settings → Case corners → Rounded.
 - **Shrink wrap and dust.** A game you have never opened arrives shrink-wrapped: pull the red tab to peel the wrap off. Games you haven't touched in a while gather dust, and you wipe it off by rubbing the case.
 
@@ -114,6 +115,7 @@ In the sidebar the shelf covers Playnite's own window buttons, so it shows its o
 | Change system (By system design) | ‹ › next to the system | Q / E | LB / RB |
 | Change shelf | the buttons at the top | Q / E (Z / C in the By system design) | LB / RB (LT / RT in the By system design) |
 | Change page | "Next" | Page Up / Page Down | LT / RT |
+| Framing a picture (Adjust framing in the card) | drag the frame, its edges or the spine's lines; the wheel zooms | arrows move · Q / E another edge · Z / C zoom · F rotate · M another face · Enter save · Esc cancel | d-pad · LB / RB · LT / RT · Y · X · A / B |
 | Go back | | Esc | B |
 | Change room | Settings | H | |
 
@@ -132,7 +134,7 @@ In the sidebar the shelf covers Playnite's own window buttons, so it shows its o
 
 ## What is saved, and where
 
-- **In Playnite:** completion status, categories, user score (each star is 20 points) and notes. Case pictures you add from the card go in the game's ExtraMetadata folder.
+- **In Playnite:** completion status, categories, user score (each star is 20 points) and notes. Case pictures you add from the card, and how you framed them, go in the game's ExtraMetadata folder.
 - **In the extension's data:** the shrink wrap, dust and chosen format of each case, the shelf preferences (room, light, sort order, system, filter, zoom, what goes on the roulette), the `.ugc` files you picked, the EmuVR consoles read from its folder, the list of Jellyfin films and series with its access token (never the password), the Navidrome music list with its password encrypted for your Windows user (its API needs it for every request), a cache of downsized covers and another of the songs played most recently (up to 1 GB). If you never change a game's format, it uses the one its platform suggests.
 
 ## Development
@@ -155,7 +157,7 @@ node build.mjs                 # web/dist/, what the extension ships
 ```
 
 - Open `web/dist/index.html` from a static server (for example `npx serve web`) to see the sample library.
-- Add `?mock` to the end of the address and the page pretends to be inside Playnite. This tests the real path: covers, colours taken from the cover, starting and closing a game, saved filters, the card's buttons and changes sent back. With `?mock&running=<id>` the shelf opens with that game already running.
+- Add `?mock` to the end of the address and the page pretends to be inside Playnite. This tests the real path: covers, colours taken from the cover, starting and closing a game, saved filters, the card's buttons and changes sent back. With `?mock&running=<id>` the shelf opens with that game already running, and with `?mock&real` the pretend games count as real ones, so the case pictures and their framing can be tried.
 
 **The extension**
 
@@ -168,7 +170,7 @@ node build.mjs                 # web/dist/, what the extension ships
 
 - The extension serves the `web` folder at `https://app.myvlibrary/`, covers at `https://media.myvlibrary/cover/{id}?w=…` (downsized and cached) and the ExtraMetadata folder (logos, trailers, case pictures) at `https://extra.myvlibrary/`.
 - The page and the extension exchange JSON messages with `chrome.webview.postMessage`.
-- The page sends: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory`, `release`, `game`, `setArt` and `window`, plus the `jf…` and `nd…` ones for Jellyfin and Navidrome.
+- The page sends: `ready`, `detail`, `start`, `update`, `openUrl`, `close`, `fetch`, `createStatus`, `createCategory`, `release`, `game`, `setArt`, `setFit` and `window`, plus the `jf…` and `nd…` ones for Jellyfin and Navidrome.
 - The extension answers with `library`, `games`, `removed`, `lists`, `detail`, `started`, `tracking`, `stopped`, `cancelled`, `notInstalled`, `failed`, `activated`, `fetched`, `pad`, `focus`, `notice` and `winState`, plus the video and music ones.
 
 ## Thanks
