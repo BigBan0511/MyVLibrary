@@ -319,16 +319,19 @@ class Case {
     this.spineCanvas = drawSpine(g); this.spineTex = tex(this.spineCanvas);
     this.spineMat = M(THREE.MeshPhysicalMaterial, { map: this.spineTex, roughness: isB ? .62 : .5, clearcoat: isB ? .3 : .6, clearcoatRoughness: .12, emissive: new THREE.Color('#ffffff'), emissiveMap: this.spineTex, emissiveIntensity: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, .8);
     const sw = d - G.bevel * 1.4, sh = h - .3;
-    this.spine = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.spineMat); this.spine.rotation.y = -Math.PI / 2; this.spine.position.x = -w / 2 - .03; this.inner.add(this.spine);
+    /* the spine hangs from the back's outer edge: in a keep case it folds back as the case opens, like the real
+       plastic hinge, so from inside you see the black hinge and not the label (a jewel case's stays put) */
+    this.hinge = new THREE.Group(); this.hinge.position.set(-w / 2, 0, -d / 2); this.inner.add(this.hinge); this.folds = D.shell === 'keep';
+    this.spine = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.spineMat); this.spine.rotation.y = -Math.PI / 2; this.spine.position.set(-.03, 0, d / 2); this.hinge.add(this.spine);
     /* dust: spine, top, front, back */
     this.dustMat = M(THREE.MeshStandardMaterial, { map: TEXS.spineDust, color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }, .6);
     this.filmMat = M(THREE.MeshStandardMaterial, { map: TEXS.film, color: '#c9bea9', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }, .6);
     this.topMat = M(THREE.MeshStandardMaterial, { map: TEXS.topDust, color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }, .6);
-    const ds = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.dustMat); ds.rotation.y = -Math.PI / 2; ds.position.x = -w / 2 - .06;
+    const ds = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.dustMat); ds.rotation.y = -Math.PI / 2; ds.position.set(-.06, 0, d / 2);
     const dt = new THREE.Mesh(pgeo(g.fmt, 'top'), this.topMat); dt.rotation.x = -Math.PI / 2; dt.position.y = h / 2 + .04;
     const df = new THREE.Mesh(pgeo(g.fmt, 'film'), this.filmMat); df.position.set(0, 0, lidD / 2 + .035); this.lid.add(df);
     const db = new THREE.Mesh(pgeo(g.fmt, 'film'), this.filmMat); db.rotation.y = Math.PI; db.position.set(0, 0, -shellD / 2 - .035); this.shell.add(db);
-    this.inner.add(ds, dt); this.dustMeshes = [ds, dt, df, db];
+    this.hinge.add(ds); this.inner.add(dt); this.dustMeshes = [ds, dt, df, db];
     /* dust footprint on the shelf and an optional cobweb (live in the room, not on the case) */
     this.footMat = M(THREE.MeshStandardMaterial, { map: TEXS.foot[g.fmt], color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }, .6);
     this.foot = new THREE.Mesh(pgeo(g.fmt, 'foot'), this.footMat); this.foot.rotation.x = -Math.PI / 2; this.foot.visible = false; scene.add(this.foot);
@@ -574,7 +577,7 @@ class Case {
     const o = this.openA;
     /* a box of tapes does not open like a book: it leans back and the tapes rise out of its open top */
     if (this.g.fmt === 'vhsbox') { this.pivot.rotation.y = 0; this.inner.position.x = 0; this.inner.rotation.x = .9 * easeIO(o); }
-    else { const mo = this.motion; this.pivot.rotation.y = -(mo ? mo.lid : LID_OPEN * o); this.inner.position.x = this.dim.w / 2 * (mo ? mo.spread : o); }
+    else { const mo = this.motion, lid = mo ? mo.lid : LID_OPEN * o; this.pivot.rotation.y = -lid; this.inner.position.x = this.dim.w / 2 * (mo ? mo.spread : o); if (this.folds) this.hinge.rotation.y = -lid / 2; }
     /* turned by hand, it springs back when you let go */
     const gb = this.grab; if (!gb.held && (gb.x || gb.y)) { gb.vx += (-16 * gb.x - 5.5 * gb.vx) * dt; gb.vy += (-16 * gb.y - 5.5 * gb.vy) * dt; gb.x += gb.vx * dt; gb.y += gb.vy * dt; if (Math.abs(gb.x) + Math.abs(gb.y) + Math.abs(gb.vx) + Math.abs(gb.vy) < 1e-4) gb.x = gb.y = gb.vx = gb.vy = 0; }
     if (this.multi) updateMultiInterior(this, dt);

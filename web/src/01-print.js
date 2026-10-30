@@ -114,13 +114,29 @@ function drawTitle(x, g, W, H, top) {
 }
 
 /* ---------- real pictures (back, spine, disc, or a full wraparound scan), when the game has them ---------- */
+/* every picture a case can have, as the extension names them */
+const SCAN_KINDS = ['full', 'front', 'back', 'spine', 'disc', 'manual'];
 function artPic(g, kind) { return g.real && g.scanImg ? g.scanImg[kind] || null : null; }
 /* the framing editor (42-fit.js): while it is open, the case is painted with what is being framed */
 const FIT = { open: false, g: null, st: {} };
 /* which picture a framing was made for: when the picture changes, the framing no longer applies */
 function fitSrc(g, kind) {
+  const S = g.scans || {}, key = v => v.length > 300 ? v.length + ':' + v.slice(-48) : v;   // a picture kept in memory (the pretend Playnite) is a whole data address
+  if (S[kind]) return key(S[kind]);
+  if (kind === 'full') return '';
+  /* a face with no picture of its own is printed from its part of the full scan; the front, from Playnite's cover; the manual, from the front */
+  if ((kind === 'front' || kind === 'back' || kind === 'spine') && S.full) return 'full:' + key(S.full);
   if (kind === 'front') return 'cover:' + (g.coverVer || g.ver || '');
-  const v = (g.scans && g.scans[kind]) || ''; return v.length > 300 ? v.length + ':' + v.slice(-48) : v;   // a picture kept in memory (the pretend Playnite) is a whole data address
+  if (kind === 'manual') return 'manual:' + fitSrc(g, 'front');
+  return '';
+}
+/* the picture a face is printed from, as fitSrc says */
+function facePic(g, kind) {
+  const own = artPic(g, kind); if (own) return own;
+  if (kind === 'front' || kind === 'back' || kind === 'spine') { const w = artPic(g, 'wrap' + kind[0].toUpperCase() + kind.slice(1)); if (w) return w; }
+  if (kind === 'front') return g.real ? g.cover || g.coverSmall || null : null;
+  if (kind === 'manual') return facePic(g, 'front');
+  return null;
 }
 /* the framing the player chose for a face: the part of the (turned) picture that goes on it, as fractions
    of the picture [left, top, right, bottom] (it may reach past the edges), and for a full scan the two
@@ -182,10 +198,11 @@ function splitWrap(g, img) {
 function artPart(g, kind) { return artPic(g, kind) || artPic(g, 'wrap' + kind[0].toUpperCase() + kind.slice(1)); }
 /* a picture on a face of W x H: as the player framed it, or filling the face (a spine lying down is stood up) */
 function layArt(x, img, g, kind, W, H) {
-  if (img.wrapCut) { if (img.exact) x.drawImage(img, 0, 0, W, H); else coverFit(x, img, 0, 0, W, H); return; }
   const f = artFit(g, kind, W / H);
   if (f) { artCrop(x, turned(img, f.r), f.c, 0, 0, W, H); return; }
-  if (kind === 'spine' && imgW(img) > imgH(img)) { x.save(); x.translate(W, 0); x.rotate(Math.PI / 2); coverFit(x, img, 0, 0, H, W); x.restore(); }
+  /* a part of a full scan cut where the player framed it fits its face exactly */
+  if (img.wrapCut && img.exact) { x.drawImage(img, 0, 0, W, H); return; }
+  if (kind === 'spine' && !img.wrapCut && imgW(img) > imgH(img)) { x.save(); x.translate(W, 0); x.rotate(Math.PI / 2); coverFit(x, img, 0, 0, H, W); x.restore(); }
   else coverFit(x, img, 0, 0, W, H);
 }
 function drawCover(g) {
@@ -511,13 +528,29 @@ function drawCartLabel(g, coverCanvas) {
   return c;
 }
 function drawMediaLabel(g, coverCanvas) { if (g.music) return musicLabel(g, coverCanvas); if (g.video) return drawVideoLabel(g, coverCanvas, g.ep || null); const m = mediaOf(g); return m === 'floppy' ? drawFloppyLabel(g, coverCanvas, 0, DIMS.floppy.disks) : m === 'cart' ? drawCartLabel(g, coverCanvas) : drawDisc(g, coverCanvas); }
+/* the manual's band: on by default, the player may take it off in the framing window */
+function manualBand(g) {
+  if (artPic(g, 'manual')) return false;
+  const s = FIT.open && FIT.g === g && FIT.st.manual, f = s || (g.scanFit && g.scanFit.manual && g.scanFit.manual.s === fitSrc(g, 'manual') ? g.scanFit.manual : null);
+  return !f || f.b !== 0;
+}
+function manualSize(g, band) { const W = 300, H = Math.round(300 * DIMS[g.fmt].man[1] / DIMS[g.fmt].man[0]); return [W, band ? Math.round(H * .72) : H, H]; }
 function drawManualCover(g, coverCanvas) {
-  const W = 300, H = Math.round(300 * DIMS[g.fmt].man[1] / DIMS[g.fmt].man[0]), c = mkCanvas(W, H), x = c.getContext('2d');
+  const [W, ih0, H] = manualSize(g, true), c = mkCanvas(W, H), x = c.getContext('2d');
+  /* a scan of the real manual, as printed */
+  const scan = artPic(g, 'manual'); if (scan) { layArt(x, scan, g, 'manual', W, H); return c; }
+  const band = manualBand(g), ih = band ? ih0 : H;
   x.fillStyle = '#f3eee3'; x.fillRect(0, 0, W, H);
-  const ih = H * .72, cw = coverCanvas.width, ch = coverCanvas.height, sc = Math.max(W / cw, ih / ch), sf = Math.min(W / cw, ih / ch);
-  if ('filter' in x) x.filter = 'blur(6px) brightness(.7)';
-  x.drawImage(coverCanvas, (W - cw * sc) / 2, (ih - ch * sc) / 2, cw * sc, ch * sc); x.filter = 'none';
-  x.drawImage(coverCanvas, (W - cw * sf) / 2, (ih - ch * sf) / 2, cw * sf, ch * sf);
+  /* the front's picture, as the player framed it on the manual, or whole over a blurred copy of itself */
+  const src = g.real ? facePic(g, 'manual') : null, f = src && artFit(g, 'manual', W / ih);
+  if (f) artCrop(x, turned(src, f.r), f.c, 0, 0, W, ih);
+  else {
+    const cw = coverCanvas.width, ch = coverCanvas.height, sc = Math.max(W / cw, ih / ch), sf = Math.min(W / cw, ih / ch);
+    if ('filter' in x) x.filter = 'blur(6px) brightness(.7)';
+    x.drawImage(coverCanvas, (W - cw * sc) / 2, (ih - ch * sc) / 2, cw * sc, ch * sc); x.filter = 'none';
+    x.drawImage(coverCanvas, (W - cw * sf) / 2, (ih - ch * sf) / 2, cw * sf, ch * sf);
+  }
+  if (!band) return c;
   x.fillStyle = inkAccent(g); x.fillRect(0, ih, W, H - ih);
   x.fillStyle = '#ffffff'; x.textAlign = 'left'; x.textBaseline = 'top';
   x.font = `700 ${Math.round(W * .045)}px ${F.mono}`; setLS(x, 2); x.fillText(T('MANUAL DE INSTRUCCIONES'), W * .07, ih + H * .05); setLS(x, 0);

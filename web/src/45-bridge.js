@@ -73,7 +73,7 @@ const LIB = {
     this.queue = list.filter(g => g.real && ((g.hasCover && !g.coverSmall) || (g.hasLogo && !g.logo) || this.needsSpineArt(g)));
     for (let k = 0; k < 6; k++) this.pump();
     /* the face-out ones show their front: load it straight away */
-    navOrder.filter(c => c.faceOut).forEach(c => this.bigCover(c.g));
+    navOrder.filter(c => c.faceOut).forEach(c => { this.bigCover(c.g); const S = c.g.scans; if (S && (S.front || S.full)) this.scansFor(c.g, ['front', 'full']).then(n => { if (n) this.refresh(c.g, false); }); });
   },
   pump() {
     if (this.loading >= 6) return; const g = this.queue.shift(); if (!g) return; this.loading++;
@@ -95,7 +95,7 @@ const LIB = {
   /* everything the case needs in your hands: the big cover, the background, the description.
      Picking waits a moment for it; whatever arrives later still gets painted on */
   prepare(g, timeout = 1500) {
-    const jobs = [this.bigCover(g), this.scansFor(g, ['full', 'back', 'spine', 'disc'])];
+    const jobs = [this.bigCover(g), this.scansFor(g, SCAN_KINDS)];
     if (g.hasBg && !g.bg) jobs.push(this.img(this.bgUrl(g, 1280)).then(i => { if (i) g.bg = i; }));
     if (!g.detailLoaded && !g.video && !g.music) jobs.push(g.detailLoading || this.detail(g));
     const all = Promise.all(jobs).then(() => { this.refresh(g, true); this.media(g); });
@@ -267,7 +267,7 @@ const LIB = {
       this.fromHost(r, g);
       /* new or changed real pictures: load them and repaint every copy of the case */
       if (g.scanNew && FIT.open && FIT.g === g) closeFit(false);
-      if (g.scanNew) { g.scanNew = false; g.fitNew = false; for (const c of casesOf(g)) c.dirty = true; this.scansFor(g, ['full', 'back', 'spine', 'disc']).then(() => this.refresh(g, true)); }
+      if (g.scanNew) { g.scanNew = false; g.fitNew = false; for (const c of casesOf(g)) c.dirty = true; this.scansFor(g, SCAN_KINDS).then(() => this.refresh(g, true)); }
       else if (g.fitNew) { g.fitNew = false; if (g.scanImg && g.scanImg.full) splitWrap(g, g.scanImg.full); }
       if (before !== passes(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '')) regroup = true;
       if (g.fmt !== f0) regroup = true;

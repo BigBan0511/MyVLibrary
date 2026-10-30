@@ -24,8 +24,9 @@ namespace MyVLibrary
     }
 
     /// <summary>
-    /// Real pictures for the parts of a case Playnite keeps no image for: the back, the spine, the disc
-    /// (or the cartridge label), or a full wraparound scan with all three. They live in the game's
+    /// Real pictures for the parts of a case: the back, the spine, the disc (or the cartridge label) and the
+    /// manual's cover, which Playnite keeps no image for, a front of its own, or a full wraparound scan with
+    /// back, spine and front. They live in the game's
     /// ExtraMetadata folder, next to Extra Metadata Loader's logo and trailer, under the names
     /// LaunchBox and other tools use; the card can also save a picture there.
     /// </summary>
@@ -35,16 +36,18 @@ namespace MyVLibrary
         private static readonly Dictionary<string, string[]> ArtNames = new Dictionary<string, string[]>
         {
             ["full"] = new[] { "Full", "BoxFull", "Box - Full", "FullCover", "Full Cover", "Wrap", "CoverFull" },
+            ["front"] = new[] { "Front", "BoxFront", "Box - Front", "FrontCover", "Front Cover", "Box - Front - Reconstructed" },
             ["back"] = new[] { "Back", "BoxBack", "Box - Back", "BackCover", "Back Cover", "Box - Back - Reconstructed" },
             ["spine"] = new[] { "Spine", "BoxSpine", "Box - Spine" },
-            ["disc"] = new[] { "Disc", "CD", "DVD", "Media", "Cart", "Cartridge", "Cart - Front" }
+            ["disc"] = new[] { "Disc", "CD", "DVD", "Media", "Cart", "Cartridge", "Cart - Front" },
+            ["manual"] = new[] { "Manual", "ManualCover", "Manual Cover", "Manual - Front", "Booklet" }
         };
 
         private static readonly string[] ArtExt = { ".png", ".jpg", ".jpeg", ".webp" };
 
         /* how each face is framed lives next to the pictures, so it goes wherever they go */
         private const string FitFile = "MyVLibrary.json";
-        private static readonly string[] FitKinds = { "front", "full", "back", "spine", "disc" };
+        private static readonly string[] FitKinds = { "front", "full", "back", "spine", "disc", "manual" };
 
         public class FitDoc
         {

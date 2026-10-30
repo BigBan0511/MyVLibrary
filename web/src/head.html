@@ -198,6 +198,14 @@ button,select,input,textarea{font:inherit;color:inherit}
 .fit-keys b{color:var(--ink);font-weight:600}
 .fit-foot .pbtn{padding:0 15px 0 7px}
 @media (max-width:760px){.fit-body{grid-template-columns:1fr}.fit-stage{height:44vh}.fit-keys{display:none}}
+/* placing the room's decoration: a bar in place of the prompts */
+.decorating #prompts,.decorating #tip{display:none!important}
+.deco-bar{position:fixed;z-index:6;left:50%;bottom:max(14px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(760px,calc(100vw - 32px));display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:center;padding:10px 12px 10px 16px;background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.deco-what{display:grid;gap:2px;min-width:0}.deco-what b{font:400 18px/1.1 var(--f-display);color:var(--amber);letter-spacing:.02em}.deco-what span{font-size:13px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.deco-btns{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.deco-btns .gact{min-width:32px}.deco-btns .pbtn{height:34px;padding:0 13px 0 6px;font-size:14px}
+.deco-hint{grid-column:1/-1;margin:0;font-size:12px;color:var(--ink-dim)}
+.deco-none{margin:0;font-size:13px;color:var(--ink-dim)}
+@media (max-width:640px){.deco-bar{grid-template-columns:1fr}.deco-btns{justify-content:flex-start}}
 @media (max-width:640px){.epbar{bottom:110px;flex-wrap:wrap;justify-content:center;border-radius:14px;width:calc(100vw - 32px)}.ep-field{min-width:0;flex:1}.ep-list{width:auto;left:8px}}
 .hint{pointer-events:auto;font-size:14px;color:var(--ink-dim);padding:9px 14px;background:var(--panel);border:1px solid var(--panel-line);border-radius:999px}
 .hint kbd{font:700 11px var(--f-mono);color:var(--ink);padding:2px 6px;border:1px solid var(--panel-line);border-radius:4px;margin:0 2px}
@@ -561,8 +569,10 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="set-row" data-tab="music"><span>Tus mezclas se graban en</span><div class="seg" data-pref="mixFmt"><button type="button" data-v="cd">CD</button><button type="button" data-v="cass">Casete</button></div><p class="set-note">Cuando hay varias canciones en la bolsa, se graban antes en el ordenador en un solo CD o casete.</p></div>
   <div class="set-row" data-tab="music"><span>Vinilos y casetes</span><div class="seg" data-pref="flip"><button type="button" data-v="off">Todo seguido</button><button type="button" data-v="on">Dar la vuelta a mitad</button></div></div>
   <div class="set-row" data-tab="music"><span>Volumen de la música <b id="mvolVal" class="vol-val"></b></span><input id="mvolRange" class="vol" type="range" min="0" max="100" step="5"></div>
+  <div class="set-row" data-tab="emuvr"><span>Decoración de la sala (.ugc)</span><div class="ugc-list" id="decoList"></div><p class="set-note">Figuras, la caja de una consola o cualquier .ugc de EmuVR, en la sala del sistema en el que estás; cada sala tiene la suya. Colocar: arrástralas a cualquier superficie; la rueda las gira y, con Mayús, cambia su tamaño.</p></div>
   <div class="set-row" data-tab="emuvr"><span>Consolas y pantallas de EmuVR (.ugc)</span><div class="ugc-list" id="ugcList"></div><p class="set-note">En las salas por sistema, un .ugc de EmuVR sustituye a la consola genérica de ese sistema, a una tele o al monitor. Las consolas que trae EmuVR se leen de su carpeta. Todo se guarda solo en este equipo.</p></div>
   <input type="file" id="ugcFile" accept=".ugc" hidden>
+  <input type="file" id="decoFile" accept=".ugc" hidden>
   <input type="file" id="emuvrDir" webkitdirectory multiple hidden>
   <p class="set-note set-row" data-tab="general">Los juegos que nunca has abierto llegan precintados: con «A mano» el precinto solo se quita tirando de la lengüeta. Los estados y categorías solo cambian cuando tú los cambias.</p>
   <p class="set-ver">MyVLibrary <!--VERSION--></p>
@@ -584,6 +594,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 <div class="epbar" id="epbar" hidden><button type="button" class="pbtn icon" id="epPrev" aria-label="Capítulos anteriores">‹</button><span class="ep-range" id="epRange"></span><button type="button" class="pbtn icon" id="epNext" aria-label="Capítulos siguientes">›</button><label class="field ep-field"><input id="epQ" type="search" placeholder="Buscar capítulo (número o título)" autocomplete="off"></label><div class="ep-list" id="epList" hidden></div></div>
 <div class="resume" id="resume" hidden role="dialog" aria-modal="true" aria-label="Retomar"></div>
 <div class="fit-ed" id="fitEd" hidden role="dialog" aria-modal="true" aria-labelledby="fitTitle"></div>
+<div class="deco-bar" id="decoBar" hidden role="toolbar" aria-label="Decorar la sala"></div>
 
 <div id="manual" hidden role="dialog" aria-modal="true" aria-label="Manual del juego">
   <div class="backdrop" id="mBack"></div>
