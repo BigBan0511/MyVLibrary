@@ -209,7 +209,7 @@ DICT.en = {
   'Decorar la sala': 'Decorate the room', 'Esta sala': 'This room', '{0} cosa': '{0} thing', '{0} cosas': '{0} things', 'Añadir .ugc': 'Add .ugc', 'Una consola de EmuVR': 'One of EmuVR\'s consoles', 'Colocar': 'Place',
   'Entra en la sala de un sistema para decorarla.': "Go into a system's room to decorate it.", 'La decoración va en el diseño Por sistema.': 'Decoration goes in the By system design.', 'Vuelve a la estantería de una sala para colocar': "Go back to a room's shelf to place things",
   'Decorando': 'Decorating', 'Elige algo de la sala': 'Pick something in the room', 'Elegir el siguiente': 'Pick the next one', 'Girar': 'Turn', 'Más pequeño': 'Smaller', 'Más grande': 'Bigger', 'Colócalo donde quieras': 'Put it wherever you like',
-  'Arrastra cada cosa a donde quieras.': 'Drag each thing wherever you like.', 'Arrastra para mover · rueda: girar · Mayús + rueda: tamaño · flechas: mover': 'Drag to move · wheel: turn · Shift + wheel: size · arrows: move'
+  'Arrastra cada cosa a donde quieras.': 'Drag each thing wherever you like.', 'Arrastra para mover · rueda: girar, inclinar o ladear (F cambia; Ctrl + rueda inclina, Alt + rueda ladea) · Mayús + rueda: tamaño · flechas: mover': 'Drag to move · wheel: turn, tilt or lean (F switches; Ctrl + wheel tilts, Alt + wheel leans) · Shift + wheel: size · arrows: move', 'Inclinar': 'Tilt', 'Ladear': 'Lean', 'Enderezar': 'Straighten', 'inclinado': 'tilted', 'ladeado': 'leant', 'Qué hacen la rueda, Q y E': 'What the wheel, Q and E do'
 };
 /* the page itself was translated before the dictionary existed */
 if (document.body) applyDomLang();
