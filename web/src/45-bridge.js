@@ -206,6 +206,8 @@ const LIB = {
     const now = Date.now(), days = iso => { if (!iso) return null; const t = Date.parse(iso); return isNaN(t) ? null : Math.max(0, Math.floor((now - t) / 864e5)); };
     const plats = r.plats || [], plat = shortPlat(plats[0]), year = r.year || null;
     const g = old || { id: r.id, real: true, ach: [0, 0], font: 'saira', tag: '', tpos: 'top', artOpt: {}, tear: 0 };
+    /* ?mock&real: the pretend library is treated as a real one (covers, scans and the card's Playnite rows) */
+    if (MOCK && /[?&]real\b/.test(location.search)) g.real = true;
     Object.assign(g, {
       t: r.name || T('Sin título'), sort: r.sort || r.name || '', status: r.status || '', cats: (r.cats || []).slice(), genres: r.genres || [], genre: (r.genres || []).slice(0, 2).join(' / '),
       dev: (r.devs || []).slice(0, 2).join(', '), pub: (r.pubs || []).slice(0, 2).join(', '), year, release: r.release || '', plat, platName: plats.join(', '), platFull: plats[0] || 'PC',
@@ -217,6 +219,10 @@ const LIB = {
     /* real pictures for the back, spine and disc: when they change, what was loaded goes */
     const ak = JSON.stringify(r.scans || {});
     if (ak !== g.scanKey) { g.scanNew = g.scanKey !== undefined || ak !== '{}'; g.scans = r.scans || {}; g.scanKey = ak; g.scanImg = {}; g.scanLoaded = {}; }
+    /* how the player framed them (and the cover): a change repaints the case without loading anything again */
+    const fk = JSON.stringify(r.scanFit || {});
+    if (fk !== g.fitKey) { g.fitNew = g.fitKey !== undefined; g.scanFit = r.scanFit || {}; g.fitKey = fk; }
+    g.coverVer = r.coverVer || '';
     if (old && old.ver !== r.ver) { g.cover = g.coverSmall = g.bg = null; g.palFromCover = false; }
     g.ver = r.ver || '';
     if (!g.pal) g.pal = defaultPal(g.id);
@@ -247,7 +253,7 @@ const LIB = {
     this.player = m.video ? m.video.player || '' : '';
     if (m.music) this.setMusic(m.music, true);
     if (m.focusId) this.focusId = m.focusId;
-    GAMES.forEach(g => { g.scanNew = false; });
+    GAMES.forEach(g => { g.scanNew = false; if (g.fitNew) { g.fitNew = false; if (g.scanImg && g.scanImg.full) splitWrap(g, g.scanImg.full); } });
     checkFilter();
     if (this.bootRes) { this.bootRes(); this.bootRes = null; }
     else if (mode === 'shelf') relayout({ follow: null }); else pendingRelayout = true;
@@ -260,7 +266,9 @@ const LIB = {
       const f0 = g.fmt, before = passes(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '');
       this.fromHost(r, g);
       /* new or changed real pictures: load them and repaint every copy of the case */
-      if (g.scanNew) { g.scanNew = false; for (const c of casesOf(g)) c.dirty = true; this.scansFor(g, ['full', 'back', 'spine', 'disc']).then(() => this.refresh(g, true)); }
+      if (g.scanNew && FIT.open && FIT.g === g) closeFit(false);
+      if (g.scanNew) { g.scanNew = false; g.fitNew = false; for (const c of casesOf(g)) c.dirty = true; this.scansFor(g, ['full', 'back', 'spine', 'disc']).then(() => this.refresh(g, true)); }
+      else if (g.fitNew) { g.fitNew = false; if (g.scanImg && g.scanImg.full) splitWrap(g, g.scanImg.full); }
       if (before !== passes(g) + '|' + keysOf(g).join('|') + '|' + g.t + '|' + (prefs.sort === 'hours' ? Math.round(g.hours) : '') + '|' + (prefs.sort === 'recent' ? g.last : '')) regroup = true;
       if (g.fmt !== f0) regroup = true;
       for (const c of casesOf(g)) { c.dirty = true; c.refreshSpine(); if (c === active || c.faceOut) c.ensureDetail(); }
@@ -394,7 +402,8 @@ const MOCKHOST = {
   },
   receive(m) {
     if (m.type === 'ndScrobble') console.log('[mock] scrobble', m.id);
-    if (m.type === 'setArt') { const r = this.lib.find(q => q.id === m.id); if (!r) return; r.scans = Object.assign({}, r.scans); if (m.data) r.scans[m.kind] = m.data; else delete r.scans[m.kind]; this.post({ type: 'games', games: [r] }); return; }
+    if (m.type === 'setFit') { const r = this.lib.find(q => q.id === m.id); if (!r) return; r.scanFit = Object.assign({}, r.scanFit); if (m.data) r.scanFit[m.kind] = JSON.parse(m.data); else delete r.scanFit[m.kind]; this.post({ type: 'games', games: [r] }); return; }
+    if (m.type === 'setArt') { const r = this.lib.find(q => q.id === m.id); if (!r) return; r.scans = Object.assign({}, r.scans); if (m.data) r.scans[m.kind] = m.data; else delete r.scans[m.kind]; if (r.scanFit && r.scanFit[m.kind]) { r.scanFit = Object.assign({}, r.scanFit); delete r.scanFit[m.kind]; } this.post({ type: 'games', games: [r] }); return; }
     if (m.type === 'game') {
       const r = this.lib.find(q => q.id === m.id); if (!r) return;
       if (m.act === 'install' || m.act === 'markOn' || m.act === 'uninstall' || m.act === 'markOff') { r.installed = m.act === 'install' || m.act === 'markOn'; r.presets = [...(r.installed ? ['f-inst'] : []), ...(r.cats.includes('Retro') ? ['f-retro'] : [])]; setTimeout(() => this.post({ type: 'games', games: [r] }), m.act === 'install' ? 1500 : 200); }

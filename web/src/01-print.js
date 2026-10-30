@@ -115,20 +115,84 @@ function drawTitle(x, g, W, H, top) {
 
 /* ---------- real pictures (back, spine, disc, or a full wraparound scan), when the game has them ---------- */
 function artPic(g, kind) { return g.real && g.scanImg ? g.scanImg[kind] || null : null; }
-/* a full scan is back | spine | front, side by side: cut it where the case's own proportions say */
+/* the framing editor (42-fit.js): while it is open, the case is painted with what is being framed */
+const FIT = { open: false, g: null, st: {} };
+/* which picture a framing was made for: when the picture changes, the framing no longer applies */
+function fitSrc(g, kind) {
+  if (kind === 'front') return 'cover:' + (g.coverVer || g.ver || '');
+  const v = (g.scans && g.scans[kind]) || ''; return v.length > 300 ? v.length + ':' + v.slice(-48) : v;   // a picture kept in memory (the pretend Playnite) is a whole data address
+}
+/* the framing the player chose for a face: the part of the (turned) picture that goes on it, as fractions
+   of the picture [left, top, right, bottom] (it may reach past the edges), and for a full scan the two
+   lines of the spine. A framing made for a case of another shape is left aside until it has that shape again */
+function artFit(g, kind, A) {
+  if (FIT.open && FIT.g === g && FIT.st[kind]) { const s = FIT.st[kind]; return s.explicit ? s : null; }
+  const f = g.scanFit && g.scanFit[kind], c = f && f.c;
+  if (!f || f.s !== fitSrc(g, kind) || !Array.isArray(c) || c.length !== 4 || !(c[2] > c[0]) || !(c[3] > c[1])) return null;
+  if (kind === 'full') return Array.isArray(f.k) && f.k.length === 2 && c[0] < f.k[0] && f.k[0] < f.k[1] && f.k[1] < c[2] ? f : null;
+  return A && f.a && Math.abs(A / f.a - 1) > .03 ? null : f;
+}
+/* the picture turned a quarter at a time (clockwise), kept so it is only turned once */
+function turned(img, r) {
+  r = (((r | 0) % 4) + 4) % 4; if (!r) return img;
+  const k = '_turn' + r; if (img[k]) return img[k];
+  const w = imgW(img), h = imgH(img), c = mkCanvas(r % 2 ? h : w, r % 2 ? w : h), x = c.getContext('2d');
+  x.translate(c.width / 2, c.height / 2); x.rotate(r * Math.PI / 2); x.drawImage(img, -w / 2, -h / 2);
+  try { img[k] = c; } catch (e) { }
+  return c;
+}
+function avgColor(im) {
+  if (im._avg) return im._avg;
+  let s = '#7f7a72'; try { const c = mkCanvas(1, 1), x = c.getContext('2d'); x.drawImage(im, 0, 0, 1, 1); const d = x.getImageData(0, 0, 1, 1).data; s = `rgb(${d[0]},${d[1]},${d[2]})`; } catch (e) { }
+  try { im._avg = s; } catch (e) { }
+  return s;
+}
+/* one part of a picture [l, t, r, b] stretched onto a face; past the picture's edges, its average colour */
+function artCrop(x, im, c, X, Y, W, H) {
+  const iw = imgW(im), ih = imgH(im); if (!iw || !ih) return;
+  const sx = W / ((c[2] - c[0]) * iw), sy = H / ((c[3] - c[1]) * ih);
+  x.save(); x.beginPath(); x.rect(X, Y, W, H); x.clip();
+  if (c[0] < 0 || c[1] < 0 || c[2] > 1 || c[3] > 1) { x.fillStyle = avgColor(im); x.fillRect(X, Y, W, H); }
+  x.drawImage(im, X - c[0] * iw * sx, Y - c[1] * ih * sy, iw * sx, ih * sy);
+  x.restore();
+}
+/* the part of a picture that fills a face of shape A (width / height) without stretching it, or that shows all of it */
+function coverRect(iw, ih, A) { const I = iw / ih; if (I > A) { const w = A / I; return [(1 - w) / 2, 0, (1 + w) / 2, 1]; } const h = I / A; return [0, (1 - h) / 2, 1, (1 + h) / 2]; }
+function containRect(iw, ih, A) { const I = iw / ih; if (I > A) { const h = I / A; return [0, (1 - h) / 2, 1, (1 + h) / 2]; } const w = A / I; return [(1 - w) / 2, 0, (1 + w) / 2, 1]; }
+/* the same, inside a part [l, t, r, b] of the picture */
+function subCover(c, iw, ih, A) { const q = coverRect((c[2] - c[0]) * iw, (c[3] - c[1]) * ih, A), w = c[2] - c[0], h = c[3] - c[1]; return [c[0] + q[0] * w, c[1] + q[1] * h, c[0] + q[2] * w, c[1] + q[3] * h]; }
+/* where the spine of a full scan is, by the case's own proportions */
+function wrapCuts(g, c) { const D = DIMS[g.fmt] || DIMS.dvd, w = c[2] - c[0], ws = w * D.d / (2 * D.w + D.d), k1 = c[0] + (w - ws) / 2; return [k1, k1 + ws]; }
+/* a full scan is back | spine | front, side by side: cut it where the player framed it, or where the case's proportions say */
 function splitWrap(g, img) {
-  const D = DIMS[g.fmt] || DIMS.dvd, iw = imgW(img), ih = imgH(img); if (!iw || !ih) return;
+  const iw0 = imgW(img), ih0 = imgH(img); if (!iw0 || !ih0) return;
+  const f = artFit(g, 'full');
+  if (f) {
+    const im = turned(img, f.r), iw = imgW(im), ih = imgH(im), c = f.c, k = f.k;
+    const part = (a, b) => { const w = Math.max(2, Math.round((b - a) * iw)), h = Math.max(2, Math.round((c[3] - c[1]) * ih)), cv = mkCanvas(w, h); artCrop(cv.getContext('2d'), im, [a, c[1], b, c[3]], 0, 0, w, h); cv.wrapCut = cv.exact = true; return cv; };
+    g.scanImg.wrapBack = part(c[0], k[0]); g.scanImg.wrapSpine = part(k[0], k[1]); g.scanImg.wrapFront = part(k[1], c[2]);
+    return;
+  }
+  const D = DIMS[g.fmt] || DIMS.dvd, iw = iw0, ih = ih0;
   const tot = 2 * D.w + D.d, ws = Math.max(2, Math.round(iw * D.d / tot)), wb = Math.round((iw - ws) / 2), wf = iw - ws - wb;
-  const cut = (x0, w) => { const c = mkCanvas(Math.max(1, w), ih); c.getContext('2d').drawImage(img, x0, 0, w, ih, 0, 0, w, ih); return c; };
+  const cut = (x0, w) => { const c = mkCanvas(Math.max(1, w), ih); c.getContext('2d').drawImage(img, x0, 0, w, ih, 0, 0, w, ih); c.wrapCut = true; return c; };
   g.scanImg.wrapBack = cut(0, wb); g.scanImg.wrapSpine = cut(wb, ws); g.scanImg.wrapFront = cut(wb + ws, wf);
 }
 /* a part's picture: its own file first, then the slice of the full scan */
 function artPart(g, kind) { return artPic(g, kind) || artPic(g, 'wrap' + kind[0].toUpperCase() + kind.slice(1)); }
+/* a picture on a face of W x H: as the player framed it, or filling the face (a spine lying down is stood up) */
+function layArt(x, img, g, kind, W, H) {
+  if (img.wrapCut) { if (img.exact) x.drawImage(img, 0, 0, W, H); else coverFit(x, img, 0, 0, W, H); return; }
+  const f = artFit(g, kind, W / H);
+  if (f) { artCrop(x, turned(img, f.r), f.c, 0, 0, W, H); return; }
+  if (kind === 'spine' && imgW(img) > imgH(img)) { x.save(); x.translate(W, 0); x.rotate(Math.PI / 2); coverFit(x, img, 0, 0, H, W); x.restore(); }
+  else coverFit(x, img, 0, 0, W, H);
+}
 function drawCover(g) {
   if (g.music) return musicCover(g);
   const [W, H] = coverSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), r = rng(hash(g.id) + 3);
   if (g.real) {
-    const scan = artPart(g, 'front'), src = scan || g.cover || g.coverSmall; if (src) coverFit(x, src, 0, 0, W, H); else placeholderArt(x, W, H, g);
+    const scan = artPart(g, 'front'), src = scan || g.cover || g.coverSmall; if (src) layArt(x, src, g, 'front', W, H); else placeholderArt(x, W, H, g);
     /* lit like printed paper behind plastic, not like a screen */
     x.save(); x.globalCompositeOperation = 'soft-light'; x.fillStyle = lg(x, 0, 0, W * .8, H, [[0, 'rgba(255,238,215,.4)'], [.55, 'rgba(128,128,128,0)'], [1, 'rgba(0,0,0,.4)']]); x.fillRect(0, 0, W, H); x.restore();
     /* a scan of the real cover stays as printed: no band of ours, no stickers; only the wear and the jewel case hinge */
@@ -233,7 +297,7 @@ function drawBack(g, coverCanvas) {
   if (g.music) return musicBack(g, coverCanvas);
   const [W, H] = coverSize(g), c = mkCanvas(W, H), x = c.getContext('2d'), p = g.pal;
   /* the real back cover, when there is one */
-  const real = artPart(g, 'back'); if (real) { coverFit(x, real, 0, 0, W, H); return c; }
+  const real = artPart(g, 'back'); if (real) { layArt(x, real, g, 'back', W, H); return c; }
   const dark = lum(p[0]) < .5, base = dark ? mix(p[0], '#000000', .15) : mix(p[0], '#ffffff', .2);
   const ink = dark ? '#f6f2ea' : '#1d1a17', soft = dark ? 'rgba(246,242,234,.82)' : 'rgba(29,26,23,.8)';
   x.fillStyle = base; x.fillRect(0, 0, W, H);
@@ -306,7 +370,7 @@ function drawRealSpine(g) {
   /* the real spine: stood upright if the picture came lying down */
   const sp = artPart(g, 'spine');
   if (sp) {
-    if (imgW(sp) > imgH(sp)) { x.save(); x.translate(W, 0); x.rotate(Math.PI / 2); coverFit(x, sp, 0, 0, H, W); x.restore(); } else coverFit(x, sp, 0, 0, W, H);
+    layArt(x, sp, g, 'spine', W, H);
     if (g.hours >= 40) wear(x, W, H, r, clamp(g.hours / 100, .4, 1));
     return c;
   }
@@ -386,7 +450,7 @@ function drawSpine(g) {
 function drawDisc(g, coverCanvas) {
   const S = 512, c = mkCanvas(S, S), x = c.getContext('2d'), p = g.pal, R = S / 2;
   /* the real disc, scanned or photographed: it fills the label */
-  const dk = artPic(g, 'disc'); if (dk) { x.save(); x.beginPath(); x.arc(R, R, R, 0, 7); x.clip(); coverFit(x, dk, 0, 0, S, S); x.restore(); return c; }
+  const dk = artPic(g, 'disc'); if (dk) { x.save(); x.beginPath(); x.arc(R, R, R, 0, 7); x.clip(); layArt(x, dk, g, 'disc', S, S); x.restore(); return c; }
   x.save(); x.beginPath(); x.arc(R, R, R, 0, 7); x.clip();
   if (g.real) { if (coverCanvas) coverFit(x, coverCanvas, 0, 0, S, S, .5, .3); else placeholderArt(x, S, S, g); }
   else { const art = mkCanvas(S, S), ax = art.getContext('2d'); drawArt(ax, S, S, g, 2); gradeArt(ax, S, S, rng(hash(g.id) + 9)); x.drawImage(art, 0, 0); }
@@ -435,7 +499,7 @@ function drawFloppyLabel(g, coverCanvas, i, n) {
 /* a cartridge label: the art edge to edge, a dark band on top and the title along the foot */
 function drawCartLabel(g, coverCanvas) {
   const W = 512, H = 266, c = mkCanvas(W, H), x = c.getContext('2d');
-  const lab = artPic(g, 'disc'); if (lab) { coverFit(x, lab, 0, 0, W, H); return c; }
+  const lab = artPic(g, 'disc'); if (lab) { layArt(x, lab, g, 'disc', W, H); return c; }
   labelArt(x, g, coverCanvas, 0, 0, W, H, 4, .25);
   const tb = H * .17; x.fillStyle = '#141418'; x.fillRect(0, 0, W, tb);
   ['#d83a3a', '#e3a02f', '#3aa655', '#3a7bd5'].forEach((cl, i) => { x.fillStyle = cl; x.fillRect(0, tb + i * 3, W, 3); });

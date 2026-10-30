@@ -193,8 +193,8 @@ function gameActs(g) {
 function artActs(g) {
   const art = g.scans || {}, med = mediaOf(g), disc = med === 'cart' ? T('Etiqueta') : med === 'disc' ? T('Disco') : '';
   const one = (k, label) => art[k] ? `<button type="button" class="gact on" data-art="${k}" title="${esc(T('Cambiar'))}">✓ ${label}</button><button type="button" class="gact x" data-artx="${k}" aria-label="${esc(T('Quitar') + ': ' + label)}" title="${esc(T('Quitar'))}">×</button>` : `<button type="button" class="gact" data-art="${k}">+ ${label}</button>`;
-  return `<div class="acts"><span class="lbl">${T('Imágenes de la caja')}</span><div class="act-row">${one('full', T('Escaneo completo'))}${one('back', T('Contraportada'))}${one('spine', T('Lomo'))}${disc ? one('disc', disc) : ''}</div>`
-    + `<p class="art-note">${T('Escaneos reales de tu copia: el completo es contraportada, lomo y portada en una sola imagen. Se guardan en la carpeta de metadatos del juego.')}</p></div>`;
+  return `<div class="acts"><span class="lbl">${T('Imágenes de la caja')}</span><div class="act-row">${one('full', T('Escaneo completo'))}${one('back', T('Contraportada'))}${one('spine', T('Lomo'))}${disc ? one('disc', disc) : ''}${g.hasCover || Object.keys(art).length ? `<button type="button" class="gact fit" data-fit="1">${T('Ajustar encuadre')}</button>` : ''}</div>`
+    + `<p class="art-note">${T('Escaneos reales de tu copia: el completo es contraportada, lomo y portada en una sola imagen. Se guardan en la carpeta de metadatos del juego. Si una imagen se corta o se pasa, Ajustar encuadre.')}</p></div>`;
 }
 /* the picture chosen for a part: made no bigger than it needs to be, then handed to the extension to keep */
 let artKind = null;
@@ -238,6 +238,7 @@ $('#info').addEventListener('click', e => {
   if (e.target.closest('[data-hide]')) { setCard('hide'); return; }
   const ga = e.target.closest('[data-gact]'); if (ga) { gameAct(active.g, ga.dataset.gact); return; }
   const ar = e.target.closest('[data-art]'); if (ar && PLAYNITE) { pickArt(ar.dataset.art); return; }
+  if (e.target.closest('[data-fit]') && PLAYNITE) { openFit(active.g); return; }
   const ax = e.target.closest('[data-artx]'); if (ax && PLAYNITE) { LIB.send('setArt', { id: active.g.id, kind: ax.dataset.artx, data: '' }); return; }
   if (e.target.closest('[data-edit]')) { infoEdit = !infoEdit; renderInfo(true); if (infoEdit) { const i = $('#catNew'); if (i && !coarse) i.focus(); } }
 });

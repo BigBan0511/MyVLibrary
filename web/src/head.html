@@ -172,6 +172,32 @@ button,select,input,textarea{font:inherit;color:inherit}
 .resume-card{max-width:min(440px,calc(100vw - 32px));padding:20px 22px;background:var(--panel);border:1px solid var(--panel-line);border-radius:12px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .resume-card h3{margin:0 0 6px;font-size:18px}.resume-card p{margin:0 0 16px;color:var(--ink-dim)}
 .resume-btns{display:flex;gap:8px;flex-wrap:wrap}.resume-btns .pbtn{padding:0 15px}
+/* framing the real pictures: the picture with its frame on the left, what the case will show on the right */
+.fit-ed{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.5)}
+.fit-card{width:min(1100px,100%);max-height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:12px;padding:14px 16px;background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);outline:none;overflow:auto}
+.fit-head{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap}
+.fit-head h3{margin:0;font:400 22px/1.1 var(--f-display);letter-spacing:.02em;color:var(--amber);flex:1 1 220px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fit-head h3 span{font:600 14px var(--f-body);color:var(--ink-dim);letter-spacing:0}
+.fit-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.gact.sel{background:var(--ink);color:var(--night);border-color:var(--ink)}
+.fit-body{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;min-height:0}
+.fit-stage{position:relative;height:min(58vh,560px);min-height:240px;border-radius:10px;overflow:hidden;background:#0c0b0a repeating-conic-gradient(#171513 0 25%,#0f0e0c 0 50%) 0 0/22px 22px}
+#fitCv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+.fit-side{display:grid;align-content:start;gap:12px;min-width:0}
+.fit-prev{display:flex;gap:8px;align-items:center;justify-content:center;min-height:120px;padding:10px;border-radius:10px;background:rgba(0,0,0,.28);border:1px solid var(--panel-line)}
+.fit-prev figure{margin:0;display:grid;justify-items:center;gap:5px}
+.fit-prev canvas{display:block;box-shadow:0 6px 16px rgba(0,0,0,.45)}
+.fit-prev figcaption{font-size:11px;color:var(--ink-dim);white-space:nowrap}
+.fit-tools{display:flex;flex-wrap:wrap;gap:6px}
+.fit-lock{display:flex;align-items:center;gap:8px;width:100%;margin-top:2px;font-size:13px;cursor:pointer}
+.fit-lock input{accent-color:var(--amber);width:16px;height:16px}
+.fit-help{margin:0;font-size:12px;line-height:1.45;color:var(--ink-dim)}
+.fit-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fit-keys{margin:0 auto 0 0;font-size:12px;color:var(--ink-dim)}
+.fit-keys kbd{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;margin-right:2px;border-radius:5px;background:rgba(255,255,255,.1);font:700 10px var(--f-mono);color:var(--ink)}
+.fit-keys b{color:var(--ink);font-weight:600}
+.fit-foot .pbtn{padding:0 15px 0 7px}
+@media (max-width:760px){.fit-body{grid-template-columns:1fr}.fit-stage{height:44vh}.fit-keys{display:none}}
 @media (max-width:640px){.epbar{bottom:110px;flex-wrap:wrap;justify-content:center;border-radius:14px;width:calc(100vw - 32px)}.ep-field{min-width:0;flex:1}.ep-list{width:auto;left:8px}}
 .hint{pointer-events:auto;font-size:14px;color:var(--ink-dim);padding:9px 14px;background:var(--panel);border:1px solid var(--panel-line);border-radius:999px}
 .hint kbd{font:700 11px var(--f-mono);color:var(--ink);padding:2px 6px;border:1px solid var(--panel-line);border-radius:4px;margin:0 2px}
@@ -360,7 +386,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 #tip{position:fixed;z-index:6;left:0;top:0;pointer-events:none;background:var(--panel);border:1px solid var(--panel-line);padding:7px 11px 8px;border-radius:7px;transform:translate(-50%,calc(-100% - 14px));white-space:nowrap}
 #tip b{display:block;font:800 19px/1 var(--f-display);text-transform:uppercase;letter-spacing:.03em}
 #tip span{display:block;font:600 12px var(--f-mono);color:var(--ink-dim);margin-top:4px}
-.toast{position:fixed;z-index:9;left:50%;top:calc(var(--hud-h,72px) + 12px);transform:translate(-50%,-8px);opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;
+.toast{position:fixed;z-index:25;left:50%;top:calc(var(--hud-h,72px) + 12px);transform:translate(-50%,-8px);opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;
   background:var(--ink);color:var(--night);font-weight:700;font-size:14px;padding:10px 16px;border-radius:999px;max-width:calc(100vw - 32px);text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
@@ -557,6 +583,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 <div class="pop bag" id="bag" hidden role="dialog" aria-label="Bolsa"></div>
 <div class="epbar" id="epbar" hidden><button type="button" class="pbtn icon" id="epPrev" aria-label="Capítulos anteriores">‹</button><span class="ep-range" id="epRange"></span><button type="button" class="pbtn icon" id="epNext" aria-label="Capítulos siguientes">›</button><label class="field ep-field"><input id="epQ" type="search" placeholder="Buscar capítulo (número o título)" autocomplete="off"></label><div class="ep-list" id="epList" hidden></div></div>
 <div class="resume" id="resume" hidden role="dialog" aria-modal="true" aria-label="Retomar"></div>
+<div class="fit-ed" id="fitEd" hidden role="dialog" aria-modal="true" aria-labelledby="fitTitle"></div>
 
 <div id="manual" hidden role="dialog" aria-modal="true" aria-label="Manual del juego">
   <div class="backdrop" id="mBack"></div>
