@@ -523,6 +523,8 @@ function applyStage(sys) {
   } else at = monOn ? MON.screen.clone() : flatOn ? flatTv.localToWorld(flatTv.userData.screen.clone()) : tvGroup.localToWorld(TV_SCREEN.clone());
   STAGE.screenAt = at; tvLight.position.set(at.x, at.y, at.z + 14);
   setCartFlaps(0); setFlaps(cartFlaps, 0); setFlaps(pcFlaps, 0); if (DEV.cur && DEV.cur.reset) DEV.cur.reset(); else setLids(DEV.cur, 0); DEV.led(false);
+  /* what you set about this room */
+  decoShow(sys);
 }
 /* where the case waits while you play, lying cover up: on the desk right of the monitor, on the rug
    left of the console (its lid opens away from it) or on the table right of the console. When it opens

@@ -193,8 +193,8 @@ function gameActs(g) {
 function artActs(g) {
   const art = g.scans || {}, med = mediaOf(g), disc = med === 'cart' ? T('Etiqueta') : med === 'disc' ? T('Disco') : '';
   const one = (k, label) => art[k] ? `<button type="button" class="gact on" data-art="${k}" title="${esc(T('Cambiar'))}">✓ ${label}</button><button type="button" class="gact x" data-artx="${k}" aria-label="${esc(T('Quitar') + ': ' + label)}" title="${esc(T('Quitar'))}">×</button>` : `<button type="button" class="gact" data-art="${k}">+ ${label}</button>`;
-  return `<div class="acts"><span class="lbl">${T('Imágenes de la caja')}</span><div class="act-row">${one('full', T('Escaneo completo'))}${one('back', T('Contraportada'))}${one('spine', T('Lomo'))}${disc ? one('disc', disc) : ''}${g.hasCover || Object.keys(art).length ? `<button type="button" class="gact fit" data-fit="1">${T('Ajustar encuadre')}</button>` : ''}</div>`
-    + `<p class="art-note">${T('Escaneos reales de tu copia: el completo es contraportada, lomo y portada en una sola imagen. Se guardan en la carpeta de metadatos del juego. Si una imagen se corta o se pasa, Ajustar encuadre.')}</p></div>`;
+  return `<div class="acts"><span class="lbl">${T('Imágenes de la caja')}</span><div class="act-row">${one('full', T('Escaneo completo'))}${one('front', T('Portada'))}${one('back', T('Contraportada'))}${one('spine', T('Lomo'))}${disc ? one('disc', disc) : ''}${DIMS[g.fmt].man && DIMS[g.fmt].man[0] ? one('manual', T('Manual')) : ''}${g.hasCover || Object.keys(art).length ? `<button type="button" class="gact fit" data-fit="1">${T('Ajustar encuadre')}</button>` : ''}</div>`
+    + `<p class="art-note">${T('Escaneos reales de tu copia: el completo es contraportada, lomo y portada en una sola imagen; Manual es la portada del manual. Se guardan en la carpeta de metadatos del juego. Si una imagen se corta o se pasa, Ajustar encuadre.')}</p></div>`;
 }
 /* the picture chosen for a part: made no bigger than it needs to be, then handed to the extension to keep */
 let artKind = null;
@@ -377,7 +377,7 @@ function renderSettings() {
   setPop.querySelectorAll('[data-tab-btn]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tabBtn === prefs.setTab)));
   setPop.querySelectorAll('[data-tab]').forEach(r => { r.hidden = r.dataset.tab !== prefs.setTab; });
   const mv = $('#mvolRange'); if (mv) { mv.value = prefs.mvol; $('#mvolVal').textContent = prefs.mvol + ' %'; }
-  renderUgcList(); const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
+  renderUgcList(); renderDecoList(); const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
 function renderRoomPick() {
   const el = $('#roomPick'); if (!el) return;
   el.innerHTML = ROOM_ORDER.map(k => { const R = ROOMS[k]; return `<button type="button" class="room" data-room="${k}" aria-pressed="${prefs.room === k}"><i style="background:linear-gradient(90deg,${R.sw[0]} 0 45%,${R.sw[1]} 45% 72%,${R.sw[2]} 72%)"></i><span>${T(R.name)}</span></button>`; }).join('');

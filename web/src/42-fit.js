@@ -9,30 +9,39 @@ const fitEl = $('#fitEd');
 const FIT_ROOM = .16;   // room around the picture, for a framing that reaches past its edges
 Object.assign(FIT, { tab: null, tabs: [], sel: 'move', drag: null, view: null, raf: 0, liveT: 0 });
 
-/* the faces that have a picture to frame; with a full scan, the front is framed inside it */
+/* the faces that have a picture to frame: the full scan as a whole, then each face from its own picture
+   (or its part of the full scan, or Playnite's cover), the manual's cover and the disc */
 function fitTabs(g) {
   const S = g.scans || {}, I = g.scanImg || {}, med = mediaOf(g), L = [];
   if (S.full && I.full) L.push(['full', T('Escaneo completo')]);
-  else if (g.cover || g.coverSmall) L.push(['front', T('Portada')]);
-  if (S.back && I.back) L.push(['back', T('Contraportada')]);
-  if (S.spine && I.spine) L.push(['spine', T('Lomo')]);
+  [['front', T('Portada')], ['back', T('Contraportada')], ['spine', T('Lomo')]].forEach(t => { if (facePic(g, t[0])) L.push(t); });
+  if (DIMS[g.fmt].man && DIMS[g.fmt].man[0] && facePic(g, 'manual')) L.push(['manual', T('Manual')]);
   if (S.disc && I.disc && (med === 'disc' || med === 'cart')) L.push(['disc', med === 'cart' ? T('Etiqueta') : T('Disco')]);
   return L;
 }
-function fitImg(g, kind) { return kind === 'front' ? g.cover || g.coverSmall : g.scanImg && g.scanImg[kind]; }
-function faceSize(g, kind) { if (kind === 'spine') return spineSize(g); if (kind === 'disc') return mediaOf(g) === 'cart' ? [512, 266] : [512, 512]; return coverSize(g); }
+function fitImg(g, kind) { return kind === 'full' || kind === 'disc' ? g.scanImg && g.scanImg[kind] : facePic(g, kind); }
+function faceSize(g, kind) {
+  if (kind === 'spine') return spineSize(g); if (kind === 'disc') return mediaOf(g) === 'cart' ? [512, 266] : [512, 512];
+  if (kind === 'manual') { const m = manualSize(g, manualBand(g)); return [m[0], m[1]]; }
+  return coverSize(g);
+}
 function faceA(g, kind) { const [W, H] = faceSize(g, kind); return W / H; }
 /* what the case shows when nothing has been framed: the picture filling the face (a spine lying down, stood up) */
 function fitDefault(g, kind, raw, r) {
-  if (r === undefined) r = kind === 'spine' && imgW(raw) > imgH(raw) ? 1 : 0;
-  const im = turned(raw, r);
+  if (r === undefined) r = kind === 'spine' && !raw.wrapCut && imgW(raw) > imgH(raw) ? 1 : 0;
+  const im = turned(raw, r), b = FIT.st[kind] ? FIT.st[kind].b : 1;
   if (kind === 'full') { const c = [0, 0, 1, 1]; return { r, c, k: wrapCuts(g, c), lock: false, explicit: false }; }
+  /* the manual shows the whole picture */
+  if (kind === 'manual' && !artPic(g, 'manual')) return { r, c: containRect(imgW(im), imgH(im), faceA(g, kind)), k: null, lock: true, explicit: false, b };
+  /* a part of the full scan already cut where it was framed fills its face as it is */
+  if (raw.wrapCut && raw.exact && !r) return { r, c: [0, 0, 1, 1], k: null, lock: false, explicit: false };
   return { r, c: coverRect(imgW(im), imgH(im), faceA(g, kind)), k: null, lock: true, explicit: false };
 }
 function fitState(g, kind) {
   if (FIT.st[kind]) return FIT.st[kind];
   const f = artFit(g, kind, faceA(g, kind));
   const s = f ? { r: f.r | 0, c: f.c.slice(), k: f.k ? f.k.slice() : null, lock: kind !== 'full' && f.l !== 0, explicit: true } : fitDefault(g, kind, fitImg(g, kind));
+  if (kind === 'manual') s.b = manualBand(g) ? 1 : 0;
   s.dirty = false;
   return (FIT.st[kind] = s);
 }
@@ -47,7 +56,7 @@ function fitHandleName(h) {
 /* ---------- opening and closing ---------- */
 async function openFit(g) {
   if (!g || !g.real || FIT.open) return;
-  await Promise.all([LIB.bigCover(g), LIB.scansFor(g, ['full', 'back', 'spine', 'disc'])]);
+  await Promise.all([LIB.bigCover(g), LIB.scansFor(g, SCAN_KINDS)]);
   if (!active || active.g !== g || FIT.open) return;
   const tabs = fitTabs(g);
   if (!tabs.length) { toast(T('Las imágenes todavía se están cargando')); return; }
@@ -82,6 +91,7 @@ function closeFit(save) {
     if (s.explicit) {
       const f = { s: fitSrc(g, kind), r: s.r, c: s.c.map(r4) };
       if (kind === 'full') f.k = s.k.map(r4); else { f.a = r4(faceA(g, kind)); f.l = s.lock ? 1 : 0; }
+      if (kind === 'manual') f.b = s.b === 0 ? 0 : 1;
       g.scanFit = Object.assign({}, g.scanFit, { [kind]: f }); LIB.send('setFit', { id: g.id, kind, data: JSON.stringify(f) }); saved++;
     } else if (g.scanFit && g.scanFit[kind]) {
       g.scanFit = Object.assign({}, g.scanFit); delete g.scanFit[kind]; LIB.send('setFit', { id: g.id, kind, data: '' }); saved++;
@@ -102,6 +112,8 @@ function fitLive() { clearTimeout(FIT.liveT); FIT.liveT = setTimeout(() => { if 
 /* ---------- one face at a time ---------- */
 function fitTab(kind) {
   if (!FIT.tabs.some(t => t[0] === kind)) return;
+  /* the parts of the full scan, cut as it is framed right now */
+  if (kind !== 'full' && FIT.g.scanImg && FIT.g.scanImg.full) splitWrap(FIT.g, FIT.g.scanImg.full);
   FIT.tab = kind; FIT.sel = 'move'; FIT.view = null; fitState(FIT.g, kind);
   fitEl.querySelectorAll('[data-ftab]').forEach(b => { const on = b.dataset.ftab === kind; b.classList.toggle('sel', on); b.setAttribute('aria-selected', on); });
   const full = kind === 'full', b = (t, l) => `<button type="button" class="gact" data-ftool="${t}">${l}</button>`;
@@ -109,15 +121,18 @@ function fitTab(kind) {
     ? b('trim', T('Detectar bordes')) + b('all', T('Toda la imagen')) + b('split', T('Repartir según la caja'))
     : b('fill', T('Rellenar')) + b('whole', T('Entera')) + b('all', T('Toda la imagen')) + b('trim', T('Detectar bordes')))
     + b('rot', T('Girar 90°')) + b('reset', T('Restablecer'))
-    + (full ? '' : `<label class="fit-lock"><input type="checkbox" id="fitLock"> ${T('Mantener la proporción')}</label>`);
+    + (full ? '' : `<label class="fit-lock"><input type="checkbox" id="fitLock"> ${T('Mantener la proporción')}</label>`)
+    + (kind === 'manual' && !artPic(FIT.g, 'manual') ? `<label class="fit-lock"><input type="checkbox" id="fitBand"> ${T('Con la franja «Manual de instrucciones»')}</label>` : '');
+  const cut = kind !== 'full' && fitImg(FIT.g, kind) && fitImg(FIT.g, kind).wrapCut;
   $('#fitHelp').textContent = full
     ? T('Arrastra los bordes de fuera hasta lo impreso y las dos líneas hasta los cantos del lomo. Cada parte se estira a su cara: contraportada, lomo y portada.')
-    : T('Arrastra el recuadro o sus bordes, o acerca y aleja con la rueda. Lo que queda dentro va a la cara de la caja; sin mantener la proporción, se estira hasta llenarla.');
+    : (cut ? T('Esta cara sale del escaneo completo: aquí se encuadra dentro de su parte.') + ' ' : kind === 'manual' && !artPic(FIT.g, 'manual') ? T('Sin un escaneo del manual, su portada se hace con la imagen de la portada de la caja.') + ' ' : '')
+      + T('Arrastra el recuadro o sus bordes, o acerca y aleja con la rueda. Lo que queda dentro va a la cara de la caja; sin mantener la proporción, se estira hasta llenarla.');
   $('#fitPrev').dataset.k = '';
   fitSync(); fitRedraw();
 }
 function fitSync() {
-  const s = fitCur(), lk = $('#fitLock'); if (lk) lk.checked = !!s.lock;
+  const s = fitCur(), lk = $('#fitLock'), bd = $('#fitBand'); if (lk) lk.checked = !!s.lock; if (bd) bd.checked = s.b !== 0;
   const multi = FIT.tabs.length > 1;
   $('#fitKeys').innerHTML = `<kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> ${T('mover')} <b>${fitHandleName(FIT.sel)}</b> · <kbd>Q</kbd><kbd>E</kbd> ${T('otro borde')} · <kbd>Z</kbd><kbd>C</kbd> ${T('zoom')} · <kbd>F</kbd> ${T('girar')}${multi ? ` · <kbd>M</kbd> ${T('otra cara')}` : ''}`;
 }
@@ -191,11 +206,11 @@ function fitPreview() {
   const g = FIT.g, kind = FIT.tab, s = fitCur(), im = fitPic(), iw = imgW(im), ih = imgH(im), dpr = Math.min(2, devicePixelRatio || 1);
   const faces = kind === 'full' ? [['back', T('Contraportada')], ['spine', T('Lomo')], ['front', T('Portada')]] : [[kind, '']];
   const lying = kind === 'spine';
-  const key = kind + '|' + g.fmt + '|' + box.clientWidth;
+  const key = kind + '|' + g.fmt + '|' + box.clientWidth + '|' + (kind === 'manual' ? s.b : '');
   if (box.dataset.k !== key) {
     box.dataset.k = key;
     box.innerHTML = faces.map(([f, l]) => `<figure><canvas data-face="${f}"></canvas>${l ? `<figcaption>${esc(l)}</figcaption>` : ''}</figure>`).join('');
-    const sizes = faces.map(([f]) => faceSize(g, f)), avail = Math.max(120, box.clientWidth - 20 - 8 * (faces.length - 1));
+    const sizes = faces.map(([f]) => { if (f !== 'manual') return faceSize(g, f); const m = manualSize(g, true); return [m[0], m[2]]; }), avail = Math.max(120, box.clientWidth - 20 - 8 * (faces.length - 1));
     const sum = sizes.reduce((a, [w, h]) => a + (lying ? h / w : w / h), 0), Hpx = Math.min(lying ? 34 : 176, avail / sum);
     box.querySelectorAll('canvas').forEach((cv, i) => {
       const [w, h] = sizes[i], A = lying ? h / w : w / h, cw = Math.max(4, Math.round(Hpx * A)), ch = Math.round(Hpx);
@@ -208,7 +223,8 @@ function fitPreview() {
     let c = s.c;
     if (kind === 'full') { c = f === 'back' ? [s.c[0], s.c[1], s.k[0], s.c[3]] : f === 'spine' ? [s.k[0], s.c[1], s.k[1], s.c[3]] : [s.k[1], s.c[1], s.c[2], s.c[3]]; if (!s.explicit) c = subCover(c, iw, ih, faceA(g, f)); }
     x.save();
-    if (lying) { x.translate(0, H); x.rotate(-Math.PI / 2); artCrop(x, im, c, 0, 0, H, W); }
+    if (f === 'manual') { const cc = active && active.g === g && active.coverCanvas ? active.coverCanvas : drawCover(g); x.drawImage(drawManualCover(g, cc), 0, 0, W, H); }
+    else if (lying) { x.translate(0, H); x.rotate(-Math.PI / 2); artCrop(x, im, c, 0, 0, H, W); }
     else if (f === 'disc' && mediaOf(g) === 'disc') {
       x.beginPath(); x.arc(W / 2, H / 2, W / 2, 0, 7); x.clip(); artCrop(x, im, c, 0, 0, W, H);
       x.globalCompositeOperation = 'destination-out'; x.beginPath(); x.arc(W / 2, H / 2, W * .065, 0, 7); x.fill();
@@ -383,7 +399,10 @@ fitEl.addEventListener('click', e => {
   const ac = e.target.closest('[data-fact]'); if (ac) closeFit(ac.dataset.fact === 'save');
 });
 fitEl.addEventListener('change', e => {
-  if (e.target.id !== 'fitLock') return;
-  const s = fitCur(); s.lock = e.target.checked; if (s.lock) fitToShape(s); s.explicit = true; fitChanged(true);
+  const s = fitCur(); if (!s) return;
+  if (e.target.id === 'fitLock') { s.lock = e.target.checked; if (s.lock) fitToShape(s); }
+  else if (e.target.id === 'fitBand') { s.b = e.target.checked ? 1 : 0; const b = $('#fitPrev'); if (b) b.dataset.k = ''; if (s.lock) fitToShape(s); }
+  else return;
+  s.explicit = true; fitChanged(true);
 });
 window.addEventListener('resize', () => { if (FIT.open) { FIT.view = null; const b = $('#fitPrev'); if (b) b.dataset.k = ''; fitRedraw(); } });
