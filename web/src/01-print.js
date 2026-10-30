@@ -127,15 +127,17 @@ function fitSrc(g, kind) {
   /* a face with no picture of its own is printed from its part of the full scan; the front, from Playnite's cover; the manual, from the front */
   if ((kind === 'front' || kind === 'back' || kind === 'spine') && S.full) return 'full:' + key(S.full);
   if (kind === 'front') return 'cover:' + (g.coverVer || g.ver || '');
-  if (kind === 'manual') return 'manual:' + fitSrc(g, 'front');
+  if (kind === 'manual') return g.manualCover ? 'pdf:' + g.manualVer : 'manual:' + fitSrc(g, 'front');
   return '';
 }
+/* the manual's own cover: a picture of it, or the first page of the real manual */
+function manualScan(g) { return artPic(g, 'manual') || (g.real && g.manualCover) || null; }
 /* the picture a face is printed from, as fitSrc says */
 function facePic(g, kind) {
   const own = artPic(g, kind); if (own) return own;
   if (kind === 'front' || kind === 'back' || kind === 'spine') { const w = artPic(g, 'wrap' + kind[0].toUpperCase() + kind.slice(1)); if (w) return w; }
   if (kind === 'front') return g.real ? g.cover || g.coverSmall || null : null;
-  if (kind === 'manual') return facePic(g, 'front');
+  if (kind === 'manual') return manualScan(g) || facePic(g, 'front');
   return null;
 }
 /* the framing the player chose for a face: the part of the (turned) picture that goes on it, as fractions
@@ -530,7 +532,7 @@ function drawCartLabel(g, coverCanvas) {
 function drawMediaLabel(g, coverCanvas) { if (g.music) return musicLabel(g, coverCanvas); if (g.video) return drawVideoLabel(g, coverCanvas, g.ep || null); const m = mediaOf(g); return m === 'floppy' ? drawFloppyLabel(g, coverCanvas, 0, DIMS.floppy.disks) : m === 'cart' ? drawCartLabel(g, coverCanvas) : drawDisc(g, coverCanvas); }
 /* the manual's band: on by default, the player may take it off in the framing window */
 function manualBand(g) {
-  if (artPic(g, 'manual')) return false;
+  if (manualScan(g)) return false;
   const s = FIT.open && FIT.g === g && FIT.st.manual, f = s || (g.scanFit && g.scanFit.manual && g.scanFit.manual.s === fitSrc(g, 'manual') ? g.scanFit.manual : null);
   return !f || f.b !== 0;
 }
@@ -538,7 +540,7 @@ function manualSize(g, band) { const W = 300, H = Math.round(300 * DIMS[g.fmt].m
 function drawManualCover(g, coverCanvas) {
   const [W, ih0, H] = manualSize(g, true), c = mkCanvas(W, H), x = c.getContext('2d');
   /* a scan of the real manual, as printed */
-  const scan = artPic(g, 'manual'); if (scan) { layArt(x, scan, g, 'manual', W, H); return c; }
+  const scan = manualScan(g); if (scan) { layArt(x, scan, g, 'manual', W, H); return c; }
   const band = manualBand(g), ih = band ? ih0 : H;
   x.fillStyle = '#f3eee3'; x.fillRect(0, 0, W, H);
   /* the front's picture, as the player framed it on the manual, or whole over a blurred copy of itself */
