@@ -176,7 +176,7 @@ const UGC = (() => {
       else if (sm.topology === 2) for (let i = 0; i + 3 < cnt; i += 4) { const a = at(i), b = at(i + 1), c = at(i + 2), d = at(i + 3); tri.push(a, b, c, a, c, d); }
       return tri;
     });
-    return { n, pos: ch(0), nrm: ch(1), uv: ch(4), col: ch(3), subs };
+    return { n, pos: ch(0), nrm: ch(1), uv: ch(4), col: ch(3), weights: ch(12), joints: ch(13), subs };
   }
 
   /* ---------- textures: one mip level, decoded to RGBA (rows bottom-first, as Unity keeps them) ---------- */
@@ -319,7 +319,8 @@ const UGC = (() => {
     const clips = {};
     for (const k of ['open', 'close', 'insert', 'remove', 'on', 'off']) {
       if (!A[k]) continue;
-      const c = Object.assign({}, A[k], { binds: A[k].binds.map(b => Object.assign({}, b, { node: hashes.get(b.path) || null })) });   /* the parsed clip stays plain data */
+      /* the parsed clip stays plain data; what it says about the model's own root is where EmuVR held it in the room, which means nothing here */
+      const c = Object.assign({}, A[k], { binds: A[k].binds.map(b => { const node = hashes.get(b.path) || null; return Object.assign({}, b, { node: node === top && b.type === 4 ? null : node }); }) });
       if (c.binds.some(b => b.node)) clips[k] = c;
     }
     /* Unity's Euler angles turn Z, then X, then Y: three.js calls that order YXZ */
@@ -347,7 +348,7 @@ const UGC = (() => {
     const get = id => { try { return id ? S.get(id) : null; } catch (e) { return null; } };
     const tfs = new Map(S.ids(4).map(id => [id, get(id)]).filter(e => e[1]));
     const comps = new Map();
-    for (const c of [33, 23, 108]) S.ids(c).forEach(id => { const d = get(id); if (!d) return; const go = d.m_GameObject.m_PathID; if (!comps.has(go)) comps.set(go, {}); comps.get(go)[c] = d; });
+    for (const c of [33, 23, 137, 108]) S.ids(c).forEach(id => { const d = get(id); if (!d) return; const go = d.m_GameObject.m_PathID; if (!comps.has(go)) comps.set(go, {}); comps.get(go)[c] = d; });
     /* the scripts EmuVR attaches: Socket marks where the medium goes, GameSystemState says which clip opens,
        closes, takes the medium in..., UGCInfo and GameSystem say what the model is */
     const mono = new Map();
@@ -369,13 +370,15 @@ const UGC = (() => {
     };
     /* a box's art: EmuVR paints the box image on these renderers */
     const artRend = new Set(); (mono.get('WIGUTextureLoader') || []).forEach(d => (d.renderersToEdit || []).forEach(p => artRend.add(String(pid(p)))));
-    const artGos = new Set(S.ids(23).filter(id => artRend.has(String(id))).map(id => { const d = get(id); return d && d.m_GameObject.m_PathID; }));
+    const artGos = new Set([...S.ids(23), ...S.ids(137)].filter(id => artRend.has(String(id))).map(id => { const d = get(id); return d && d.m_GameObject.m_PathID; }));
     const sockets = new Map((mono.get('Socket') || []).map(d => [d.m_GameObject.m_PathID, { female: !!d.isFemale, type: d.typeData || '', free: [d.freeRotationX, d.freeRotationY, d.freeRotationZ].map(Boolean) }]));
     const node = t => {
       const go = get(t.m_GameObject.m_PathID), cs = comps.get(t.m_GameObject.m_PathID) || {};
       const n = { name: go ? go.m_Name : '', go: t.m_GameObject.m_PathID, active: go ? go.m_IsActive !== false : true, p: t.m_LocalPosition, q: t.m_LocalRotation, s: t.m_LocalScale, kids: [] };
-      const me = cs[33] && get(pid(cs[33].m_Mesh));
-      if (me) { n.mesh = meshData(me, S.little); n.meshName = me.m_Name; n.mats = (cs[23] ? cs[23].m_Materials : []).map(p => pid(p) ? material(pid(p)) : null); n.visible = !cs[23] || !!cs[23].m_Enabled; }
+      /* a mesh that bends with bones has its own renderer, which holds both the mesh and the bones */
+      const rend = cs[23] || cs[137], me = cs[33] ? get(pid(cs[33].m_Mesh)) : cs[137] && get(pid(cs[137].m_Mesh));
+      if (me) { n.mesh = meshData(me, S.little); n.meshName = me.m_Name; n.mats = (rend ? rend.m_Materials : []).map(p => pid(p) ? material(pid(p)) : null); n.visible = !rend || !!rend.m_Enabled; }
+      if (me && cs[137] && !cs[33] && n.mesh.weights && n.mesh.joints && (cs[137].m_Bones || []).length) { n.bones = cs[137].m_Bones.map(p => { const b = tfs.get(pid(p)); return b ? b.m_GameObject.m_PathID : null; }); n.bind = me.m_BindPose; }
       if (cs[108]) n.light = { color: cs[108].m_Color, intensity: cs[108].m_Intensity, range: cs[108].m_Range };
       if (sockets.has(n.go)) n.sock = sockets.get(n.go);
       if (artGos.has(n.go)) n.art = true;
@@ -472,7 +475,7 @@ const UGC = (() => {
     };
     mat.customProgramCacheKey = () => 'emuvr-quick' + !!mat.map;
   }
-  function geometry(md, colours) {
+  function geometry(md, colours, bones) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(md.pos.arr, 3));
     /* vertex colours and their alpha (only the Quick shader reads them; white plastic when a mesh has none) */
@@ -483,6 +486,11 @@ const UGC = (() => {
     }
     if (md.nrm) g.setAttribute('normal', new THREE.BufferAttribute(md.nrm.arr, 3));
     if (md.uv) { const uv = md.uv.dim === 2 ? md.uv.arr : md.uv.arr.filter((_, i) => i % md.uv.dim < 2); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); }
+    if (bones) {
+      const n = md.n, w = new Float32Array(n * 4), j = new Uint16Array(n * 4), wd = md.weights.dim, jd = md.joints.dim;
+      for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) { w[i * 4 + k] = k < wd ? md.weights.arr[i * wd + k] : 0; j[i * 4 + k] = k < jd ? md.joints.arr[i * jd + k] : 0; }
+      g.setAttribute('skinWeight', new THREE.BufferAttribute(w, 4)); g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(j, 4));
+    }
     const all = [].concat(...md.subs), idx = md.n > 65535 ? new Uint32Array(all) : new Uint16Array(all); g.setIndex(new THREE.BufferAttribute(idx, 1));
     let start = 0; md.subs.forEach((s, i) => { g.addGroup(start, s.length, i); start += s.length; });
     if (!md.nrm) g.computeVertexNormals();
@@ -490,15 +498,17 @@ const UGC = (() => {
   }
   /* the model in centimetres, facing the room (+Z), standing on y = 0; anchors in userData */
   function build(parsed) {
-    const made = new Map(), anchors = {}, lids = [], meshes = [], art = [], byGo = new Map();
+    const made = new Map(), anchors = {}, lids = [], meshes = [], art = [], byGo = new Map(), bent = [], bentMats = new Map();
+    /* a program belongs to its material, so what bends has a material of its own */
+    const bentMat = b => { if (!bentMats.has(b)) { const c = b.clone(); c.skinning = true; c.userData.envBase = b.userData.envBase ?? 1; c.envMapIntensity = b.envMapIntensity; c.onBeforeCompile = b.onBeforeCompile; c.customProgramCacheKey = b.customProgramCacheKey; allMats.push(c); bentMats.set(b, c); } return bentMats.get(b); };
     /* the medium's place is the female Socket EmuVR attaches; older or hand-made models only name it */
     let scripted = false; { const w = n => { if (n.sock && n.sock.female) scripted = true; n.kids.forEach(w); }; parsed.roots.forEach(w); }
     const mk = n => {
       const o = new THREE.Group(); o.name = n.name; o.visible = n.active; o.userData.unity = true; byGo.set(n.go, o);
       o.position.set(n.p.x, n.p.y, n.p.z); o.quaternion.set(n.q.x, n.q.y, n.q.z, n.q.w); o.scale.set(n.s.x, n.s.y, n.s.z);
       if (n.mesh && n.mesh.pos) {
-        const mats = n.mesh.subs.map((_, i) => makeMaterial(n.mats[i] || n.mats[0], made));
-        const m = new THREE.Mesh(geometry(n.mesh, n.mesh.subs.some((_, i) => isQuick(n.mats[i] || n.mats[0]))), mats.length === 1 ? mats[0] : mats); m.name = n.meshName || n.name; m.castShadow = m.receiveShadow = true; m.visible = n.visible !== false;
+        const mats = n.mesh.subs.map((_, i) => { const b = makeMaterial(n.mats[i] || n.mats[0], made); return n.bones ? bentMat(b) : b; }), geo = geometry(n.mesh, n.mesh.subs.some((_, i) => isQuick(n.mats[i] || n.mats[0])), !!n.bones);
+        const m = new (n.bones ? THREE.SkinnedMesh : THREE.Mesh)(geo, mats.length === 1 ? mats[0] : mats); if (n.bones) bent.push([m, n]); m.name = n.meshName || n.name; m.castShadow = m.receiveShadow = true; m.visible = n.visible !== false;
         o.add(m); meshes.push(m); if (/lid|tapa/i.test(n.name)) lids.push(o);
         /* a box's art, and the sticker on a cartridge or a disc */
         if (n.art) art.push(m); if (/^media_label/i.test(n.name)) anchors.label = m;
@@ -512,14 +522,18 @@ const UGC = (() => {
       return o;
     };
     const model = new THREE.Group(); parsed.roots.forEach(r => model.add(mk(r)));
+    /* Unity's bind poses work on the same numbers as its transforms, and the mesh is placed by its bones alone */
+    bent.forEach(([m, n]) => { const B = (n.bind || []).map(b => new THREE.Matrix4().set(b.e00, b.e01, b.e02, b.e03, b.e10, b.e11, b.e12, b.e13, b.e20, b.e21, b.e22, b.e23, b.e30, b.e31, b.e32, b.e33)); m.bind(new THREE.Skeleton(n.bones.map(go => byGo.get(go) || model), n.bones.map((_, i) => B[i] || new THREE.Matrix4())), new THREE.Matrix4()); m.frustumCulled = false; });
     /* Unity is left-handed: mirror X so the front, which EmuVR models put at +Z, still faces the room */
     const root = new THREE.Group(); model.scale.set(-100, 100, 100); root.add(model);
     root.updateMatrixWorld(true);
+    /* its bounds are where the bones hold it, not where the mesh was modelled */
+    bent.forEach(([m]) => { const P = m.geometry.attributes.position, v = new V3(), b = new THREE.Box3(), step = Math.max(1, P.count >> 12); for (let i = 0; i < P.count; i += step) b.expandByPoint(m.boneTransform(i, v.fromBufferAttribute(P, i))); m.geometry.boundingBox = b; });
     const box = new THREE.Box3(); meshes.forEach(m => { if (m.visible) box.expandByObject(m); });
     if (!box.isEmpty()) { model.position.y -= box.min.y; model.position.x -= (box.min.x + box.max.x) / 2; model.position.z -= (box.min.z + box.max.z) / 2; }
     root.updateMatrixWorld(true); box.setFromObject(model);
     const anim = parsed.anim ? makeAnim(parsed.anim, byGo.get(parsed.anim.root) || model.children[0], byGo) : null;
-    root.userData = { anchors, lids, meshes, art, info: parsed.info || {}, size: box.getSize(new V3()), materials: [...made.values()], anim: anim && Object.keys(anim.clips).length ? anim : null };
+    root.userData = { anchors, lids, meshes, art, info: parsed.info || {}, size: box.getSize(new V3()), materials: [...made.values(), ...bentMats.values()], anim: anim && Object.keys(anim.clips).length ? anim : null };
     return root;
   }
   function dispose(root) {

@@ -24,7 +24,7 @@ function modelKind(p) {
   if (p.type === 'screen') return 'screen';
   if (/^system/.test(p.type) || p.art) {
     if (/^animated|fake plug|blinds/i.test(n) || p.systems.includes('LemonsAnimatedFurniture')) return 'prop';
-    if (p.art) { if (/arcade|bartop|cab\b|cabinet|consolette|game & watch|neo geo mvs/i.test(n)) return 'console'; if (/comic|magazine|book|manual|mp3|insert/i.test(n) || p.systems.includes('Bookmark')) return 'prop'; return 'box'; }
+    if (p.art) { if (/arcade|bartop|cab\b|cabinet|consolette|game & watch|neo geo mvs/i.test(n)) return 'console'; if (/comic|magazine|book|manual|mp3/i.test(n) || (/insert/i.test(n) && !/case/i.test(n)) || p.systems.includes('Bookmark')) return 'prop'; return 'box'; }
     return 'console';
   }
   return 'prop';

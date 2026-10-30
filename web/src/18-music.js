@@ -154,15 +154,16 @@ function musicSpine(g) {
   return c;
 }
 /* the medium itself: a vinyl's paper label, a CD's face, a cassette's sticker */
-function musicLabel(g, coverCanvas) {
+function musicLabel(g, coverCanvas, reels) {
   const m = DIMS[g.fmt];
   if (g.fmt === 'cass') {
-    const W = 512, H = 137, c = mkCanvas(W, H), x = c.getContext('2d');
-    if (g.kind === 'mix') { x.fillStyle = '#f7f3e8'; x.fillRect(0, 0, W, H); x.fillStyle = '#1d2a6b'; x.font = `${Math.round(H * .42)}px ${F.marker}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(g.t, W / 2, H * .5); x.fillStyle = '#d43a3a'; x.font = `800 ${Math.round(H * .4)}px ${F.saira}`; x.fillText('A', W * .06, H * .52); return c; }
+    /* on a whole cassette the reels show through the sticker's middle, so the title stays above them */
+    const W = 512, H = 137, c = mkCanvas(W, H), x = c.getContext('2d'), ty = reels ? .34 : .55;
+    if (g.kind === 'mix') { x.fillStyle = '#f7f3e8'; x.fillRect(0, 0, W, H); x.fillStyle = '#1d2a6b'; x.font = `${Math.round(H * (reels ? .24 : .42))}px ${F.marker}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(g.t, W / 2, H * (reels ? .2 : .5)); x.fillStyle = '#d43a3a'; x.font = `800 ${Math.round(H * .4)}px ${F.saira}`; x.fillText('A', W * .06, H * .52); return c; }
     x.fillStyle = '#f2ede1'; x.fillRect(0, 0, W, H); x.fillStyle = g.pal[2]; x.fillRect(0, 0, W, H * .2);
     x.fillStyle = '#ffffff'; x.font = `800 ${Math.round(H * .16)}px ${F.saira}`; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText((g.artist || musicSub(g)).toUpperCase(), W * .03, H * .1);
-    x.fillStyle = '#1a1a1e'; let ts = H * .34; x.font = `800 ${Math.round(ts)}px ${F.saira}`; x.textAlign = 'center'; while (x.measureText(g.t.toUpperCase()).width > W * .78 && ts > 8) { ts *= .94; x.font = `800 ${Math.round(ts)}px ${F.saira}`; }
-    x.fillText(g.t.toUpperCase(), W / 2, H * .55); x.fillStyle = '#d43a3a'; x.font = `800 ${Math.round(H * .4)}px ${F.saira}`; x.fillText('A', W * .06, H * .58);
+    x.fillStyle = '#1a1a1e'; let ts = H * (reels ? .2 : .34); x.font = `800 ${Math.round(ts)}px ${F.saira}`; x.textAlign = 'center'; while (x.measureText(g.t.toUpperCase()).width > W * .78 && ts > 8) { ts *= .94; x.font = `800 ${Math.round(ts)}px ${F.saira}`; }
+    x.fillText(g.t.toUpperCase(), W / 2, H * ty); x.fillStyle = '#d43a3a'; x.font = `800 ${Math.round(H * (reels ? .24 : .4))}px ${F.saira}`; x.fillText('A', W * .06, H * (ty + .03));
     x.fillStyle = '#4a463e'; x.font = `700 ${Math.round(H * .13)}px ${F.mono}`; x.fillText(`C-${Math.max(46, Math.ceil(sumDur(tracksOf(g)) / 60 / 15) * 15)} · DOLBY`, W / 2, H * .86);
     return c;
   }

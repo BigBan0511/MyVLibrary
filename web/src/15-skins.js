@@ -45,7 +45,7 @@ function skinFaces(root, list) {
       (f.tris = f.tris || []).push({ out, ar, a: m.id * 1e6 + a, b: m.id * 1e6 + b, c: m.id * 1e6 + c, u0: Math.min(ua, ub, uc), u1: Math.max(ua, ub, uc), v0: Math.min(va, vb, vc), v1: Math.max(va, vb, vc) });
       const du1 = ub - ua, dv1 = vb - va, du2 = uc - ua, dv2 = vc - va, det = du1 * dv2 - du2 * dv1; if (Math.abs(det) < 1e-9) continue;
       _st.copy(_se1).multiplyScalar(dv2).addScaledVector(_se2, -dv1).multiplyScalar(1 / det); _su.copy(_se2).multiplyScalar(du1).addScaledVector(_se1, -du2).multiplyScalar(1 / det);
-      if (_st.lengthSq() > 0) f.gu.addScaledVector(_st.normalize(), ar); if (_su.lengthSq() > 0) f.gv.addScaledVector(_su.normalize(), ar);
+      const T = f.tris[f.tris.length - 1]; if (_st.lengthSq() > 0) T.gu = _st.clone().normalize(); if (_su.lengthSq() > 0) T.gv = _su.clone().normalize();
     }
   }
   /* the outermost layer of each face (an inner wall looks the same way but has its own place in the picture) */
@@ -56,7 +56,8 @@ function skinFaces(root, list) {
     outer.forEach(t => { const a = find(t.a); [t.b, t.c].forEach(v => { const b = find(v); if (a !== b) up.set(b, a); }); if (!up.has(a)) up.set(a, a); });
     const by = new Map(); outer.forEach(t => { const r = find(t.a); by.set(r, (by.get(r) || 0) + t.ar); });
     let best = null, ba = -1; by.forEach((v, k) => { if (v > ba) { ba = v; best = k; } });
-    outer.filter(t => find(t.a) === best).forEach(t => { f.u0 = Math.min(f.u0, t.u0); f.u1 = Math.max(f.u1, t.u1); f.v0 = Math.min(f.v0, t.v0); f.v1 = Math.max(f.v1, t.v1); });
+    /* the way the picture runs is that piece's too: an inner wall can run the other way */
+    outer.filter(t => find(t.a) === best).forEach(t => { f.u0 = Math.min(f.u0, t.u0); f.u1 = Math.max(f.u1, t.u1); f.v0 = Math.min(f.v0, t.v0); f.v1 = Math.max(f.v1, t.v1); if (t.gu) f.gu.addScaledVector(t.gu, t.ar); if (t.gv) f.gv.addScaledVector(t.gv, t.ar); });
     f.outer = ba; f.tris = null;
   });
   return Object.values(B).sort((a, b) => b.outer - a.outer);
@@ -104,10 +105,11 @@ function skinFitMedium(root) {
   if (A.label) { const F = skinFaces(root, [A.label]); if (F[0]) { const f = F[0], k = f.key[0]; n = new V3(k === 'x' ? 1 : 0, k === 'y' ? 1 : 0, k === 'z' ? 1 : 0); const lc = new THREE.Box3().setFromObject(A.label).getCenter(new V3()).sub(ctr).dot(n); if (Math.abs(lc) > .02 ? lc < 0 : n.dot(f.n) < 0) n.negate(); } }
   else if (n.dot(new V3(1, 1, 1)) < 0) n.negate();
   let down = A.male ? A.male.getWorldPosition(new V3()).sub(ctr).projectOnPlane(n) : new V3();
-  if (down.lengthSq() < .25) { const o = n.x ? new V3(0, 1, 0) : new V3(1, 0, 0); down = (size0.dot(o.clone().set(Math.abs(o.x), Math.abs(o.y), Math.abs(o.z))) >= 0 ? o : o).negate(); }
+  /* a socket in the middle (a cassette) says nothing: the short side goes down, so it lies the long way */
+  if (down.lengthSq() < .25) { const axes = [new V3(1, 0, 0), new V3(0, 1, 0), new V3(0, 0, 1)].filter(a => Math.abs(a.dot(n)) < .5).sort((a, b) => size0.dot(a) - size0.dot(b)); down = axes[0].clone().negate(); }
   const ax = Math.abs(down.x), ay = Math.abs(down.y), az = Math.abs(down.z); down = new V3(ax >= ay && ax >= az ? Math.sign(down.x) : 0, ay > ax && ay >= az ? Math.sign(down.y) : 0, az > ax && az > ay ? Math.sign(down.z) : 0);
   const up = down.clone().negate(), right = up.clone().cross(n).normalize();
-  skinPlace(root, right, up, n, 40, 40, true);
+  root.userData.size = skinPlace(root, right, up, n, 40, 40, true);
   const S = A.male; root.userData.male = null;
   if (S) { root.updateMatrixWorld(true); const e = S.matrixWorld.elements, x = new V3(e[0], e[1], e[2]).normalize(), y = new V3(e[4], e[5], e[6]).normalize(), z = new V3(e[8], e[9], e[10]).normalize(); root.userData.male = { p: new V3().setFromMatrixPosition(S.matrixWorld), m: new THREE.Matrix4().makeBasis(x, y, z) }; }
 }
@@ -118,11 +120,14 @@ function skinPrepare(key, root) {
   if (box) root.userData.closed = skinCopy(root);
 }
 /* a closed copy of the model: the same geometry and materials, nothing that moves */
-function skinCopy(o) {
-  const n = o.isMesh ? new THREE.Mesh(o.geometry, o.material) : new THREE.Group();
-  n.position.copy(o.position); n.quaternion.copy(o.quaternion); n.scale.copy(o.scale); n.visible = o.visible; n.castShadow = o.castShadow; n.receiveShadow = o.receiveShadow;
+function skinCopy(o, seen) {
+  const top = !seen, map = seen || new Map(), n = o.isSkinnedMesh ? new THREE.SkinnedMesh(o.geometry, o.material) : o.isMesh ? new THREE.Mesh(o.geometry, o.material) : new THREE.Group();
+  map.set(o, n); n.position.copy(o.position); n.quaternion.copy(o.quaternion); n.scale.copy(o.scale); n.visible = o.visible; n.castShadow = o.castShadow; n.receiveShadow = o.receiveShadow;
   if (o.isMesh && o.userData.artFace) n.userData.artFace = true;
-  o.children.forEach(k => n.add(skinCopy(k))); return n;
+  o.children.forEach(k => n.add(skinCopy(k, map)));
+  /* what bends gets bones of its own, or the copies would open along with the box in your hands */
+  if (top) map.forEach((c, a) => { if (a.isSkinnedMesh) { c.bind(new THREE.Skeleton(a.skeleton.bones.map(b => map.get(b) || c), a.skeleton.boneInverses), a.bindMatrix); c.frustumCulled = false; } });
+  return n;
 }
 /* the texture transform that lays a whole picture (a spine, a cover) over one face of the box's image */
 function skinFaceMatrix(t, r) {
@@ -188,14 +193,41 @@ function skinWear(c) {
   skinPaint(c, root);
   /* where the medium rests, with the box open */
   const S = root.userData.anchors.socket;
-  skinPose(c, 1); root.updateMatrixWorld(true);
+  skinPose(c, 1); root.updateMatrixWorld(true); c.inner.updateMatrixWorld(true);
+  const toIn = new THREE.Matrix4().copy(c.inner.matrixWorld).invert(), bb = new THREE.Box3(), mb = new THREE.Box3();
+  root.userData.meshes.forEach(m => { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); for (let o = m; o && o !== root; o = o.parent) if (!o.visible) return; mb.copy(m.geometry.boundingBox).applyMatrix4(new THREE.Matrix4().multiplyMatrices(toIn, m.matrixWorld)); bb.union(mb); });
+  /* it opens like a book, or to one side: what stays centred on screen is the open box */
+  c.skin.shift = bb.isEmpty() ? 0 : -(bb.min.x + bb.max.x) / 2;
+  /* whatever is nearest the viewer at a point of the open box */
+  const rc = new THREE.Raycaster(), frontZ = (x, y) => { rc.set(c.inner.localToWorld(new V3(x, y, c.dim.d + 60)), c.inner.localToWorld(new V3(x, y, 0)).sub(c.inner.localToWorld(new V3(x, y, 1))).normalize()); const h = rc.intersectObjects(root.userData.meshes, false)[0]; return h ? c.inner.worldToLocal(h.point.clone()).z : null; };
   if (c.disc) {
-    const p = S ? c.inner.worldToLocal(S.getWorldPosition(new V3())) : new V3(0, 0, c.dim.d / 2);
+    const d = c.disc, male = d.userData.male; let p = S ? S.getWorldPosition(new V3()).applyMatrix4(toIn) : new V3(0, 0, c.dim.d / 2);
+    if (S && male) {
+      /* EmuVR's own medium in EmuVR's box: male socket on female socket, as in its machines */
+      const e = new THREE.Matrix4().multiplyMatrices(toIn, S.matrixWorld).elements, F = new THREE.Matrix4().makeBasis(new V3(e[0], e[1], e[2]).normalize(), new V3(e[4], e[5], e[6]).normalize(), new V3(e[8], e[9], e[10]).normalize());
+      const q = new Q4().setFromRotationMatrix(F.multiply(male.m.clone().invert())); d.quaternion.copy(q); c.discQuat = q.clone(); p = p.clone().sub(male.p.clone().applyQuaternion(q));
+      /* a lid that stands up holds its medium edge-on (a cassette box), and a box that does not really open keeps it inside: it comes out and lies on the half that faces you, label up, turned to fit */
+      const size = d.children[0].userData.size, ax = new V3(size.x * .3, 0, 0).applyQuaternion(q), ay = new V3(0, size.y * .3, 0).applyQuaternion(q), top = p.z + size.z / 2 + .05;
+      const hid = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].filter(([a, b]) => { const z = frontZ(p.x + ax.x * a + ay.x * b, p.y + ax.y * a + ay.y * b); return z !== null && z > top; }).length;
+      if (new V3(0, 0, 1).applyQuaternion(q).z < .85 || hid >= 2 || Math.abs(p.y) > c.dim.h / 2) {
+        const z = frontZ(0, 0);
+        q.identity(); if (size.x > c.dim.w && size.y < size.x) q.setFromAxisAngle(new V3(0, 0, 1), Math.PI / 2);
+        d.quaternion.copy(q); c.discQuat = q.clone(); p.set(0, 0, (z === null ? c.dim.d / 2 : z) + Math.min(size.x, size.y, size.z) / 2 + .1);
+      }
+    }
     /* a medium that stays behind a flap comes out in front of it, or you would never see it */
-    const rc = new THREE.Raycaster(), o = c.inner.localToWorld(new V3(p.x, p.y, c.dim.d + 60)), dir = c.inner.localToWorld(new V3(p.x, p.y, 0)).sub(o).normalize(); rc.set(o, dir);
-    const h = rc.intersectObjects(root.userData.meshes, false)[0];
-    if (h) { const z = c.inner.worldToLocal(h.point.clone()).z; if (z > p.z + .2) p.z = z + (c.dim.media === 'disc' ? .2 : (MSIZE[c.dim.media] ? MSIZE[c.dim.media].t / 2 + .1 : .6)); }
-    c.discHome.copy(p); c.disc.position.copy(p); if (c.disc.parent !== c.inner) c.inner.add(c.disc); if (c.thick && !c.thick.includes(c.disc)) c.thick.push(c.disc); c.thickAt = .35;
+    if (Math.abs(p.y) > c.dim.h / 2 && !male) p.set(0, 0, p.z);
+    const z = frontZ(p.x, p.y); if (z !== null && z > p.z + .2 && !male) p.z = z + (c.dim.media === 'disc' ? .2 : (MSIZE[c.dim.media] ? MSIZE[c.dim.media].t / 2 + .1 : .6));
+    c.discHome.copy(p); d.position.copy(p); if (d.parent !== c.inner) c.inner.add(d); if (c.thick && !c.thick.includes(d)) c.thick.push(d); c.thickAt = .35;
+  }
+  /* the manual lies on the free half of the open box, never on the medium; with no free half it stays out of sight */
+  if (c.manual) {
+    const m = c.manual, sp = { L: -c.dim.w / 2 - bb.min.x, R: bb.max.x - c.dim.w / 2 }, side = sp.L >= sp.R ? 'L' : 'R', room = sp[side];
+    const x = side === 'L' ? (bb.min.x - c.dim.w / 2) / 2 : (bb.max.x + c.dim.w / 2) / 2, z = frontZ(x, 0);
+    if (!bb.isEmpty() && room > 4 && z !== null) {
+      const g = m.geometry.parameters, k = Math.min(1, (room - .6) / g.width, (c.dim.h - .6) / g.height);
+      c.inner.add(m); m.position.set(x, 0, z + .1); m.rotation.set(0, Math.PI, 0); m.scale.setScalar(k); if (c.thick) c.thick.push(m); c.skin.manual = true;
+    } else m.visible = false;
   }
   skinPose(c, c.openA);
 }
@@ -206,6 +238,8 @@ function skinOff(c) {
   if (c.shelfSkin) c.shelfSkin.obj.visible = true;
   else { [c.shell, c.lid, c.spine].forEach(m => { m.visible = true; }); c.dustMeshes.forEach(m => { m.visible = c.g.dust > .01; }); }
   (c.interior || []).forEach(([, o]) => { o.visible = true; });
+  if (c.manual) { const m = c.manual; if (s.manual) { const i = c.thick ? c.thick.indexOf(m) : -1; if (i >= 0) c.thick.splice(i, 1); c.pivot.add(m); m.position.set(c.dim.w / 2 - .1, 0, -.09); m.rotation.set(0, 0, 0); m.scale.setScalar(1); } m.visible = true; }
+  c.inner.position.x = 0;
 }
 /* the medium of a game whose system has one chosen; null keeps our own */
 function skinMedium(c) {
@@ -223,6 +257,7 @@ function skinLabel(c) {
   const UV = L.geometry.attributes.uv; if (!UV) return;
   let u0 = 9, u1 = -9, v0 = 9, v1 = -9; for (let i = 0; i < UV.count; i++) { const u = UV.getX(i), v = UV.getY(i); u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
   const t = c.discTex, mt = Array.isArray(L.material) ? L.material[0] : L.material;
+  if (c.g.fmt === 'cass') { t.image = musicLabel(c.g, c.coverCanvas, true); t.needsUpdate = true; }
   if (u1 > u0 && v1 > v0) { t.repeat.set(1 / (u1 - u0), 1 / (v1 - v0)); t.offset.set(-u0 / (u1 - u0), -v0 / (v1 - v0)); }
   mt.map = t; mt.color.set('#ffffff'); mt.needsUpdate = true;
 }

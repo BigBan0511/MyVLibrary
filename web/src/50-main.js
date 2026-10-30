@@ -245,7 +245,7 @@ async function boot() {
   if (PLAYNITE && LIB.running && LIB.running.length) { const r = LIB.running[0]; setTimeout(() => restorePlaying(r.id, r.seconds), 600); }
   else if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
 }
-window.__mvl = { modelsRead, libOpen, uMeta: () => prefs.ugc, skin: () => active && { dim: active.dim.skin, worn: !!active.skin, disc: !!(active.disc && active.disc.userData.skin), home: active.discHome.toArray() }, decoFake: async (id, name, w, h, d, col) => {
+window.__mvl = { modelsRead, libOpen, uMeta: () => prefs.ugc, skinRoot: () => active && active.skin && active.skin.root, skin: () => active && { dim: active.dim.skin, worn: !!active.skin, disc: !!(active.disc && active.disc.userData.skin), home: active.discHome.toArray() }, decoFake: async (id, name, w, h, d, col) => {
     const geo = new THREE.BoxGeometry(w, h, d), A = geo.attributes;
     const parsed = { roots: [{ name: id, go: 1, active: true, p: { x: 0, y: 0, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 }, s: { x: 1, y: 1, z: 1 }, mesh: { n: A.position.count, pos: { arr: new Float32Array(A.position.array), dim: 3 }, nrm: { arr: new Float32Array(A.normal.array), dim: 3 }, subs: [Array.from(geo.index.array)] }, mats: [{ name: 'm', col: { _Color: col }, fl: {}, tex: {}, shader: '', keywords: '' }], kids: [] }], anim: null, info: { name, type: '', system: '' } };
     await UGCS.tx('readwrite', st => st.put({ parsed }, 'emuvr:' + id)); prefs.emuvr = (prefs.emuvr || []).filter(b => b.id !== id).concat([{ id, name, sys: '' }]); savePrefs();

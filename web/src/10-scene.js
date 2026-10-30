@@ -581,7 +581,7 @@ class Case {
     }
     const o = this.openA;
     /* a box of tapes does not open like a book: it leans back and the tapes rise out of its open top */
-    if (this.skin) { skinPose(this, easeIO(o)); this.pivot.rotation.y = 0; this.inner.position.x = 0; }
+    if (this.skin) { skinPose(this, easeIO(o)); this.pivot.rotation.y = 0; this.inner.position.x = (this.skin.shift || 0) * easeIO(o); }
     else if (this.g.fmt === 'vhsbox') { this.pivot.rotation.y = 0; this.inner.position.x = 0; this.inner.rotation.x = .9 * easeIO(o); }
     else { const mo = this.motion, lid = mo ? mo.lid : LID_OPEN * o; this.pivot.rotation.y = -lid; this.inner.position.x = this.dim.w / 2 * (mo ? mo.spread : o); if (this.folds) this.hinge.rotation.y = -lid / 2; }
     /* turned by hand, it springs back when you let go */
