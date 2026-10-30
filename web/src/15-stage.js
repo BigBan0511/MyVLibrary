@@ -374,6 +374,8 @@ function ugcDevice(root) {
     /* the disc's axis is taken where it ends up (the spindle's, once in) and kept in the socket's own terms:
        a socket that tilts while the medium goes in (EmuVR's GameCube) must not leave the disc tilted */
     const played = sock(), na = discAxis(played), nl = [played.x, played.y, played.z].map(a => a.dot(na));
+    /* the socket as the medium meets it, for EmuVR's own media */
+    const seatM = new THREE.Matrix4().makeBasis(ready.x, ready.y, ready.z);
     pose(opens, false);
     const deep = ready.p.clone().add(move), per = {};
     for (const m of ['disc', 'cart', 'floppy', 'tape']) {
@@ -418,7 +420,7 @@ function ugcDevice(root) {
       per[m] = { q, s, inward, inside: ready.p.clone().addScaledVector(inward, -(H / 2 - .6) * s), H: H * s, disc };
     }
     pose(false, false);
-    return { per, opens, feeds, ready };
+    return { per, opens, feeds, ready, seatM };
   })();
   const play = (c, a, b, sec) => c ? tweenReal(sec ?? c.dur * Math.abs(b - a), t => anim.apply(c, c.dur * lerp(a, b, t)), easeIO) : Promise.resolve();
   const lids = (v0, v1, sec = .45) => lidPivots.length ? tweenReal(sec, t => setLids(dev, lerp(v0, v1, t)), easeIO) : Promise.resolve();
@@ -434,13 +436,16 @@ function ugcDevice(root) {
     /* back to empty and shut (a new room, a reload) */
     reset() { pose(false, false); },
     socket() { root.updateMatrixWorld(true); return root.localToWorld(geo.ready.p.clone()); },
-    port(m) {
+    port(m, c) {
       root.updateMatrixWorld(true);
-      const g = geo.per[m] || geo.per.cart, rq = root.getWorldQuaternion(new Q4()), back = g.inward.clone().negate().applyQuaternion(rq);
-      const inside = root.localToWorld(g.inside.clone()), q = rq.clone().multiply(g.q), above = Math.abs(g.inward.y) > .7;
+      const g = geo.per[m === 'cass' ? 'tape' : m] || geo.per.cart, rq = root.getWorldQuaternion(new Q4()), back = g.inward.clone().negate().applyQuaternion(rq);
+      /* EmuVR's own medium goes where EmuVR puts it: its male socket on the female one */
+      const male = c && c.disc && c.disc.userData.male;
+      let qm = g.q, inm = g.inside; if (male) { qm = new Q4().setFromRotationMatrix(geo.seatM.clone().multiply(male.m.clone().invert())); inm = geo.ready.p.clone().sub(male.p.clone().applyQuaternion(qm)); }
+      const inside = root.localToWorld(inm.clone()), q = rq.clone().multiply(qm), above = Math.abs(g.inward.y) > .7;
       const reach = g.disc ? (above ? 10 : DIMS.dvd.discR * g.s + 5) : g.H + 5, back2 = g.disc ? (above ? 4 : DIMS.dvd.discR * g.s + 3) : g.H * .5 + 2;
       return {
-        kind: 'socket', m, q, s: g.s, inside, entry: inside.clone().addScaledVector(back, reach), out: inside.clone().addScaledVector(back, back2), lids: lidPivots,
+        kind: 'socket', m, q, s: male ? 1 : g.s, inside, entry: inside.clone().addScaledVector(back, reach), out: inside.clone().addScaledVector(back, back2), lids: lidPivots,
         /* before the medium flies over: the lid or the tray opens */
         prepare() { if (opens) openUp(); else if (feeds) pose(false, false); },
         /* it has landed: the machine holds it, pulls it in and shuts */
@@ -577,11 +582,12 @@ const UGCS = {
   async put(key, file) {
     const buf = await file.arrayBuffer();
     const parsed = UGC.parse(buf, { maxTex: 1024 });   /* fails here if it cannot be read: nothing is stored */
-    if (parsed.info.type === 'medium') throw new Error('Ese .ugc es un juego (un cartucho o un disco), no una consola ni una pantalla.');
+    const skin = /^(box|med):/.test(key);
+    if (!skin && /^medium$/i.test(parsed.info.type)) throw new Error('Ese .ugc es un juego (un cartucho o un disco), no una consola ni una pantalla.');
     const root = UGC.build(parsed);
     await this.tx('readwrite', st => st.put(buf, key));
     this.drop(key); this.adopt(key, root);
-    this.meta()[key] = { name: parsed.info.name || file.name.replace(/\.ugc$/i, '').replace(/_[0-9a-f]{8}$/i, '').replace(/_/g, ' '), size: file.size, rot: false }; savePrefs();
+    this.meta()[key] = { name: parsed.info.name || file.name.replace(/\.ugc$/i, '').replace(/_[0-9a-f]{8}$/i, '').replace(/_/g, ' '), size: file.size, rot: false }; if (root.userData.dim) this.meta()[key].dim = root.userData.dim; savePrefs();
     return root;
   },
   /* EmuVR's own consoles: read from the folder the user picked, each one kept already read */
@@ -601,10 +607,10 @@ const UGCS = {
     await this.load([key]);
   },
   async remove(key) { await this.tx('readwrite', st => st.delete(key)); this.drop(key); delete this.meta()[key]; savePrefs(); },
-  adopt(key, root) { root.userData.dev = ugcDevice(root); root.visible = false; this.group.add(root); this.models.set(key, root); },
-  drop(key) { const m = this.models.get(key); if (m) { this.group.remove(m); UGC.dispose(m); this.models.delete(key); } },
+  adopt(key, root) { if (/^(box|med):/.test(key)) { skinPrepare(key, root); this.models.set(key, root); return; } root.userData.dev = ugcDevice(root); root.visible = false; this.group.add(root); this.models.set(key, root); },
+  drop(key) { const m = this.models.get(key); if (m) { const wb = m.userData.wornBy; if (wb) { if (key.startsWith('box:')) skinOff(wb); else skinMediumOff(wb); } if (m.parent) m.parent.remove(m); UGC.dispose(m); this.models.delete(key); } },
   ready(key) { return this.meta()[key] ? this.models.get(key) || null : null; },
-  showOnly(list) { this.models.forEach(m => { m.visible = list.includes(m); }); },
+  showOnly(list) { this.models.forEach(m => { if (!m.userData.skinKey) m.visible = list.includes(m); }); },
   /* reads the models this room needs; resolves when they are built (or could not be) */
   load(keys) {
     return Promise.all(keys.filter(k => this.meta()[k] && !this.models.has(k)).map(k => {
@@ -616,6 +622,6 @@ const UGCS = {
       return this.building.get(k);
     }));
   },
-  keysFor(sys) { const st = stageFor(sys); return st === 'table' || st === 'music' ? [] : st === 'video' ? ['vid:tape', 'vid:disc', 'scr:crt', 'scr:flat'] : ['sys:' + sys, 'scr:' + screenFor(st, sys)]; }
+  keysFor(sys) { const st = stageFor(sys), both = k => ['box:' + k, 'med:' + k]; return st === 'table' ? [] : st === 'music' ? ['lp', 'cass', 'cd'].flatMap(both) : st === 'video' ? ['vid:tape', 'vid:disc', 'scr:crt', 'scr:flat', ...['vhs', 'dvd', 'bluray'].flatMap(both)] : ['sys:' + sys, 'scr:' + screenFor(st, sys), ...both(sys)]; }
 };
 scene.add(UGCS.group);

@@ -331,6 +331,7 @@ qEl.addEventListener('keydown', e => { if (e.key === 'Enter') { const m = navOrd
 /* ---------- settings ---------- */
 const setBtn = $('#setBtn'), setPop = $('#settings');
 function renderUgcList() {
+  renderLibRows(); if (!MODELS.list) modelsLoad().then(renderLibRows);
   const el = $('#ugcList'); if (!el) return;
   const rows = [...systemsList().filter(s => s.key !== 'MUSIC').flatMap(s => s.key === 'VIDEO' ? [['vid:tape', T('Vídeo VHS'), T('Genérico')], ['vid:disc', T('Reproductor de DVD y Blu-ray'), T('Genérico')]] : [['sys:' + s.key, s.name, s.key === 'PC' ? T('PC genérico') : T('Consola genérica (ID-2)')]]), ['scr:crt', T('Tele de tubo'), T('Genérica')], ['scr:flat', T('Tele plana'), T('Genérica')], ['scr:monitor', T('Monitor del PC'), T('Genérico')]];
   /* EmuVR's own consoles, once its folder has been read: offered on every system, the ones that suit it first */

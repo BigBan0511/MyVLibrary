@@ -86,7 +86,7 @@ function faceOutOf(gr) {
 }
 function sortedItems(gr, gapSpine) {
   const fo = faceOutOf(gr), rest = gr.games.filter(g => !fo.includes(g)).sort(SORTS[prefs.sort] || SORTS.alpha);
-  return [...fo.map(g => ({ g, fo: true, w: DIMS[g.fmt].w + 1 })), ...rest.map(g => ({ g, fo: false, w: DIMS[g.fmt].d + gapSpine }))];
+  return [...fo.map(g => ({ g, fo: true, w: dimOf(g).w + 1 })), ...rest.map(g => ({ g, fo: false, w: dimOf(g).d + gapSpine }))];
 }
 function paginate(gr) {
   const pages = []; let page = [], x = 0;
@@ -98,7 +98,7 @@ function paginate(gr) {
 function paginateCabinet(gr) {
   const pages = []; let page = [], row = 0, x = 0;
   for (const it0 of sortedItems(gr, .14)) {
-    const it = Object.assign({}, it0, { fo: false, w: DIMS[it0.g.fmt].d + .14 });
+    const it = Object.assign({}, it0, { fo: false, w: dimOf(it0.g).d + .14 });
     if (x + it.w > CAB.innerW - 1 && (page.length || row)) { row++; x = 0; if (row > 1) { pages.push(page); page = []; row = 0; } }
     it.row = row; it.x = x; page.push(it); x += it.w;
   }
@@ -114,7 +114,7 @@ function casesOf(g) { const out = []; for (const c of caseById.values()) if (c.g
 function getCase(g, ui = curGroup) {
   const k = caseKey(g, ui); let c = caseById.get(k);
   /* its format changed (Settings, or Playnite moved it to another platform): a new case takes its place */
-  if (c && !c.disposed && c !== active && c.dim !== DIMS[g.fmt]) { c.dispose(); caseById.delete(k); c = null; }
+  if (c && !c.disposed && c !== active && c.dim !== dimOf(g)) { c.dispose(); caseById.delete(k); c = null; }
   if (!c || c.disposed) { c = new Case(g); c.fresh = true; c.key = k; caseById.set(k, c); }
   return c;
 }

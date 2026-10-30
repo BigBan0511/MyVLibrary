@@ -367,6 +367,9 @@ const UGC = (() => {
       if (!out.tex._BumpMap && texs._NormalMap) out.tex._BumpMap = tex(texs._NormalMap);   /* EmuVR's own shaders call it so */
       matCache.set(id, out); return out;
     };
+    /* a box's art: EmuVR paints the box image on these renderers */
+    const artRend = new Set(); (mono.get('WIGUTextureLoader') || []).forEach(d => (d.renderersToEdit || []).forEach(p => artRend.add(String(pid(p)))));
+    const artGos = new Set(S.ids(23).filter(id => artRend.has(String(id))).map(id => { const d = get(id); return d && d.m_GameObject.m_PathID; }));
     const sockets = new Map((mono.get('Socket') || []).map(d => [d.m_GameObject.m_PathID, { female: !!d.isFemale, type: d.typeData || '', free: [d.freeRotationX, d.freeRotationY, d.freeRotationZ].map(Boolean) }]));
     const node = t => {
       const go = get(t.m_GameObject.m_PathID), cs = comps.get(t.m_GameObject.m_PathID) || {};
@@ -375,6 +378,7 @@ const UGC = (() => {
       if (me) { n.mesh = meshData(me, S.little); n.meshName = me.m_Name; n.mats = (cs[23] ? cs[23].m_Materials : []).map(p => pid(p) ? material(pid(p)) : null); n.visible = !cs[23] || !!cs[23].m_Enabled; }
       if (cs[108]) n.light = { color: cs[108].m_Color, intensity: cs[108].m_Intensity, range: cs[108].m_Range };
       if (sockets.has(n.go)) n.sock = sockets.get(n.go);
+      if (artGos.has(n.go)) n.art = true;
       n.kids = (t.m_Children || []).map(ch => tfs.get(pid(ch))).filter(Boolean).map(node);
       return n;
     };
@@ -402,6 +406,18 @@ const UGC = (() => {
       res(sd) { const name = String(sd.path).split('/').pop(), r = files.get(name) || [...files.entries()].find(([k]) => k.endsWith('.resS'))?.[1]; return r ? r.subarray(Number(sd.offset), Number(sd.offset) + sd.size) : null; }
     };
     return assemble(S, opts);
+  }
+
+  /* what a .ugc is, without reading its meshes: for the model library */
+  function peek(buf, thumb = 96) {
+    const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf), files = readBundle(u8);
+    const cab = [...files.entries()].find(([k]) => !/\.(resS|resource)$/.test(k)); if (!cab) throw new Error('El .ugc no contiene ningún objeto.');
+    const sf = readSerialized(cab[1]), all = [...sf.objects.values()], get = id => { try { return readObject(sf, id); } catch (e) { return null; } };
+    const scripts = new Map(all.filter(o => o.type.cls === 115).map(o => { const d = get(o.id); return [String(o.id), d ? d.m_ClassName : '']; }));
+    const mono = {}; for (const o of all) if (o.type.cls === 114) { const d = get(o.id), n = d && scripts.get(String(pid(d.m_Script))); if (n) (mono[n] = mono[n] || []).push(d); }
+    const info = (mono.UGCInfo || [])[0] || {}, sys = (mono.GameSystem || [])[0];
+    let img = null; try { const t = get(pid(info.thumbnail)), res = sd => { const name = String(sd.path).split('/').pop(), r = files.get(name) || [...files.entries()].find(([k]) => k.endsWith('.resS'))?.[1]; return r ? r.subarray(Number(sd.offset), Number(sd.offset) + sd.size) : new Uint8Array(0); }; if (t) img = pixels(texture(res, t, thumb)); } catch (e) { }
+    return { name: info.name || '', by: info.author || '', type: String(info.type || '').toLowerCase(), systems: sys ? String(sys.systemName || '').split('|').map(s => s.trim()).filter(Boolean) : [], male: (mono.Socket || []).filter(d => !d.isFemale).map(d => d.typeData || ''), female: (mono.Socket || []).some(d => d.isFemale), art: !!mono.WIGUTextureLoader, medium: !!mono.GameMedium, state: !!mono.GameSystemState, thumb: img };
   }
 
   /* ---------- three.js objects ---------- */
@@ -474,7 +490,7 @@ const UGC = (() => {
   }
   /* the model in centimetres, facing the room (+Z), standing on y = 0; anchors in userData */
   function build(parsed) {
-    const made = new Map(), anchors = {}, lids = [], meshes = [], byGo = new Map();
+    const made = new Map(), anchors = {}, lids = [], meshes = [], art = [], byGo = new Map();
     /* the medium's place is the female Socket EmuVR attaches; older or hand-made models only name it */
     let scripted = false; { const w = n => { if (n.sock && n.sock.female) scripted = true; n.kids.forEach(w); }; parsed.roots.forEach(w); }
     const mk = n => {
@@ -484,10 +500,13 @@ const UGC = (() => {
         const mats = n.mesh.subs.map((_, i) => makeMaterial(n.mats[i] || n.mats[0], made));
         const m = new THREE.Mesh(geometry(n.mesh, n.mesh.subs.some((_, i) => isQuick(n.mats[i] || n.mats[0]))), mats.length === 1 ? mats[0] : mats); m.name = n.meshName || n.name; m.castShadow = m.receiveShadow = true; m.visible = n.visible !== false;
         o.add(m); meshes.push(m); if (/lid|tapa/i.test(n.name)) lids.push(o);
+        /* a box's art, and the sticker on a cartridge or a disc */
+        if (n.art) art.push(m); if (/^media_label/i.test(n.name)) anchors.label = m;
         /* TVs and monitors: the game is shown on the child called screen_mesh (or whatever wears the kit's Screen material) */
         if (/screen_mesh/i.test(n.name) || (!anchors.screen && (n.mats || []).some(mt => mt && /^screen$/i.test(mt.name || '')))) anchors.screen = m;
       }
       if (scripted ? n.sock && n.sock.female && (!anchors.socket || /socket_media/i.test(n.name)) : /socket_media/i.test(n.name) || (!anchors.socket && /socket/i.test(n.name) && !/_av|cable|plug|controller/i.test(n.name) && !n.mesh)) { anchors.socket = o; anchors.sock = n.sock || null; }
+      if (n.sock && !n.sock.female) anchors.male = o;
       if (n.light) anchors.light = { obj: o, color: n.light.color };
       n.kids.forEach(k => o.add(mk(k)));
       return o;
@@ -500,7 +519,7 @@ const UGC = (() => {
     if (!box.isEmpty()) { model.position.y -= box.min.y; model.position.x -= (box.min.x + box.max.x) / 2; model.position.z -= (box.min.z + box.max.z) / 2; }
     root.updateMatrixWorld(true); box.setFromObject(model);
     const anim = parsed.anim ? makeAnim(parsed.anim, byGo.get(parsed.anim.root) || model.children[0], byGo) : null;
-    root.userData = { anchors, lids, meshes, info: parsed.info || {}, size: box.getSize(new V3()), materials: [...made.values()], anim: anim && Object.keys(anim.clips).length ? anim : null };
+    root.userData = { anchors, lids, meshes, art, info: parsed.info || {}, size: box.getSize(new V3()), materials: [...made.values()], anim: anim && Object.keys(anim.clips).length ? anim : null };
     return root;
   }
   function dispose(root) {
@@ -508,5 +527,5 @@ const UGC = (() => {
     root.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
     (root.userData.materials || []).forEach(m => { ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap'].forEach(k => { if (m[k]) m[k].dispose(); }); unM(m); });
   }
-  return { parse, assemble, build, dispose, readBundle, readSerialized, readObject, pid };
+  return { parse, peek, assemble, build, dispose, readBundle, readSerialized, readObject, pid };
 })();

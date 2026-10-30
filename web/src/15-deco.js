@@ -38,6 +38,10 @@ function decoShow(sys) {
   DECO.objs.forEach((o, id) => { o.visible = ids.has(id); });
   mine.forEach(it => decoObj(it).then(o => { if (!o) return; decoPlace(it, o); o.visible = decoRoom() === sys && decoList(sys).includes(it); }));
 }
+/* animated props and toys move by themselves, on a loop */
+function decoTick(now) {
+  DECO.objs.forEach(o => { if (!o.visible) return; const an = o.userData.anim; if (!an) return; const c = an.clips.on || an.clips.open; if (c && c.dur > 0) an.apply(c, (now / 1000) % c.dur); });
+}
 function decoDrop(id) { const o = DECO.objs.get(id); if (o) { DECO.group.remove(o); UGC.dispose(o); DECO.objs.delete(id); } }
 
 /* ---------- surfaces: anything flat enough in the room, other decoration included ---------- */
@@ -194,12 +198,13 @@ function renderDecoList() {
   if (!sys) { el.innerHTML = `<p class="deco-none">${T(isRooms() ? 'Entra en la sala de un sistema para decorarla.' : 'La decoración va en el diseño Por sistema.')}</p>`; return; }
   const L = decoList(sys), room = (systemsList().find(s => s.key === sys) || {}).name || sys, bases = UGCS.bases();
   el.innerHTML = `<div class="ugc-item"><div class="ugc-what"><b>${T('Esta sala')}</b><span class="on">${esc(room)}${L.length ? ' · ' + T(L.length === 1 ? '{0} cosa' : '{0} cosas', L.length) : ''}</span></div><div class="ugc-btns">`
-    + `<button type="button" data-deco-add>${T('Añadir .ugc')}</button>`
+    + `<button type="button" data-deco-lib>${T('Biblioteca')}</button><button type="button" data-deco-add>${T('Añadir .ugc')}</button>`
     + (bases.length ? `<select data-deco-base aria-label="${esc(T('Una consola de EmuVR'))}"><option value="">EmuVR…</option>${bases.map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('')}</select>` : '')
     + (L.length ? `<button type="button" data-deco-place>${T('Colocar')}</button>` : '') + `</div></div>`
     + L.map(it => `<div class="ugc-item"><div class="ugc-what"><b>${esc(it.name)}</b><span>×${(it.s || 1).toFixed(2)}</span></div><div class="ugc-btns"><button type="button" data-deco-pick="${it.id}">${T('Colocar')}</button><button type="button" data-deco-del="${it.id}" aria-label="${esc(T('Quitar') + ': ' + it.name)}" title="${esc(T('Quitar'))}">×</button></div></div>`).join('');
 }
 $('#decoList').addEventListener('click', async e => {
+  if (e.target.closest('[data-deco-lib]')) { libOpen({ kind: 'prop' }); return; }
   if (e.target.closest('[data-deco-add]')) { const f = $('#decoFile'); f.value = ''; f.click(); return; }
   if (e.target.closest('[data-deco-place]')) { decoStart(); return; }
   const p = e.target.closest('[data-deco-pick]'); if (p) { decoStart(p.dataset.decoPick); return; }

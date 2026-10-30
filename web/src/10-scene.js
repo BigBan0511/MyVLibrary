@@ -304,7 +304,7 @@ function viewW(dist) { return viewH(dist) * camera.aspect; }
 
 class Case {
   constructor(g) {
-    this.g = g; const D = this.dim = DIMS[g.fmt], { w, h, d, split } = D, G = caseGeo(g.fmt);
+    this.g = g; const D = this.dim = dimOf(g), { w, h, d, split } = D, fid = this.fid = D.id || g.fmt, G = caseGeo(fid);
     const isJ = D.shell === 'clear', isB = D.shell === 'card';
     this.root = new THREE.Group(); this.inner = new THREE.Group(); this.root.add(this.inner); scene.add(this.root);
     this.edge = isB ? M(THREE.MeshStandardMaterial, { color: g.spine || g.pal[0], roughness: .7 }, .6) : MAT.edge[g.fmt];
@@ -322,19 +322,19 @@ class Case {
     /* the spine hangs from the back's outer edge: in a keep case it folds back as the case opens, like the real
        plastic hinge, so from inside you see the black hinge and not the label (a jewel case's stays put) */
     this.hinge = new THREE.Group(); this.hinge.position.set(-w / 2, 0, -d / 2); this.inner.add(this.hinge); this.folds = D.shell === 'keep';
-    this.spine = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.spineMat); this.spine.rotation.y = -Math.PI / 2; this.spine.position.set(-.03, 0, d / 2); this.hinge.add(this.spine);
+    this.spine = new THREE.Mesh(pgeo(fid, 'spine'), this.spineMat); this.spine.rotation.y = -Math.PI / 2; this.spine.position.set(-.03, 0, d / 2); this.hinge.add(this.spine);
     /* dust: spine, top, front, back */
     this.dustMat = M(THREE.MeshStandardMaterial, { map: TEXS.spineDust, color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }, .6);
     this.filmMat = M(THREE.MeshStandardMaterial, { map: TEXS.film, color: '#c9bea9', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }, .6);
     this.topMat = M(THREE.MeshStandardMaterial, { map: TEXS.topDust, color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }, .6);
-    const ds = new THREE.Mesh(pgeo(g.fmt, 'spine'), this.dustMat); ds.rotation.y = -Math.PI / 2; ds.position.set(-.06, 0, d / 2);
-    const dt = new THREE.Mesh(pgeo(g.fmt, 'top'), this.topMat); dt.rotation.x = -Math.PI / 2; dt.position.y = h / 2 + .04;
-    const df = new THREE.Mesh(pgeo(g.fmt, 'film'), this.filmMat); df.position.set(0, 0, lidD / 2 + .035); this.lid.add(df);
-    const db = new THREE.Mesh(pgeo(g.fmt, 'film'), this.filmMat); db.rotation.y = Math.PI; db.position.set(0, 0, -shellD / 2 - .035); this.shell.add(db);
+    const ds = new THREE.Mesh(pgeo(fid, 'spine'), this.dustMat); ds.rotation.y = -Math.PI / 2; ds.position.set(-.06, 0, d / 2);
+    const dt = new THREE.Mesh(pgeo(fid, 'top'), this.topMat); dt.rotation.x = -Math.PI / 2; dt.position.y = h / 2 + .04;
+    const df = new THREE.Mesh(pgeo(fid, 'film'), this.filmMat); df.position.set(0, 0, lidD / 2 + .035); this.lid.add(df);
+    const db = new THREE.Mesh(pgeo(fid, 'film'), this.filmMat); db.rotation.y = Math.PI; db.position.set(0, 0, -shellD / 2 - .035); this.shell.add(db);
     this.hinge.add(ds); this.inner.add(dt); this.dustMeshes = [ds, dt, df, db];
     /* dust footprint on the shelf and an optional cobweb (live in the room, not on the case) */
     this.footMat = M(THREE.MeshStandardMaterial, { map: TEXS.foot[g.fmt], color: '#d9cfbd', transparent: true, opacity: 0, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }, .6);
-    this.foot = new THREE.Mesh(pgeo(g.fmt, 'foot'), this.footMat); this.foot.rotation.x = -Math.PI / 2; this.foot.visible = false; scene.add(this.foot);
+    this.foot = new THREE.Mesh(pgeo(fid, 'foot'), this.footMat); this.foot.rotation.x = -Math.PI / 2; this.foot.visible = false; scene.add(this.foot);
     this.contactMat = new THREE.MeshBasicMaterial({ map: TEXS.contact, transparent: true, opacity: .55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
     this.contact = new THREE.Mesh(UNIT_PLANE, this.contactMat); this.contact.rotation.x = -Math.PI / 2; this.contact.visible = false; scene.add(this.contact);
     this.stand = null;
@@ -364,7 +364,7 @@ class Case {
   }
   /* ---------- shrink wrap with a red tear strip ---------- */
   makeWrap() {
-    const { w, h, d } = this.dim, o = .075, G = caseGeo(this.g.fmt);
+    const { w, h, d } = this.dim, o = .075, G = caseGeo(this.fid);
     this.wrapMat = M(THREE.MeshPhysicalMaterial, { color: '#ffffff', transparent: true, opacity: .2, roughness: .04, clearcoat: 1, clearcoatRoughness: .03, bumpMap: TEXS.crinkle, bumpScale: .04, depthWrite: false }, 2.2);
     this.wrap = new THREE.Mesh(G.wrap, this.wrapMat); this.inner.add(this.wrap);
     const st = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2.8), MAT.sticker); st.position.set(w / 2 - 2.3, -h / 2 + 2.6, d / 2 + .07); this.wrap.add(st);
@@ -421,7 +421,9 @@ class Case {
     }
     /* thick media would show through a closed lid: they only appear once it has swung far enough */
     this.thick = []; this.thickAt = D.media === 'cart' ? .5 : .15;
-    if (D.media === 'disc') this.disc = D.vinyl ? makeVinyl(D.discR, this.discLabelMat) : makeDisc(D.discR, this.discLabelMat);
+    const own = skinMedium(this);
+    if (own) { this.disc = own; this.thick.push(own); this.thickAt = .2; }
+    else if (D.media === 'disc') this.disc = D.vinyl ? makeVinyl(D.discR, this.discLabelMat) : makeDisc(D.discR, this.discLabelMat);
     else if (D.media === 'cass') { this.disc = makeCassette(this.discLabelMat); this.thick.push(this.disc); this.thickAt = .2; }
     else if (D.media === 'tape') {
       /* the tape stands on its long side in the clamshell, its label to the front */
@@ -457,6 +459,7 @@ class Case {
     if (this.multi) dropMultiInterior(this);
     if (this.disc) { this.disc.parent && this.disc.parent.remove(this.disc); this.disc.children.forEach(m => { if (m.geometry && !m.geometry.userData.shared) m.geometry.dispose(); }); }
     if (this.manual) this.pivot.remove(this.manual);
+    skinOff(this); skinMediumOff(this);
     if (this.extraLabelMats) { this.extraLabelMats.forEach(m => { if (m.map) m.map.dispose(); unM(m); }); this.extraLabelMats = null; }
     if (this.mediaMat) { unM(this.mediaMat); this.mediaMat = null; }
     this.disc = null; this.manual = null; this.interior = null; this.thick = null;
@@ -517,6 +520,7 @@ class Case {
     if (this.extraLabelMats) this.extraLabelMats.forEach((m, k) => { if (m.map) m.map.dispose(); m.map = tex(drawFloppyLabel(this.g, this.coverCanvas, k + 1, this.dim.disks)); m.needsUpdate = true; });
     this.manTex = tex(drawManualCover(this.g, this.coverCanvas)); this.manMat.map = this.manTex; this.manMat.color.set('#ffffff'); this.manMat.needsUpdate = true;
     this.detail = true; this.dirty = false;
+    skinLabel(this); skinWear(this);
   }
   releaseDetail() {
     if (!this.detail) return;
@@ -576,7 +580,8 @@ class Case {
     }
     const o = this.openA;
     /* a box of tapes does not open like a book: it leans back and the tapes rise out of its open top */
-    if (this.g.fmt === 'vhsbox') { this.pivot.rotation.y = 0; this.inner.position.x = 0; this.inner.rotation.x = .9 * easeIO(o); }
+    if (this.skin) { skinPose(this, easeIO(o)); this.pivot.rotation.y = 0; this.inner.position.x = 0; }
+    else if (this.g.fmt === 'vhsbox') { this.pivot.rotation.y = 0; this.inner.position.x = 0; this.inner.rotation.x = .9 * easeIO(o); }
     else { const mo = this.motion, lid = mo ? mo.lid : LID_OPEN * o; this.pivot.rotation.y = -lid; this.inner.position.x = this.dim.w / 2 * (mo ? mo.spread : o); if (this.folds) this.hinge.rotation.y = -lid / 2; }
     /* turned by hand, it springs back when you let go */
     const gb = this.grab; if (!gb.held && (gb.x || gb.y)) { gb.vx += (-16 * gb.x - 5.5 * gb.vx) * dt; gb.vy += (-16 * gb.y - 5.5 * gb.vy) * dt; gb.x += gb.vx * dt; gb.y += gb.vy * dt; if (Math.abs(gb.x) + Math.abs(gb.y) + Math.abs(gb.vx) + Math.abs(gb.vy) < 1e-4) gb.x = gb.y = gb.vx = gb.vy = 0; }

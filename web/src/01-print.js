@@ -39,8 +39,9 @@ function placeholderArt(x, W, H, g) {
   let s = W * .14; x.font = titleFont(g, s); const t = titleText(g); while (x.measureText(t).width > W * .84 && s > 10) { s *= .94; x.font = titleFont(g, s); }
   x.fillStyle = g.pal[4]; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(t, W / 2, H * .3);
 }
-function coverSize(g) { if (g.video || g.music) return [512, Math.round(512 * DIMS[g.fmt].h / DIMS[g.fmt].w)]; return { jewel: [512, 452], bigjewel: [512, 470], big: [512, 592], floppy: [512, 694], cart: [512, 686] }[g.fmt] || [512, 720]; }
+function coverSize(g) { const sk = dimOf(g); if (sk.skin) return [512, Math.round(512 * sk.h / sk.w)]; if (g.video || g.music) return [512, Math.round(512 * DIMS[g.fmt].h / DIMS[g.fmt].w)]; return { jewel: [512, 452], bigjewel: [512, 470], big: [512, 592], floppy: [512, 694], cart: [512, 686] }[g.fmt] || [512, 720]; }
 function spineSize(g) {
+  { const sk = dimOf(g); if (sk.skin) return [Math.max(32, Math.round(1000 * sk.d / sk.h)), 1000]; }
   if (g.video) { const d = DIMS[g.fmt]; return [Math.round(1000 * d.d / d.h), 1000]; }
   if (g.music) { const d = DIMS[g.fmt]; return [Math.max(28, Math.round(1000 * d.d / d.h)), 1000]; }
   const s = { big: [224, 1036], floppy: [200, 1080], cart: [192, 1060], bigjewel: [104, 760] }[g.fmt];
