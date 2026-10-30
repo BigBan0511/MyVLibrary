@@ -6,7 +6,7 @@
    .ugc (UGCS in 15-stage.js). Placed by hand: Settings → EmuVR →
    Decoration → Place, then drag them onto any flat surface of the room.
    ===================================================================== */
-const DECO = { on: false, room: '', sel: null, drag: null, group: new THREE.Group(), objs: new Map(), building: new Map(), surf: [], box: null, saveT: 0 };
+const DECO = { on: false, room: '', axis: 'r', sel: null, drag: null, group: new THREE.Group(), objs: new Map(), building: new Map(), surf: [], box: null, saveT: 0 };
 scene.add(DECO.group);
 const decoRay = new THREE.Raycaster(), _deN = new THREE.Vector2(), _deV = new V3(), _deD = new V3(0, -1, 0);
 function decoList(sys) { const d = prefs.decor || (prefs.decor = {}); return d[sys] || (d[sys] = []); }
@@ -30,7 +30,23 @@ function decoObj(it) {
   })().catch(e => { console.error(e); toast(T('No se ha podido leer {0}', it.name)); return null; }).finally(() => DECO.building.delete(it.id)));
   return DECO.building.get(it.id);
 }
-function decoPlace(it, o) { o.position.set(it.p[0], it.p[1], it.p[2]); o.rotation.set(0, it.r || 0, 0); o.scale.setScalar(it.s || 1); }
+/* turned about the vertical (r), tilted forwards or back (x) and leant to a side (z): the turn is the last one, so it is always about the vertical */
+const _deP = new V3();
+/* tilted, a thing's lowest point is no longer its base: it is lifted by that much so it rests on the surface instead of sinking into it */
+function decoSeat(it, o) {
+  const k = [it.x || 0, it.z || 0, it.s || 1].map(v => v.toFixed(4)).join(',');
+  if (o.userData.seatK === k) return o.userData.seat;
+  let seat = 0;
+  if (it.x || it.z) {
+    o.position.set(0, 0, 0); o.rotation.set(it.x || 0, 0, it.z || 0, 'YXZ'); o.scale.setScalar(it.s || 1); o.updateMatrixWorld(true);
+    let n = 0, min = Infinity; o.traverse(m => { if (m.isMesh && m.visible) n += m.geometry.attributes.position.count; });
+    const step = Math.max(1, Math.ceil(n / 150000));
+    o.traverse(m => { if (!m.isMesh || !m.visible) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i += step) { _deP.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); if (_deP.y < min) min = _deP.y; } });
+    seat = isFinite(min) ? -min : 0;
+  }
+  o.userData.seatK = k; o.userData.seat = seat; return seat;
+}
+function decoPlace(it, o) { const seat = decoSeat(it, o); o.position.set(it.p[0], it.p[1] + seat, it.p[2]); o.rotation.set(it.x || 0, it.r || 0, it.z || 0, 'YXZ'); o.scale.setScalar(it.s || 1); }
 /* called by applyStage: this room's things appear, the others' are put away */
 function decoShow(sys) {
   if (DECO.on && DECO.room !== sys) decoEnd();
@@ -83,7 +99,7 @@ function decoSpawn() {
 }
 async function decoAdd(src, name, parsed) {
   const sys = decoRoom(); if (!sys) return;
-  const it = { id: 'd' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), src, name, p: decoSpawn(), r: 0, s: 1 };
+  const it = { id: 'd' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), src, name, p: decoSpawn(), r: 0, x: 0, z: 0, s: 1 };
   decoList(sys).push(it); savePrefs();
   const o = parsed ? decoAdopt(it, UGC.build(parsed)) : await decoObj(it);
   if (!o) return;
@@ -129,7 +145,12 @@ function decoMark() {
   DECO.box = new THREE.BoxHelper(o, 0xffb547); DECO.box.material.depthTest = false; DECO.box.material.transparent = true; DECO.box.renderOrder = 10; scene.add(DECO.box);
 }
 function decoMoved(it) { const o = DECO.objs.get(it.id); if (o) decoPlace(it, o); if (DECO.box) DECO.box.update(); decoSave(); renderDecoBar(); }
-function decoTurn(it, a) { it.r = ((it.r || 0) + a) % (Math.PI * 2); decoMoved(it); }
+/* what the wheel, Q and E do: turn it, tilt it forwards or back, or lean it to a side */
+const DECO_AXES = [['r', 'Girar'], ['x', 'Inclinar'], ['z', 'Ladear']];
+const wrapPi = v => { v = (v + Math.PI) % (2 * Math.PI); return (v < 0 ? v + 2 * Math.PI : v) - Math.PI; };
+function decoTurn(it, a, axis) { const k = axis || DECO.axis; it[k] = wrapPi((it[k] || 0) + a); decoMoved(it); }
+function decoAxis(k) { DECO.axis = k || DECO_AXES[(DECO_AXES.findIndex(x => x[0] === DECO.axis) + 1) % DECO_AXES.length][0]; renderDecoBar(); }
+function decoStraighten(it) { it.x = 0; it.z = 0; decoMoved(it); }
 function decoSize(it, k) { it.s = clamp((it.s || 1) * k, .05, 20); decoMoved(it); }
 /* moved with the arrows: along the floor as the camera sees it, then dropped onto whatever is under it */
 function decoNudge(it, dx, dz) {
@@ -147,6 +168,7 @@ function decoKey(k) {
   else if (k === 'ArrowUp') decoNudge(it, 0, 1.5); else if (k === 'ArrowDown') decoNudge(it, 0, -1.5);
   else if (k === 'q' || k === 'Q') decoTurn(it, -Math.PI / 12); else if (k === 'e' || k === 'E') decoTurn(it, Math.PI / 12);
   else if (k === 'z' || k === 'Z' || k === '-') decoSize(it, 1 / 1.1); else if (k === 'c' || k === 'C' || k === '+' || k === '=') decoSize(it, 1.1);
+  else if (k === 'f' || k === 'F') decoAxis();
   return true;
 }
 /* while placing, the mouse moves things instead of choosing games */
@@ -166,8 +188,9 @@ function decoKey(k) {
     if (DECO.drag) { DECO.drag = null; canvasEl.style.cursor = 'grab'; decoSave(); renderDecoBar(); }
   } else if (type === 'wheel') {
     const it = decoItem(DECO.sel); if (!it) return;
-    if (e.shiftKey || e.ctrlKey || e.altKey) decoSize(it, Math.exp(-clamp(e.deltaY, -120, 120) * .0016));
-    else decoTurn(it, clamp(e.deltaY, -120, 120) * .004);
+    const d = clamp(e.deltaY, -120, 120);
+    if (e.shiftKey) decoSize(it, Math.exp(-d * .0016));
+    else decoTurn(it, d * .004, e.ctrlKey ? 'x' : e.altKey ? 'z' : null);
   }
 }, { capture: true, passive: false }));
 
@@ -176,15 +199,20 @@ function renderDecoBar() {
   const el = $('#decoBar'); if (!el || !DECO.on) return;
   const it = decoItem(DECO.sel), L = decoRoom() ? decoList(decoRoom()) : [], room = (systemsList().find(s => s.key === decoRoom()) || {}).name || '';
   const b = (a, label, tip) => `<button type="button" class="gact" data-deco-act="${a}"${tip ? ` title="${esc(tip)}" aria-label="${esc(tip)}"` : ''}>${label}</button>`;
-  el.innerHTML = `<div class="deco-what"><b>${T('Decorando')} · ${esc(room)}</b><span>${it ? esc(it.name) + ' · ×' + (it.s || 1).toFixed(2) : T('Elige algo de la sala')}</span></div>
-    <div class="deco-btns">${L.length > 1 ? b('next', T('Siguiente'), T('Elegir el siguiente') + ' (M)') : ''}${it ? b('left', '↺', T('Girar') + ' (Q)') + b('right', '↻', T('Girar') + ' (E)') + b('small', '−', T('Más pequeño') + ' (Z)') + b('big', '+', T('Más grande') + ' (C)') + b('del', T('Quitar'), T('Quitar') + ' (Supr)') : ''}
-    <button type="button" class="pbtn primary" data-deco-act="done"><kbd>${T('Intro')}</kbd>${T('Listo')}</button></div>
-    <p class="deco-hint">${coarse ? T('Arrastra cada cosa a donde quieras.') : T('Arrastra para mover · rueda: girar · Mayús + rueda: tamaño · flechas: mover')}</p>`;
+  const deg = v => Math.round((v || 0) * 180 / Math.PI) + '°', ax = DECO_AXES.find(x => x[0] === DECO.axis) || DECO_AXES[0], tilted = it && (Math.abs(it.x || 0) > 1e-3 || Math.abs(it.z || 0) > 1e-3);
+  const angles = it ? ` · ↻ ${deg(it.r)}` + (tilted ? ` · ${T('inclinado')} ${deg(it.x)} · ${T('ladeado')} ${deg(it.z)}` : '') : '';
+  const sep = '<i class="deco-sep" aria-hidden="true"></i>';
+  el.innerHTML = `<div class="deco-what"><b>${T('Decorando')} · ${esc(room)}</b><span>${it ? esc(it.name) + ' · ×' + (it.s || 1).toFixed(2) + angles : T('Elige algo de la sala')}</span></div>
+    <button type="button" class="pbtn primary deco-done" data-deco-act="done"><kbd>${T('Intro')}</kbd>${T('Listo')}</button>
+    <div class="deco-btns">${it ? `<span class="deco-axis" role="group" aria-label="${esc(T('Qué hacen la rueda, Q y E'))} (F)">${DECO_AXES.map(([k, l]) => `<button type="button" data-deco-axis="${k}" aria-pressed="${k === DECO.axis}">${T(l)}</button>`).join('')}</span>`
+      + b('left', '↺', T(ax[1]) + ' (Q)') + b('right', '↻', T(ax[1]) + ' (E)') + (tilted ? b('straight', T('Enderezar')) : '') + sep + b('small', '−', T('Más pequeño') + ' (Z)') + b('big', '+', T('Más grande') + ' (C)') + sep + b('del', T('Quitar'), T('Quitar') + ' (Supr)') : ''}${L.length > 1 ? b('next', T('Siguiente'), T('Elegir el siguiente') + ' (M)') : ''}</div>
+    <p class="deco-hint">${coarse ? T('Arrastra cada cosa a donde quieras.') : T('Arrastra para mover · rueda: girar, inclinar o ladear (F cambia; Ctrl + rueda inclina, Alt + rueda ladea) · Mayús + rueda: tamaño · flechas: mover')}</p>`;
 }
 $('#decoBar').addEventListener('click', e => {
+  const x = e.target.closest('[data-deco-axis]'); if (x) { decoAxis(x.dataset.decoAxis); return; }
   const a = e.target.closest('[data-deco-act]'); if (!a) return; const it = decoItem(DECO.sel), k = a.dataset.decoAct;
   if (k === 'done') decoEnd(); else if (k === 'next') decoKey('m');
-  else if (it) { if (k === 'left') decoTurn(it, -Math.PI / 12); else if (k === 'right') decoTurn(it, Math.PI / 12); else if (k === 'small') decoSize(it, 1 / 1.1); else if (k === 'big') decoSize(it, 1.1); else if (k === 'del') decoRemove(it.id); }
+  else if (it) { if (k === 'left') decoTurn(it, -Math.PI / 12); else if (k === 'right') decoTurn(it, Math.PI / 12); else if (k === 'straight') decoStraighten(it); else if (k === 'small') decoSize(it, 1 / 1.1); else if (k === 'big') decoSize(it, 1.1); else if (k === 'del') decoRemove(it.id); }
 });
 
 /* ---------- Settings → EmuVR → Decoration ---------- */
