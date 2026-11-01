@@ -367,9 +367,9 @@ function ejectMusic() {
     setLed(false);
     const opened = rest ? (async () => { await waitReal(.3); await swingOpen(c); })() : null;
     await popOut(d, P); afterOut(P); await wait(320); if (opened) await opened;
-    await flyIntoCase(c, d, P, rest ? new V3(home.x, home.y, home.z + 7) : discAbove(c, new V3()));
+    await flyIntoCase(c, d, P, rest ? home.clone().addScaledVector(discLift(c), 7) : discAbove(c, new V3()));
     MUSIC.held = null; await waitReal(.25);
-    const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0;
+    await shutCase(c); c.openA = 0;
     setView('shelf'); await waitReal(.2);
     if (c.temp) { c.vanish = true; await wait(450); c.dispose(); looseCases.delete(c); }
     else { await slideHome(c); focus = c; }
@@ -385,8 +385,9 @@ async function flyIntoCase(c, d, P, above) {
   await tween(1.1, t => { bez(_p0, _p1, _p2, t, d.position); d.scale.setScalar(lerp(s0, sT, t)); _qt.copy(_q0).slerp(_q2, easeIO(Math.min(1, t * 1.2))); _qz.setFromAxisAngle(ZAX, (1 - t) * Math.PI * 2); d.quaternion.copy(_qt).multiply(_qz); });
   c.inner.attach(d); d.position.copy(above); d.quaternion.copy(qIn); d.scale.set(1, 1, 1); d.visible = true;
   sfx.mediaIn(c.g.fmt, { hitAt: (.55 + .22) * SPEED });
-  await tween(.55, t => { d.position.y = lerp(above.y, home.y, t); d.position.z = lerp(above.z, home.z + 1.4, t); });
-  await tween(.22, t => { d.position.z = home.z + 1.4 * (1 - t); }); d.position.copy(home);
+  const lift = discLift(c), loose = home.clone().addScaledVector(lift, 1.4);
+  await tween(.55, t => { d.position.lerpVectors(above, loose, t); });
+  await tween(.22, t => { d.position.copy(home).addScaledVector(lift, 1.4 * (1 - t)); }); d.position.copy(home);
 }
 /* a case that is not on any shelf (one song, a burnt mix): it comes into your hands from below */
 async function presentCase(g) {

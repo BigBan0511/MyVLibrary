@@ -178,7 +178,183 @@ function skinPaint(c, root) {
   const t = tex(cv); seen.forEach(mt => { mt.map = t; mt.color.set('#ffffff'); mt.needsUpdate = true; });
   if (root.userData.artTex) root.userData.artTex.dispose(); root.userData.artTex = t;
 }
-function skinPose(c, o) { const s = c.skin, an = s.root.userData.anim; if (!an || s.o === o) return; s.o = o; if (an.clips.open) an.apply(an.clips.open, an.clips.open.dur * o); else if (an.clips.close) an.apply(an.clips.close, an.clips.close.dur * (1 - o)); }
+/* ---------- the box at work ----------
+   EmuVR keeps no list of boxes and has no idea how far any of them opens. It runs the model's own clips and
+   hangs the medium from the model's own socket (male socket on female socket, and the medium becomes its
+   child), so whatever a clip moves carries the medium along: a DVD's socket stays on the back while the front
+   swings 180°, a cassette box's rides on its 90° lid, a SNES box's on the tray that slides out. Here it is the
+   same, and nothing below knows a kind of box. Two things have no counterpart in EmuVR, where you walk round a
+   box and reach into it, and are looked for on the model itself with rays: which way to hold it open so that
+   the medium can be seen (and, when no way shows it, by which side to draw it out), and where a manual fits. */
+const _sm1 = new THREE.Matrix4(), _sm2 = new THREE.Matrix4(), _sm3 = new THREE.Matrix4(), _wp = new V3(), _wq = new Q4(), _ws = new V3();
+const SKIN_PULL_T = .6;
+/* where a part of the model is now, in the case's own space */
+function skinAt(root, o, out) { return out.copy(root.matrix).multiply(_sm1.copy(root.matrixWorld).invert()).multiply(o.matrixWorld); }
+/* one clip's seconds, the time a box takes to open or shut, and the share of it that belongs to the clip */
+function skinClipT(c, shut) { const C = (c.skin.root.userData.anim || { clips: {} }).clips, k = shut ? C.close || C.open : C.open || C.close; return k ? clamp(k.dur, .3, 3.2) : .5; }
+function skinTime(c, shut) { return skinClipT(c, shut) + (c.skin.pull ? SKIN_PULL_T : 0); }
+/* whatever rides on the box goes where its part took it */
+function skinRide(c, o) {
+  const s = c.skin, root = s.root; if (!s.riders.length) return;
+  root.updateMatrixWorld(true);
+  const P = s.pull, share = skinClipT(c, s.shut) / skinTime(c, s.shut), e = P ? easeIO(clamp((o - share) / (1 - share), 0, 1)) : 0;
+  for (const r of s.riders) {
+    /* the medium is the app's while it travels: it rides again once it is back where it was left */
+    const b = r.obj; if (b.parent !== c.inner || (r.last && b.position.distanceToSquared(r.last) > 1e-5 && !(r.home && b.position.distanceToSquared(r.home) < 1e-5))) continue;
+    _sm2.multiplyMatrices(skinAt(root, r.part, _sm3), r.base).decompose(_wp, _wq, _ws);
+    if (r.pulled && P) _wp.addScaledVector(P.v, P.len * e);
+    b.position.copy(_wp); b.quaternion.copy(_wq); (r.last = r.last || new V3()).copy(_wp);
+  }
+}
+/* the model's own clips, the opening one on the way up and the closing one on the way down: each brings its own easing */
+function skinPose(c, o) {
+  const s = c.skin, an = s.root.userData.anim; if (s.o === o) return;
+  if (s.o >= 0 && o !== s.o) s.shut = o < s.o;
+  const t = Math.min(1, o * skinTime(c, s.shut) / skinClipT(c, s.shut)); s.o = o;
+  if (an) { const C = an.clips, k = s.shut ? C.close || C.open : C.open || C.close; if (k) an.apply(k, k === C.open ? k.dur * t : k.dur * (1 - t)); }
+  skinRide(c, o);
+}
+/* every frame: the pose, and the way the box is held (lying on a table it stays as it lies) */
+function skinMove(c, o, dt) {
+  const s = c.skin, v = s.view; skinPose(c, o);
+  s.lean += ((c.mode === 'rest' ? 0 : 1) - s.lean) * (1 - Math.exp(-7 * dt)); c.pivot.rotation.y = 0;
+  const e = easeIO(o) * s.lean; c.inner.quaternion.identity().slerp(v.q, e); c.inner.position.set(v.p.x * e, v.p.y * e, 0);
+}
+/* the open box as plain triangles in the case's space, in small bundles with their bounds, so that rays can look at
+   thousands of them (what bends is posed once, here). What you can see through stops nothing, except a printed card. */
+function skinTris(meshes, at) {
+  const out = { b: [], pos: [] }, v = new V3();
+  for (const m of meshes) {
+    const G = m.geometry, P = G.attributes.position, I = G.index.array, M = at(m), mats = [].concat(m.material), pos = new Float32Array(P.count * 3);
+    for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); if (m.isSkinnedMesh) m.boneTransform(i, v); v.applyMatrix4(M).toArray(pos, i * 3); }
+    out.pos.push(pos);
+    for (const g of G.groups.length ? G.groups : [{ start: 0, count: I.length, materialIndex: 0 }]) {
+      const t = mats[g.materialIndex] || mats[0]; if (t && t.transparent && !m.userData.artFace) continue;
+      for (let s = g.start, end = g.start + g.count; s < end; s += 96) {
+        const to = Math.min(end, s + 96), lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+        for (let i = s; i < to; i++) { const q = I[i] * 3; for (let k = 0; k < 3; k++) { const w = pos[q + k]; if (w < lo[k]) lo[k] = w; if (w > hi[k]) hi[k] = w; } }
+        out.b.push({ m, I, pos, from: s, to, lo, hi });
+      }
+    }
+  }
+  return out;
+}
+/* the first triangle a ray meets, whichever side it comes from: where, how far, which way it looks (towards the ray) */
+function skinHit(T, o, d) {
+  const ox = o.x, oy = o.y, oz = o.z, dx = d.x || 1e-9, dy = d.y || 1e-9, dz = d.z || 1e-9, ix = 1 / dx, iy = 1 / dy, iz = 1 / dz; let near = Infinity, B = null, at = 0;
+  for (const b of T.b) {
+    const ax = (b.lo[0] - ox) * ix, bx = (b.hi[0] - ox) * ix, ay = (b.lo[1] - oy) * iy, by = (b.hi[1] - oy) * iy, az = (b.lo[2] - oz) * iz, bz = (b.hi[2] - oz) * iz;
+    const t0 = Math.max(Math.min(ax, bx), Math.min(ay, by), Math.min(az, bz), 0), t1 = Math.min(Math.max(ax, bx), Math.max(ay, by), Math.max(az, bz), near); if (t0 > t1) continue;
+    const I = b.I, p = b.pos;
+    for (let i = b.from; i + 2 < b.to; i += 3) {
+      const a = I[i] * 3, e = I[i + 1] * 3, f = I[i + 2] * 3, x0 = p[a], y0 = p[a + 1], z0 = p[a + 2], ux = p[e] - x0, uy = p[e + 1] - y0, uz = p[e + 2] - z0, vx = p[f] - x0, vy = p[f + 1] - y0, vz = p[f + 2] - z0;
+      const px = dy * vz - dz * vy, py = dz * vx - dx * vz, pz = dx * vy - dy * vx, det = ux * px + uy * py + uz * pz; if (det > -1e-10 && det < 1e-10) continue;
+      const k = 1 / det, tx = ox - x0, ty = oy - y0, tz = oz - z0, u = (tx * px + ty * py + tz * pz) * k; if (u < 0 || u > 1) continue;
+      const qx = ty * uz - tz * uy, qy = tz * ux - tx * uz, qz = tx * uy - ty * ux, w = (dx * qx + dy * qy + dz * qz) * k; if (w < 0 || u + w > 1) continue;
+      const t = (vx * qx + vy * qy + vz * qz) * k; if (t > 1e-4 && t < near) { near = t; B = b; at = i; }
+    }
+  }
+  if (!B) return null;
+  const I = B.I, p = B.pos, a = I[at] * 3, e = I[at + 1] * 3, f = I[at + 2] * 3, n = new V3(p[e] - p[a], p[e + 1] - p[a + 1], p[e + 2] - p[a + 2]).cross(new V3(p[f] - p[a], p[f + 1] - p[a + 1], p[f + 2] - p[a + 2])).normalize();
+  if (n.dot(d) > 0) n.negate();
+  return { d: near, p: o.clone().addScaledVector(d, near), n, m: B.m, a: I[at] };
+}
+/* the size of one of our own media, on its own axes */
+function skinMedSize(c) { const D = c.dim, m = D.media; return m === 'disc' ? new V3(2 * D.discR, 2 * D.discR, .15) : m === 'tape' || m === 'cass' ? new V3(MSIZE[m].h, MSIZE[m].w, MSIZE[m].t) : new V3(MSIZE[m].w, MSIZE[m].h, MSIZE[m].t); }
+/* a box and what goes in it, looked at once: the seat of the medium, how to hold the box, the manual's place */
+function skinMeasure(c, root) {
+  const A = root.userData.anchors, an = root.userData.anim, C = an ? an.clips : {}, S = A.socket || root, d = c.disc, male = d && A.socket ? d.userData.male : null, D = c.dim, k0 = root.scale.x;
+  const at = o => skinAt(root, o, new THREE.Matrix4()), comp = (p, q) => new THREE.Matrix4().compose(p, q, new V3(1, 1, 1));
+  const nodes = new Set(); [C.open, C.close].forEach(k => k && k.binds.forEach(b => { if (b.node && b.type === 4) nodes.add(b.node); }));
+  skinClosed(root); const shut = new Map([...nodes].map(o => [o, at(o)])), S0 = at(S), sealed = skinTris(root.userData.meshes.filter(m => { for (let o = m; o && o !== root; o = o.parent) if (!o.visible) return false; return true; }), at);
+  if (C.open) an.apply(C.open, C.open.dur); else if (C.close) an.apply(C.close, 0);
+  root.updateMatrixWorld(true);
+  const S1 = at(S), moved = new Set([...shut].filter(([o, m]) => { const e = at(o).multiply(m.clone().invert()).elements; return Math.hypot(e[12], e[13], e[14]) > .3 || (e[0] + e[5] + e[10] - 1) / 2 < .995; }).map(e => e[0]));
+  const meshes = root.userData.meshes.filter(m => { for (let o = m; o && o !== root; o = o.parent) if (!o.visible) return false; return true; });
+  const tris = skinTris(meshes, at), hit = (o, dir) => skinHit(tris, o, dir);
+  /* the medium's seat with the box open */
+  const q1 = new Q4(), p1 = new V3(), size = d ? (male ? d.children[0].userData.size.clone().multiplyScalar(k0) : skinMedSize(c)) : new V3();
+  if (d && male) {
+    const e = S1.elements, F = new THREE.Matrix4().makeBasis(new V3(e[0], e[1], e[2]).normalize(), new V3(e[4], e[5], e[6]).normalize(), new V3(e[8], e[9], e[10]).normalize());
+    q1.setFromRotationMatrix(F.multiply(male.m.clone().invert())); p1.setFromMatrixPosition(S1).sub(male.p.clone().multiplyScalar(k0).applyQuaternion(q1));
+  } else if (d) {
+    /* one of our own has no socket: it lies flat inside the shut box as near the model's socket as it fits, and moves as the socket moves */
+    const q0 = (c.discQuat || new Q4()).clone(), half = q => { const a = new V3(size.x / 2, 0, 0).applyQuaternion(q), b = new V3(0, size.y / 2, 0).applyQuaternion(q), f = new V3(0, 0, size.z / 2).applyQuaternion(q); return new V3(Math.abs(a.x) + Math.abs(b.x) + Math.abs(f.x), Math.abs(a.y) + Math.abs(b.y) + Math.abs(f.y), Math.abs(a.z) + Math.abs(b.z) + Math.abs(f.z)); };
+    const h = half(q0), fit = (v, room) => room <= 0 ? 0 : clamp(v, -room, room), p0 = new V3().setFromMatrixPosition(S0); p0.set(fit(p0.x, D.w / 2 - h.x), fit(p0.y, D.h / 2 - h.y), fit(p0.z, D.d / 2 - h.z));
+    const rel = S1.clone().multiply(S0.clone().invert()), place = q => rel.clone().multiply(comp(p0, q)).decompose(p1, q1, _ws); place(q0);
+    /* on a lid it must end up looking at you, not at the lid */
+    if (new V3(0, 0, 1).applyQuaternion(q1).z < .2 && S1.elements[12] !== S0.elements[12]) place(q0.clone().multiply(new Q4().setFromAxisAngle(new V3(0, 1, 0), Math.PI)));
+  }
+  const ax = new V3(1, 0, 0).applyQuaternion(q1), ay = new V3(0, 1, 0).applyQuaternion(q1), n = new V3(0, 0, 1).applyQuaternion(q1);
+  /* the medium, nine points through its middle */
+  let P = []; if (d) for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) P.push(p1.clone().addScaledVector(ax, i * size.x * .36).addScaledVector(ay, j * size.y * .36));
+  const hidden = (L, v) => { if (!L.length) return 0; const back = v.clone().negate(); return L.filter(x => { const o = x.clone().addScaledVector(v, 90), h = hit(o, back); return h && h.d < 89.95; }).length / L.length; };
+  /* the way to hold it open: what shows the medium, flat towards you (best its label: a tape in a lid has it against the lid), turned as little as will do */
+  const hold = L => { let out = null; for (const yaw of d ? [0, .25, -.25, .5, -.5, .8, -.8, 1.05, -1.05] : [0]) for (const pitch of d ? [0, .35, -.35, .7, -.7, 1.05, -1.05, 1.3, -1.3] : [0]) { const q = new Q4().setFromEuler(new EU(pitch, yaw, 0)), v = new V3(0, 0, 1).applyQuaternion(q.clone().invert()), hid = hidden(L, v), f = n.dot(v), cost = 3 * hid + (1 - Math.abs(f)) + (f < 0 ? .25 : 0) + .35 * (1 - Math.cos(yaw) * Math.cos(pitch)); if (!out || cost < out.cost) out = { q, v, hid, cost, flat: Math.abs(f) }; } return out; };
+  let view = hold(P), pull = null, lift = d ? n.clone() : new V3(0, 0, 1), through = false;
+  /* it stays out of sight, or could only be seen from far round the side or edge-on (a box that opens at the top, a tape between the leaves of its card): a hand would draw it out by the side that is open */
+  if (d && (view.hid > .5 || view.cost > .75)) {
+    const axes = [ax, ay, n].flatMap(a => [a.clone(), a.clone().negate()]), len = a => Math.abs(a.dot(ax)) * size.x + Math.abs(a.dot(ay)) * size.y + Math.abs(a.dot(n)) * size.z;
+    /* which side the opening freed: where a ray goes further with the box open than shut, or gets away altogether */
+    const reach = (T, a) => P.reduce((m, x) => { const h = skinHit(T, x.clone().addScaledVector(a, .05), a); return m + (h ? Math.min(h.d, 40) : 40); }, 0) / P.length;
+    const ways = axes.map(a => { const go = reach(tris, a), gain = go - reach(sealed, a); return { a, go, gain, s: (go >= 40 ? 1 : 0) + gain / 8 + .3 * a.y + .15 * a.z }; }).sort((u, w) => w.s - u.s), way = ways[0].a;
+    if (ways[0].go >= 40 || ways[0].gain > .5) for (let t = len(way) * .35, end = Math.abs(way.x) * D.w + Math.abs(way.y) * D.h + Math.abs(way.z) * D.d + len(way); t <= end && !pull; t += len(way) * .15) { const Q = P.map(x => x.clone().addScaledVector(way, t)), w = hold(Q); if (w.hid <= .12 && w.flat > .5 && w.cost < .62) { pull = { v: way.clone(), len: t }; view = w; P = Q; lift = way.clone(); } }
+    /* a box that does not open at all: the medium comes to lie on its front */
+    if (!pull && view.hid > .5) {
+      const f = hit(new V3(0, 0, D.d + 60), new V3(0, 0, -1)), z = f ? f.p.z : D.d / 2; through = true;
+      q1.identity(); if (size.x > D.w && size.y < size.x) q1.setFromAxisAngle(new V3(0, 0, 1), Math.PI / 2);
+      p1.set(0, 0, z + size.z / 2 + .1); lift.set(0, 0, 1); view = { q: new Q4(), v: new V3(0, 0, 1), hid: 0 }; P = [p1.clone()];
+    }
+  }
+  if (!pull && lift.dot(view.v) < 0) lift.negate();
+  /* how big the open box is, held that way */
+  const R = new THREE.Matrix4().makeRotationFromQuaternion(view.q), Ri = R.clone().invert(), ext = new THREE.Box3(), add = v => ext.expandByPoint(v.applyMatrix4(R)), v0 = new V3();
+  tris.pos.forEach(a => { const step = 3 * Math.max(1, (a.length / 3) >> 12); for (let i = 0; i < a.length; i += step) add(v0.fromArray(a, i)); });
+  const seat = pull ? p1.clone().addScaledVector(pull.v, pull.len) : p1.clone();
+  /* the manual: the biggest flat bit of the open box that looks your way and is not the medium. It stays on that part, so it swings with a lid */
+  let man = null;
+  if (c.manual && !through) {
+    const g = c.manual.geometry.parameters, ux = new V3(1, 0, 0).transformDirection(Ri), uy = new V3(0, 1, 0).transformDirection(Ri), v = view.v, W = ext.max.x - ext.min.x, H = ext.max.y - ext.min.y, step = Math.max(.7, Math.max(W, H) / 32);
+    const nx = Math.ceil(W / step), ny = Math.ceil(H / step), cells = [], mrect = new THREE.Box3(), vp = new V3();
+    if (d) [-1, 1].forEach(i => [-1, 1].forEach(j => mrect.expandByPoint(vp.copy(seat).addScaledVector(ax, i * size.x / 2).addScaledVector(ay, j * size.y / 2).applyMatrix4(R))));
+    const carrier = h => { let o = h.m; if (o.isSkinnedMesh) { const G = o.geometry.attributes, a = h.a; let best = 0, bw = -1; for (let i = 0; i < 4; i++) { const w = G.skinWeight.array[a * 4 + i]; if (w > bw) { bw = w; best = G.skinIndex.array[a * 4 + i]; } } o = o.skeleton.bones[best] || o; } for (; o && o !== root; o = o.parent) if (moved.has(o)) return o; return root; };
+    const back = v.clone().negate();
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const x = ext.min.x + (i + .5) * step, y = ext.min.y + (j + .5) * step; cells.push(null);
+      if (d && x > mrect.min.x - .4 && x < mrect.max.x + .4 && y > mrect.min.y - .4 && y < mrect.max.y + .4) continue;
+      const h = hit(new V3().addScaledVector(ux, x).addScaledVector(uy, y).addScaledVector(v, ext.max.z + 30), back); if (!h) continue;
+      if (h.n.dot(v) < .35) continue;
+      const part = carrier(h), m0 = part === root ? null : shut.get(part).clone().multiply(at(part).invert()), p0 = h.p.clone(), n0 = h.n.clone(); if (m0) { p0.applyMatrix4(m0); n0.transformDirection(m0); }
+      if (!skinHit(sealed, p0.addScaledVector(n0, .03), n0)) continue;
+      cells[j * nx + i] = { part, p: h.p, n: h.n };
+    }
+    const fits = (i0, j0, a, b) => { const f = cells[j0 * nx + i0]; if (!f) return null; for (let j = j0; j < j0 + b; j++) for (let i = i0; i < i0 + a; i++) { const q = cells[j * nx + i]; if (!q || q.part !== f.part || Math.abs(_st.subVectors(q.p, f.p).dot(f.n)) > .55) return null; } return f; };
+    for (let k = 1; k >= .39 && !man; k -= .1) {
+      const a = Math.ceil(g.width * k / step), b = Math.ceil(g.height * k / step); let found = null;
+      for (let j = 0; j + b <= ny; j++) for (let i = 0; i + a <= nx; i++) {
+        const f = fits(i, j, a, b); if (!f) continue;
+        /* a part that moves is where a manual lives; among places alike, the middle of what is free */
+        const dc = Math.hypot(i + a / 2 - nx / 2, j + b / 2 - ny / 2) / Math.max(nx, ny), score = (f.part === root ? 0 : 1) - dc;
+        if (!found || score > found.score) found = { score, i, j, part: f.part };
+      }
+      if (!found) continue;
+      const pts = [], nrm = new V3(); for (let j = found.j; j < found.j + b; j++) for (let i = found.i; i < found.i + a; i++) { const q = cells[j * nx + i]; pts.push(q.p); nrm.add(q.n); }
+      nrm.normalize(); const mid = pts.reduce((m, q) => m.add(q), new V3()).multiplyScalar(1 / pts.length).addScaledVector(nrm, .07 + .08);
+      const y = uy.clone().projectOnPlane(nrm).normalize(), z = nrm.clone().negate(), x = y.clone().cross(z).normalize(), T = new THREE.Matrix4().makeBasis(x, y, z); T.setPosition(mid);
+      man = { part: found.part, base: at(found.part).invert().multiply(T), k };
+    }
+    /* no room inside: if the medium comes out it brings the manual behind it */
+    if (!man && (pull || S1.elements[12] !== S0.elements[12] || S1.elements[13] !== S0.elements[13])) {
+      const k = Math.min(1, size.y * 1.02 / g.height, D.w * .9 / g.width), y = ay.clone(), z = n.clone().negate(), x = y.clone().cross(z).normalize(), T = new THREE.Matrix4().makeBasis(x, y, z); T.setPosition(p1.clone().addScaledVector(n, -size.z / 2 - .16).addScaledVector(ax, size.x * .3));
+      man = { part: S, base: S1.clone().invert().multiply(T), k, pulled: !!pull };
+    }
+  }
+  if (d) { [-1, 1].forEach(i => [-1, 1].forEach(j => add(v0.copy(seat).addScaledVector(ax, i * size.x / 2).addScaledVector(ay, j * size.y / 2)))); }
+  return {
+    part: through ? root : S, base: (through ? root.matrix.clone() : S1.clone()).invert().multiply(comp(p1, q1)), home: seat, quat: q1.clone(), lift, pull, through, man,
+    view: { q: view.q, p: new V3((ext.min.x + ext.max.x) / -2, (ext.min.y + ext.max.y) / -2, 0), w: ext.max.x - ext.min.x, h: ext.max.y - ext.min.y }
+  };
+}
 function skinWear(c) {
   const key = c.dim.skin; if (!key || c.disposed) return;
   const root = UGCS.models.get(key);
@@ -187,49 +363,24 @@ function skinWear(c) {
   if (c.skin) { skinPaint(c, root); return; }
   root.userData.wornBy = c; root.visible = true; c.inner.add(root);
   if (c.shelfSkin) c.shelfSkin.obj.visible = false;
-  c.skin = { root, o: -1 }; root.traverse(o => { if (o.isMesh) { o.userData.case = c; o.userData.part = null; } });
+  c.skin = { root, o: -1, shut: false, lean: 1, riders: [], pull: null, view: null }; root.traverse(o => { if (o.isMesh) { o.userData.case = c; o.userData.part = null; } });
   [c.shell, c.lid, c.spine, ...c.dustMeshes].forEach(m => { m.visible = false; });
   (c.interior || []).forEach(([, o]) => { o.visible = false; });
   skinPaint(c, root);
-  /* where the medium rests, with the box open */
-  const S = root.userData.anchors.socket;
-  skinPose(c, 1); root.updateMatrixWorld(true); c.inner.updateMatrixWorld(true);
-  const toIn = new THREE.Matrix4().copy(c.inner.matrixWorld).invert(), bb = new THREE.Box3(), mb = new THREE.Box3();
-  root.userData.meshes.forEach(m => { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); for (let o = m; o && o !== root; o = o.parent) if (!o.visible) return; mb.copy(m.geometry.boundingBox).applyMatrix4(new THREE.Matrix4().multiplyMatrices(toIn, m.matrixWorld)); bb.union(mb); });
-  /* it opens like a book, or to one side: what stays centred on screen is the open box */
-  c.skin.shift = bb.isEmpty() ? 0 : -(bb.min.x + bb.max.x) / 2;
-  /* whatever is nearest the viewer at a point of the open box */
-  const rc = new THREE.Raycaster(), frontZ = (x, y) => { rc.set(c.inner.localToWorld(new V3(x, y, c.dim.d + 60)), c.inner.localToWorld(new V3(x, y, 0)).sub(c.inner.localToWorld(new V3(x, y, 1))).normalize()); const h = rc.intersectObjects(root.userData.meshes, false)[0]; return h ? c.inner.worldToLocal(h.point.clone()).z : null; };
-  if (c.disc) {
-    const d = c.disc, male = d.userData.male; let p = S ? S.getWorldPosition(new V3()).applyMatrix4(toIn) : new V3(0, 0, c.dim.d / 2);
-    if (S && male) {
-      /* EmuVR's own medium in EmuVR's box: male socket on female socket, as in its machines */
-      const e = new THREE.Matrix4().multiplyMatrices(toIn, S.matrixWorld).elements, F = new THREE.Matrix4().makeBasis(new V3(e[0], e[1], e[2]).normalize(), new V3(e[4], e[5], e[6]).normalize(), new V3(e[8], e[9], e[10]).normalize());
-      const q = new Q4().setFromRotationMatrix(F.multiply(male.m.clone().invert())); d.quaternion.copy(q); c.discQuat = q.clone(); p = p.clone().sub(male.p.clone().applyQuaternion(q));
-      /* a lid that stands up holds its medium edge-on (a cassette box), and a box that does not really open keeps it inside: it comes out and lies on the half that faces you, label up, turned to fit */
-      const size = d.children[0].userData.size, ax = new V3(size.x * .3, 0, 0).applyQuaternion(q), ay = new V3(0, size.y * .3, 0).applyQuaternion(q), top = p.z + size.z / 2 + .05;
-      const hid = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].filter(([a, b]) => { const z = frontZ(p.x + ax.x * a + ay.x * b, p.y + ax.y * a + ay.y * b); return z !== null && z > top; }).length;
-      if (new V3(0, 0, 1).applyQuaternion(q).z < .85 || hid >= 2 || Math.abs(p.y) > c.dim.h / 2) {
-        const z = frontZ(0, 0);
-        q.identity(); if (size.x > c.dim.w && size.y < size.x) q.setFromAxisAngle(new V3(0, 0, 1), Math.PI / 2);
-        d.quaternion.copy(q); c.discQuat = q.clone(); p.set(0, 0, (z === null ? c.dim.d / 2 : z) + Math.min(size.x, size.y, size.z) / 2 + .1);
-      }
-    }
-    /* a medium that stays behind a flap comes out in front of it, or you would never see it */
-    if (Math.abs(p.y) > c.dim.h / 2 && !male) p.set(0, 0, p.z);
-    const z = frontZ(p.x, p.y); if (z !== null && z > p.z + .2 && !male) p.z = z + (c.dim.media === 'disc' ? .2 : (MSIZE[c.dim.media] ? MSIZE[c.dim.media].t / 2 + .1 : .6));
-    c.discHome.copy(p); d.position.copy(p); if (d.parent !== c.inner) c.inner.add(d); if (c.thick && !c.thick.includes(d)) c.thick.push(d); c.thickAt = .35;
+  const d = c.disc, m = c.manual, s = c.skin, plans = root.userData.plans || (root.userData.plans = new Map());
+  const pk = (d ? (d.userData.skin ? d.children[0].userData.skinKey : c.dim.media) : '') + '|' + (m ? c.g.fmt : '');
+  if (!plans.has(pk)) { let P = null; try { P = skinMeasure(c, root); } catch (e) { console.warn('skin', key, e); } plans.set(pk, P || { part: root, base: root.matrix.clone().invert().multiply(new THREE.Matrix4().setPosition(0, 0, c.dim.d / 2 + .6)), home: new V3(0, 0, c.dim.d / 2 + .6), quat: new Q4(), lift: new V3(0, 0, 1), pull: null, through: true, man: null, view: { q: new Q4(), p: new V3(), w: c.dim.w, h: c.dim.h } }); }
+  const P = plans.get(pk); s.view = P.view; s.pull = P.pull; s.lift = P.lift; c.thickAt = P.through ? .6 : 0;
+  if (d) {
+    c.discHome.copy(P.home); c.discQuat = P.quat.clone(); d.position.copy(P.home); d.quaternion.copy(P.quat); d.scale.setScalar(root.scale.x);
+    if (d.parent !== c.inner) c.inner.add(d); if (c.thick && !c.thick.includes(d)) c.thick.push(d);
+    s.riders.push({ obj: d, part: P.part, base: P.base, pulled: true, home: c.discHome });
   }
-  /* the manual lies on the free half of the open box, never on the medium; with no free half it stays out of sight */
-  if (c.manual) {
-    const m = c.manual, sp = { L: -c.dim.w / 2 - bb.min.x, R: bb.max.x - c.dim.w / 2 }, side = sp.L >= sp.R ? 'L' : 'R', room = sp[side];
-    const x = side === 'L' ? (bb.min.x - c.dim.w / 2) / 2 : (bb.max.x + c.dim.w / 2) / 2, z = frontZ(x, 0);
-    if (!bb.isEmpty() && room > 4 && z !== null) {
-      const g = m.geometry.parameters, k = Math.min(1, (room - .6) / g.width, (c.dim.h - .6) / g.height);
-      c.inner.add(m); m.position.set(x, 0, z + .1); m.rotation.set(0, Math.PI, 0); m.scale.setScalar(k); if (c.thick) c.thick.push(m); c.skin.manual = true;
-    } else m.visible = false;
+  if (m) {
+    if (P.man) { c.inner.add(m); m.rotation.set(0, 0, 0); m.scale.setScalar(P.man.k); if (c.thick) c.thick.push(m); s.manual = true; s.riders.push({ obj: m, part: P.man.part, base: P.man.base, pulled: P.man.pulled }); }
+    else m.visible = false;
   }
-  skinPose(c, c.openA);
+  s.o = -1; skinPose(c, c.openA);
 }
 function skinOff(c) {
   const s = c.skin; if (!s) return; c.skin = null;
@@ -239,7 +390,7 @@ function skinOff(c) {
   else { [c.shell, c.lid, c.spine].forEach(m => { m.visible = true; }); c.dustMeshes.forEach(m => { m.visible = c.g.dust > .01; }); }
   (c.interior || []).forEach(([, o]) => { o.visible = true; });
   if (c.manual) { const m = c.manual; if (s.manual) { const i = c.thick ? c.thick.indexOf(m) : -1; if (i >= 0) c.thick.splice(i, 1); c.pivot.add(m); m.position.set(c.dim.w / 2 - .1, 0, -.09); m.rotation.set(0, 0, 0); m.scale.setScalar(1); } m.visible = true; }
-  c.inner.position.x = 0;
+  c.inner.position.set(0, 0, 0); c.inner.quaternion.identity();
 }
 /* the medium of a game whose system has one chosen; null keeps our own */
 function skinMedium(c) {

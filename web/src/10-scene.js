@@ -551,7 +551,7 @@ class Case {
     let dist, offX = 0, offY = 0, extra = 0, tx = 0, ty = 0, tz = 0;
     if (this.mode === 'inspect') {
       const hk = camera.aspect < .95 ? 2.05 : 1.66, sw = studio.sway, gb = this.grab;
-      dist = lerp(fitDist(D.w * 1.85, D.h * hk), fitDist(D.w * 2 * 1.2, D.h * hk), o);
+      const wide = this.skin ? this.skin.view : null; dist = lerp(fitDist(D.w * 1.85, D.h * hk), wide ? fitDist(wide.w * 1.2, wide.h * hk) : fitDist(D.w * 2 * 1.2, D.h * hk), o);
       /* with the card open the case moves right to leave it room; otherwise it sits in the middle */
       if (camera.aspect > 1.25 && prefs.card !== 'hide') offX = viewW(dist) * .1;
       offY = viewH(dist) * (camera.aspect > 1 ? .015 : prefs.card === 'hide' ? .02 : -.05) + sw.y;
@@ -581,7 +581,7 @@ class Case {
     }
     const o = this.openA;
     /* a box of tapes does not open like a book: it leans back and the tapes rise out of its open top */
-    if (this.skin) { skinPose(this, easeIO(o)); this.pivot.rotation.y = 0; this.inner.position.x = (this.skin.shift || 0) * easeIO(o); }
+    if (this.skin) skinMove(this, o, s);
     else if (this.g.fmt === 'vhsbox') { this.pivot.rotation.y = 0; this.inner.position.x = 0; this.inner.rotation.x = .9 * easeIO(o); }
     else { const mo = this.motion, lid = mo ? mo.lid : LID_OPEN * o; this.pivot.rotation.y = -lid; this.inner.position.x = this.dim.w / 2 * (mo ? mo.spread : o); if (this.folds) this.hinge.rotation.y = -lid / 2; }
     /* turned by hand, it springs back when you let go */

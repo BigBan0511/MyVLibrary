@@ -513,9 +513,9 @@ function flipCase() { if (!active || busy || mode !== 'inspect') return; active.
 /* the lid starts to swing when the latch lets go in the recording */
 /* in the studio the case turns once round as the lid opens (the hinge sound lands as the lid lets go); in the room it just opens */
 /* only a case held in your hands that opens like a book spins: not a box of tapes, a season's tray or a record */
-const spinStage = c => !RM && prefs.hold !== 'room' && !!c && c.mode === 'inspect' && !c.multi && c.g.fmt !== 'vhsbox' && !c.g.music && ['keep', 'clear', 'card'].includes(c.dim.shell);
+const spinStage = c => !RM && prefs.hold !== 'room' && !!c && !c.skin && c.mode === 'inspect' && !c.multi && c.g.fmt !== 'vhsbox' && !c.g.music && ['keep', 'clear', 'card'].includes(c.dim.shell);
 async function swingOpen(c) {
-  if (!spinStage(c)) { const h = sfx.caseOpen(c.g.fmt); await waitReal(h - .01); await tween(.75, t => { c.openA = t; }, easeIO); return; }
+  if (!spinStage(c)) { const h = sfx.caseOpen(c.g.fmt); await waitReal(h - .01); await tween(c.skin ? skinTime(c) : .75, t => { c.openA = t; }, c.skin ? t => t : easeIO); return; }
   sfx.play('caseOpen', c.g.fmt, { hitAt: .97 * SPEED }); await playMotion(c, OPEN_K, OPEN_T); c.openA = 1;
 }
 function openCase() {
@@ -562,7 +562,7 @@ function closeCase(internal) {
     if (c.multi) { multiClosing(c); await wait(c.multi.kind === 'tape' ? 380 : 260); }
     /* in the studio the lid lands with a small bounce (the recorded snap lands with it) */
     if (!internal && spinStage(c)) { sfx.play('caseClose', c.g.fmt, { hitAt: 1.7 * SPEED }); await playMotion(c, CLOSE_K, CLOSE_T); }
-    else { const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); }
+    else await shutCase(c);
     c.openA = 0; if (!internal) setMode('inspect');
   };
   if (internal) return run();
@@ -587,15 +587,18 @@ async function slideHome(c) {
   c.pullHold = 0; await wait(90); c.fast = false; c.leaving = false; c.setShadow(false); c.placeExtras();
   stopTrailer(); c.releaseDetail(); active = null;
 }
+/* closes it: a model takes the time of its own clip, which already eases */
+function shutCase(c) { const h = clamp(sfx.caseClose(c.g.fmt), .3, .9), T = c.skin ? skinTime(c, true) : 0; return tweenReal(T || h, t => { c.openA = 1 - t; }, T ? t => t : t => t * t); }
 /* once the medium is in the machine the case closes and is laid down beside it */
 async function layDown(c) {
   c.mode = 'rest'; await waitReal(.15);
-  const h = clamp(sfx.caseClose(c.g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0;
+  await shutCase(c); c.openA = 0;
 }
 const _p0 = new V3(), _p1 = new V3(), _p2 = new V3(), _q0 = new Q4(), _q2 = new Q4(), _qz = new Q4(), _qt = new Q4(), ZAX = new V3(0, 0, 1);
 const QFLAT = new Q4().setFromEuler(new EU(-Math.PI / 2, 0, 0));
-/* the medium leaves the case upwards, in front of it, so it never passes through the plastic */
-function discAbove(c, out) { return out.set(c.discHome.x, c.dim.h / 2 + mediaHalfH(c) + 1.4, c.discHome.z + 3.2); }
+/* the medium leaves the case upwards, in front of it, so it never passes through the plastic; it comes loose the way it can in a model */
+const discLift = c => c.skin && c.skin.lift ? c.skin.lift : ZAX;
+function discAbove(c, out) { return out.set(c.discHome.x, c.dim.h / 2 + mediaHalfH(c) + 1.4, c.discHome.z).addScaledVector(discLift(c), 3.2); }
 const QUP = new Q4();
 /* each medium's way into whatever machine is in the room: where it is offered (entry), where it rests
    inside, where it pops out to and how it is turned. The machine says what kind of opening it is. */
@@ -666,8 +669,9 @@ function insertDisc() {
     await waitReal(sfx.mediaOut(c.g.fmt) - .005);
     /* it comes loose with a slight tilt, whatever way it was lying */
     const qHome = d.quaternion.clone(), qTilt = new Q4();
-    await tween(.28, t => { d.position.z = home.z + 1.4 * t; d.quaternion.copy(qTilt.setFromAxisAngle(X_AXIS, -.06 * t)).multiply(qHome); });
-    await tween(.6, t => { d.position.y = lerp(home.y, above.y, t); d.position.z = lerp(home.z + 1.4, above.z, t); });
+    const lift = discLift(c), loose = home.clone().addScaledVector(lift, 1.4);
+    await tween(.28, t => { d.position.copy(home).addScaledVector(lift, 1.4 * t); d.quaternion.copy(qTilt.setFromAxisAngle(X_AXIS, -.06 * t)).multiply(qHome); });
+    await tween(.6, t => { d.position.lerpVectors(loose, above, t); });
     c.mode = 'parked'; setView('console'); prepareIn(P); await wait(750);
     scene.attach(d); _p0.copy(d.position); _q0.copy(d.quaternion); const s0 = d.scale.x;
     layDown(c);
@@ -732,7 +736,7 @@ function closeGame(o = {}) {
   return guarded(async () => {
     const c = active, d = c.disc, g = c.g, home = c.discHome, P = portOf(c), rest = c.mode === 'rest';
     /* into a case lying open on the table the medium drops from straight above */
-    const above = rest ? new V3(home.x, home.y, home.z + 7) : discAbove(c, new V3()), qIn = c.discQuat || new Q4();
+    const lift = discLift(c), above = rest ? home.clone().addScaledVector(lift, 7) : discAbove(c, new V3()), qIn = c.discQuat || new Q4();
     const mins = Math.max(1, Math.floor((performance.now() - playStart) / 1000));
     /* pulled out by hand while only the shelf was keeping track: stop counting from here */
     if (g.video && !o.auto) stopVideo();
@@ -752,8 +756,9 @@ function closeGame(o = {}) {
     if (P.kind === 'cart') setCartFlaps(0);
     c.inner.attach(d); d.position.copy(above); d.quaternion.copy(qIn); d.scale.set(1, 1, 1);
     sfx.mediaIn(g.fmt, { hitAt: (.55 + .22) * SPEED });
-    await tween(.55, t => { d.position.y = lerp(above.y, home.y, t); d.position.z = lerp(above.z, home.z + 1.4, t); });
-    await tween(.22, t => { d.position.z = home.z + 1.4 * (1 - t); }); d.position.copy(home);
+    const loose = home.clone().addScaledVector(lift, 1.4);
+    await tween(.55, t => { d.position.lerpVectors(above, loose, t); });
+    await tween(.22, t => { d.position.copy(home).addScaledVector(lift, 1.4 * (1 - t)); }); d.position.copy(home);
     if (c.multi) await putBackInSet(c);
     let msg, moved = false;
     if (g.video) msg = videoDone(c.box || c, o);
@@ -775,7 +780,7 @@ function closeGame(o = {}) {
        and goes back to its place */
     const more = !!(owner.multi && owner.multi.eps.length > 1);
     await waitReal(.25);
-    if (c.box || !more) { const h = clamp(sfx.caseClose(g.fmt), .3, .9); await tweenReal(h, t => { c.openA = 1 - t; }, t => t * t); c.openA = 0; }
+    if (c.box || !more) { await shutCase(c); c.openA = 0; }
     if (c.box) { await caseBackInBox(c); if (!more) await closeCase(true); } else setView('shelf');
     if (more) { if (!c.box) c.mode = 'inspect'; await wait(450); backToEpisodes(owner); setMode('open'); return; }
     await waitReal(.2);
