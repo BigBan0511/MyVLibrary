@@ -617,7 +617,11 @@ const UGCS = {
       if (!this.building.has(k)) this.building.set(k, this.tx('readonly', st => st.get(k)).then(async v => {
         if (v && v.ref) v = await this.tx('readonly', st => st.get(v.ref));
         if (!v) { delete this.meta()[k]; savePrefs(); return; }
-        try { this.adopt(k, UGC.build(v.parsed || UGC.parse(v, { maxTex: 1024 }))); } catch (e) { console.error(e); toast(T('No se ha podido leer {0}', this.meta()[k].name)); }
+        try {
+          const root = UGC.build(v.parsed || UGC.parse(v, { maxTex: 1024 })); this.adopt(k, root);
+          /* a box measured by an older version takes its real size now, and the shelf makes room */
+          const m = this.meta()[k], d = root.userData.dim; if (m && d && m.dim && ['w', 'h', 'd'].some(a => m.dim[a] !== d[a])) { m.dim = d; savePrefs(); relayout(); }
+        } catch (e) { console.error(e); toast(T('No se ha podido leer {0}', this.meta()[k].name)); }
       }).catch(e => console.error(e)).finally(() => this.building.delete(k)));
       return this.building.get(k);
     }));

@@ -14,6 +14,8 @@
    sits in EmuVR's machines exactly where EmuVR would put it.
    ===================================================================== */
 const SKIN_MAX = { w: 30, h: 23 };
+/* the biggest a box may be: a format bigger than that (a record's sleeve) has shelves of its own size */
+function skinMax(key) { const b = DIMS[key.slice(4)]; return b ? { w: Math.max(SKIN_MAX.w, b.w), h: Math.max(SKIN_MAX.h, b.h) } : SKIN_MAX; }
 /* which slot a game's box or medium goes by: its system, or for films and music its format */
 function skinSlot(g) { return g.video || g.music ? g.fmt : sysOf(g); }
 function dimOf(g) {
@@ -73,7 +75,7 @@ function skinPlace(root, right, up, n, maxW, maxH, keepAll) {
   return size;
 }
 /* a box, measured: returns its size and keeps where the front, the back and the spine are in the picture */
-function skinFitBox(root) {
+function skinFitBox(root, key) {
   skinClosed(root);
   const list = (root.userData.art || []).length ? root.userData.art : root.userData.meshes;
   list.forEach(m => { m.userData.artFace = true; });
@@ -92,7 +94,7 @@ function skinFitBox(root) {
   const spine = F.filter(f => f !== front && f !== back && f.key[0] !== front.key[0]).sort((a, b) => b.area - a.area).find(f => !back || (uMid(f) > Math.min(uMid(front), uMid(back)) - .05 && uMid(f) < Math.max(uMid(front), uMid(back)) + .05));
   const flipOf = f => { const c = new V3().crossVectors(f.gu, f.gv); return c.dot(f.n) < 0; };
   root.userData.rects = { front: front && { u0: front.u0, u1: front.u1, v0: front.v0, v1: front.v1, flip: flipOf(front) }, back: back && { u0: back.u0, u1: back.u1, v0: back.v0, v1: back.v1, flip: flipOf(back) }, spine: spine && { u0: spine.u0, u1: spine.u1, v0: spine.v0, v1: spine.v1, flip: back ? flipOf(front) : flipOf(spine), turn: spine.v1 - spine.v0 < spine.u1 - spine.u0 } };
-  const size = skinPlace(root, right, up, axis, SKIN_MAX.w, SKIN_MAX.h);
+  const max = skinMax(key), size = skinPlace(root, right, up, axis, max.w, max.h);
   return { w: +size.x.toFixed(2), h: +size.y.toFixed(2), d: +size.z.toFixed(2) };
 }
 /* a medium, measured: the label to the front, the end with the socket (the end that goes in) down */
@@ -116,7 +118,7 @@ function skinFitMedium(root) {
 function skinPrepare(key, root) {
   const box = key.startsWith('box:');
   root.userData.skinKey = key;
-  root.userData.dim = box ? skinFitBox(root) : (skinFitMedium(root), null);
+  root.userData.dim = box ? skinFitBox(root, key) : (skinFitMedium(root), null);
   if (box) root.userData.closed = skinCopy(root);
 }
 /* a closed copy of the model: the same geometry and materials, nothing that moves */
@@ -278,12 +280,16 @@ function skinMeasure(c, root) {
     const e = S1.elements, F = new THREE.Matrix4().makeBasis(new V3(e[0], e[1], e[2]).normalize(), new V3(e[4], e[5], e[6]).normalize(), new V3(e[8], e[9], e[10]).normalize());
     q1.setFromRotationMatrix(F.multiply(male.m.clone().invert())); p1.setFromMatrixPosition(S1).sub(male.p.clone().multiplyScalar(k0).applyQuaternion(q1));
   } else if (d) {
-    /* one of our own has no socket: it lies flat inside the shut box as near the model's socket as it fits, and moves as the socket moves */
+    /* one of our own has no socket: it lies flat inside the shut box as near the model's socket as it fits, in the widest gap there is, and moves as the socket moves */
     const q0 = (c.discQuat || new Q4()).clone(), half = q => { const a = new V3(size.x / 2, 0, 0).applyQuaternion(q), b = new V3(0, size.y / 2, 0).applyQuaternion(q), f = new V3(0, 0, size.z / 2).applyQuaternion(q); return new V3(Math.abs(a.x) + Math.abs(b.x) + Math.abs(f.x), Math.abs(a.y) + Math.abs(b.y) + Math.abs(f.y), Math.abs(a.z) + Math.abs(b.z) + Math.abs(f.z)); };
     const h = half(q0), fit = (v, room) => room <= 0 ? 0 : clamp(v, -room, room), p0 = new V3().setFromMatrixPosition(S0); p0.set(fit(p0.x, D.w / 2 - h.x), fit(p0.y, D.h / 2 - h.y), fit(p0.z, D.d / 2 - h.z));
+    const down = new V3(0, 0, -1), gaps = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([i, j]) => { const o = new V3(p0.x + i * h.x * .6, p0.y + j * h.y * .6, D.d + 20); let z = null, best = 0, mid = 0; for (let k = 0; k < 16; k++) { const f = skinHit(sealed, o, down); if (!f) break; if (z !== null && z - f.p.z > best) { best = z - f.p.z; mid = (z + f.p.z) / 2; } z = f.p.z; o.z = z - .001; } return best > 0 ? mid : null; }).filter(v => v !== null).sort((a, b) => a - b);
+    if (gaps.length) p0.z = gaps[gaps.length >> 1];
     const rel = S1.clone().multiply(S0.clone().invert()), place = q => rel.clone().multiply(comp(p0, q)).decompose(p1, q1, _ws); place(q0);
     /* on a lid it must end up looking at you, not at the lid */
     if (new V3(0, 0, 1).applyQuaternion(q1).z < .2 && S1.elements[12] !== S0.elements[12]) place(q0.clone().multiply(new Q4().setFromAxisAngle(new V3(0, 1, 0), Math.PI)));
+    /* a clip may spin the socket as it slides: a printed disc still comes out with its label straight */
+    else if (D.media === 'disc') q1.identity();
   }
   const ax = new V3(1, 0, 0).applyQuaternion(q1), ay = new V3(0, 1, 0).applyQuaternion(q1), n = new V3(0, 0, 1).applyQuaternion(q1);
   /* the medium, nine points through its middle */
@@ -295,10 +301,12 @@ function skinMeasure(c, root) {
   /* it stays out of sight, or could only be seen from far round the side or edge-on (a box that opens at the top, a tape between the leaves of its card): a hand would draw it out by the side that is open */
   if (d && (view.hid > .5 || view.cost > .75)) {
     const axes = [ax, ay, n].flatMap(a => [a.clone(), a.clone().negate()]), len = a => Math.abs(a.dot(ax)) * size.x + Math.abs(a.dot(ay)) * size.y + Math.abs(a.dot(n)) * size.z;
-    /* which side the opening freed: where a ray goes further with the box open than shut, or gets away altogether */
+    /* a clip that slides the medium along its own plane and leaves it hidden says itself which way is out (a record half out of its sleeve; a lid swinging it round does not count);
+       otherwise, the side the opening freed: where a ray goes further with the box open than shut, or gets away altogether */
+    const slid = new V3().setFromMatrixPosition(S1).sub(new V3().setFromMatrixPosition(S0)), turn = new Q4().setFromRotationMatrix(S1.clone().multiply(S0.clone().invert())), slides = view.hid > .5 && slid.length() > 1 && n.clone().applyQuaternion(turn).dot(n) > .98;
     const reach = (T, a) => P.reduce((m, x) => { const h = skinHit(T, x.clone().addScaledVector(a, .05), a); return m + (h ? Math.min(h.d, 40) : 40); }, 0) / P.length;
-    const ways = axes.map(a => { const go = reach(tris, a), gain = go - reach(sealed, a); return { a, go, gain, s: (go >= 40 ? 1 : 0) + gain / 8 + .3 * a.y + .15 * a.z }; }).sort((u, w) => w.s - u.s), way = ways[0].a;
-    if (ways[0].go >= 40 || ways[0].gain > .5) for (let t = len(way) * .35, end = Math.abs(way.x) * D.w + Math.abs(way.y) * D.h + Math.abs(way.z) * D.d + len(way); t <= end && !pull; t += len(way) * .15) { const Q = P.map(x => x.clone().addScaledVector(way, t)), w = hold(Q); if (w.hid <= .12 && w.flat > .5 && w.cost < .62) { pull = { v: way.clone(), len: t }; view = w; P = Q; lift = way.clone(); } }
+    const ways = axes.map(a => { const go = reach(tris, a), gain = go - reach(sealed, a); return { a, go, gain, s: (go >= 40 ? 1 : 0) + gain / 8 + .3 * a.y + .15 * a.z }; }).sort((u, w) => w.s - u.s), way = slides ? slid.clone().normalize() : ways[0].a;
+    if (slides || ways[0].go >= 40 || ways[0].gain > .5) for (let t = len(way) * .35, end = Math.abs(way.x) * D.w + Math.abs(way.y) * D.h + Math.abs(way.z) * D.d + len(way); t <= end && !pull; t += len(way) * .15) { const Q = P.map(x => x.clone().addScaledVector(way, t)), w = hold(Q); if (w.hid <= .12 && w.flat > .5 && w.cost < .62) { pull = { v: way.clone(), len: t }; view = w; P = Q; lift = way.clone(); } }
     /* a box that does not open at all: the medium comes to lie on its front */
     if (!pull && view.hid > .5) {
       const f = hit(new V3(0, 0, D.d + 60), new V3(0, 0, -1)), z = f ? f.p.z : D.d / 2; through = true;
@@ -401,6 +409,15 @@ function skinMedium(c) {
   const W = new THREE.Group(); W.add(root); W.userData.male = root.userData.male; W.userData.skin = true; return W;
 }
 function skinMediumOff(c) { const d = c.disc; if (!d || !d.userData.skin) return; const root = d.children[0]; if (root) { root.userData.wornBy = null; d.remove(root); root.traverse(o => { if (o.isMesh) o.userData.case = null; }); } }
+/* the pieces of its picture a label is made of: faces on the same piece count once, and a rim's slivers not at all */
+function skinPatches(L) {
+  const UV = L.geometry.attributes.uv, I = L.geometry.index.array, up = Int32Array.from({ length: UV.count }, (_, i) => i), find = x => { while (up[x] !== x) { up[x] = up[up[x]]; x = up[x]; } return x; };
+  for (let i = 0; i + 2 < I.length; i += 3) { const a = find(I[i]); up[find(I[i + 1])] = a; up[find(I[i + 2])] = a; }
+  const parts = new Map();
+  I.forEach(v => { const k = find(v), u = UV.getX(v), w = UV.getY(v), q = parts.get(k) || { u0: 9, u1: -9, v0: 9, v1: -9 }; q.u0 = Math.min(q.u0, u); q.u1 = Math.max(q.u1, u); q.v0 = Math.min(q.v0, w); q.v1 = Math.max(q.v1, w); parts.set(k, q); });
+  const big = [...parts.values()].filter(q => q.u1 - q.u0 > .02 && q.v1 - q.v0 > .02);
+  return big.filter((q, i) => !big.slice(0, i).some(o => Math.abs(o.u0 - q.u0) < .02 && Math.abs(o.v0 - q.v0) < .02));
+}
 /* the game's sticker on the medium: the label's own part of its texture stretches over the picture */
 function skinLabel(c) {
   const d = c.disc; if (!d || !d.userData.skin || !c.discTex) return;
@@ -409,6 +426,10 @@ function skinLabel(c) {
   let u0 = 9, u1 = -9, v0 = 9, v1 = -9; for (let i = 0; i < UV.count; i++) { const u = UV.getX(i), v = UV.getY(i); u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
   const t = c.discTex, mt = Array.isArray(L.material) ? L.material[0] : L.material;
   if (c.g.fmt === 'cass') { t.image = musicLabel(c.g, c.coverCanvas, true); t.needsUpdate = true; }
-  if (u1 > u0 && v1 > v0) { t.repeat.set(1 / (u1 - u0), 1 / (v1 - v0)); t.offset.set(-u0 / (u1 - u0), -v0 / (v1 - v0)); }
+  /* two equal pieces are the two sides of the thing (a record, a tape): each carries the whole sticker */
+  const P = skinPatches(L), [a, b] = P;
+  if (P.length === 2 && Math.abs((a.u1 - a.u0) - (b.u1 - b.u0)) < .05 && Math.abs((a.v1 - a.v0) - (b.v1 - b.v0)) < .05) {
+    const W = 1024, cv = mkCanvas(W, W), x = cv.getContext('2d'); P.forEach(q => x.drawImage(t.image, q.u0 * W, (1 - q.v1) * W, (q.u1 - q.u0) * W, (q.v1 - q.v0) * W)); t.image = cv; t.needsUpdate = true;
+  } else if (u1 > u0 && v1 > v0) { t.repeat.set(1 / (u1 - u0), 1 / (v1 - v0)); t.offset.set(-u0 / (u1 - u0), -v0 / (v1 - v0)); }
   mt.map = t; mt.color.set('#ffffff'); mt.needsUpdate = true;
 }
