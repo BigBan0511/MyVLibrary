@@ -32,7 +32,7 @@ function decoObj(it) {
 }
 /* turned about the vertical (r), tilted forwards or back (x) and leant to a side (z): the turn is the last one, so it is always about the vertical */
 const _deP = new V3();
-/* tilted, a thing's lowest point is no longer its base: it is lifted by that much so it rests on the surface instead of sinking into it */
+/* tilted, a thing's lowest point is no longer its base: it is lifted by that much so it rests on the surface instead of sinking into it (what has bones is where they hold it, not where the mesh was modelled) */
 function decoSeat(it, o) {
   const k = [it.x || 0, it.z || 0, it.s || 1].map(v => v.toFixed(4)).join(',');
   if (o.userData.seatK === k) return o.userData.seat;
@@ -41,7 +41,7 @@ function decoSeat(it, o) {
     o.position.set(0, 0, 0); o.rotation.set(it.x || 0, 0, it.z || 0, 'YXZ'); o.scale.setScalar(it.s || 1); o.updateMatrixWorld(true);
     let n = 0, min = Infinity; o.traverse(m => { if (m.isMesh && m.visible) n += m.geometry.attributes.position.count; });
     const step = Math.max(1, Math.ceil(n / 150000));
-    o.traverse(m => { if (!m.isMesh || !m.visible) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i += step) { _deP.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); if (_deP.y < min) min = _deP.y; } });
+    o.traverse(m => { if (!m.isMesh || !m.visible) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i += step) { (m.isSkinnedMesh ? m.boneTransform(i, _deP) : _deP.fromBufferAttribute(a, i)).applyMatrix4(m.matrixWorld); if (_deP.y < min) min = _deP.y; } });
     seat = isFinite(min) ? -min : 0;
   }
   o.userData.seatK = k; o.userData.seat = seat; return seat;
@@ -53,6 +53,10 @@ function decoShow(sys) {
   const mine = isRooms() && sys && stageFor(sys) !== 'table' ? decoList(sys) : [], ids = new Set(mine.map(i => i.id));
   DECO.objs.forEach((o, id) => { o.visible = ids.has(id); });
   mine.forEach(it => decoObj(it).then(o => { if (!o) return; decoPlace(it, o); o.visible = decoRoom() === sys && decoList(sys).includes(it); }));
+}
+/* animated props and toys move by themselves, on a loop */
+function decoTick(now) {
+  DECO.objs.forEach(o => { if (!o.visible) return; const an = o.userData.anim; if (!an) return; const c = an.clips.on || an.clips.open; if (c && c.dur > 0) an.apply(c, (now / 1000) % c.dur); });
 }
 function decoDrop(id) { const o = DECO.objs.get(id); if (o) { DECO.group.remove(o); UGC.dispose(o); DECO.objs.delete(id); } }
 
@@ -222,12 +226,13 @@ function renderDecoList() {
   if (!sys) { el.innerHTML = `<p class="deco-none">${T(isRooms() ? 'Entra en la sala de un sistema para decorarla.' : 'La decoración va en el diseño Por sistema.')}</p>`; return; }
   const L = decoList(sys), room = (systemsList().find(s => s.key === sys) || {}).name || sys, bases = UGCS.bases();
   el.innerHTML = `<div class="ugc-item"><div class="ugc-what"><b>${T('Esta sala')}</b><span class="on">${esc(room)}${L.length ? ' · ' + T(L.length === 1 ? '{0} cosa' : '{0} cosas', L.length) : ''}</span></div><div class="ugc-btns">`
-    + `<button type="button" data-deco-add>${T('Añadir .ugc')}</button>`
+    + `<button type="button" data-deco-lib>${T('Biblioteca')}</button><button type="button" data-deco-add>${T('Añadir .ugc')}</button>`
     + (bases.length ? `<select data-deco-base aria-label="${esc(T('Una consola de EmuVR'))}"><option value="">EmuVR…</option>${bases.map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('')}</select>` : '')
     + (L.length ? `<button type="button" data-deco-place>${T('Colocar')}</button>` : '') + `</div></div>`
     + L.map(it => `<div class="ugc-item"><div class="ugc-what"><b>${esc(it.name)}</b><span>×${(it.s || 1).toFixed(2)}</span></div><div class="ugc-btns"><button type="button" data-deco-pick="${it.id}">${T('Colocar')}</button><button type="button" data-deco-del="${it.id}" aria-label="${esc(T('Quitar') + ': ' + it.name)}" title="${esc(T('Quitar'))}">×</button></div></div>`).join('');
 }
 $('#decoList').addEventListener('click', async e => {
+  if (e.target.closest('[data-deco-lib]')) { libOpen({ kind: 'prop' }); return; }
   if (e.target.closest('[data-deco-add]')) { const f = $('#decoFile'); f.value = ''; f.click(); return; }
   if (e.target.closest('[data-deco-place]')) { decoStart(); return; }
   const p = e.target.closest('[data-deco-pick]'); if (p) { decoStart(p.dataset.decoPick); return; }

@@ -148,6 +148,7 @@ window.addEventListener('keydown', e => {
   if (tag === 'TEXTAREA') { if (e.key === 'Escape') { closeManual(); e.preventDefault(); } return; }
   if (tag === 'INPUT' || tag === 'SELECT') { if (e.key === 'Escape') tg.blur(); return; }
   if (tag === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+  if (e.key === 'Escape' && !$('#lib').hidden) { libClose(); return; }
   if (e.key === 'Escape' && !setPop.hidden) { setPop.hidden = true; return; }
   if (e.key === 'Escape' && !$('#filterPop').hidden) { closeFilterPop(); return; }
   if (LIB.hostPad && /^(Arrow|Page)/.test(e.key) && LIB.dupe(e.key, 'key')) { e.preventDefault(); return; }
@@ -197,7 +198,7 @@ function frame(now) {
   for (const c of cases) { if (c.disposed) continue; c.glowT = mode === 'shelf' && c === hovered ? (kbNav ? 1 : .7) : c.match ? pulse : 0; c.update(dt); }
   if (heldTape && !heldTape.disposed) heldTape.update(dt);
   for (const c of looseCases) if (!c.disposed) c.update(dt);
-  musicTick(dt, now);
+  musicTick(dt, now); decoTick(now);
   if (active && active.disc) {
     const on = mode === 'open';
     active.discLabelMat.emissive.setScalar(on && hoverPart === 'disc' ? .16 : 0);
@@ -245,7 +246,7 @@ async function boot() {
   if (PLAYNITE && LIB.running && LIB.running.length) { const r = LIB.running[0]; setTimeout(() => restorePlaying(r.id, r.seconds), 600); }
   else if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
 }
-window.__mvl = { decoFake: async (id, name, w, h, d, col) => {
+window.__mvl = { modelsRead, libOpen, uMeta: () => prefs.ugc, skinRoot: () => active && active.skin && active.skin.root, skinPlan: () => { const s = active && active.skin; if (!s) return null; const q = new EU().setFromQuaternion(s.view.q), g = v => +v.toFixed(2); return { time: g(skinTime(active)), pull: s.pull ? g(s.pull.len) : 0, way: s.pull ? s.pull.v.toArray().map(g) : null, man: !!s.manual, w: g(s.view.w), h: g(s.view.h), home: active.discHome.toArray().map(g), say: `yaw ${g(q.y)} pitch ${g(q.x)} pull ${s.pull ? g(s.pull.len) : 0} man ${!!s.manual}` }; }, skin: () => active && { dim: active.dim.skin, worn: !!active.skin, disc: !!(active.disc && active.disc.userData.skin), home: active.discHome.toArray() }, decoFake: async (id, name, w, h, d, col) => {
     const geo = new THREE.BoxGeometry(w, h, d), A = geo.attributes;
     const parsed = { roots: [{ name: id, go: 1, active: true, p: { x: 0, y: 0, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 }, s: { x: 1, y: 1, z: 1 }, mesh: { n: A.position.count, pos: { arr: new Float32Array(A.position.array), dim: 3 }, nrm: { arr: new Float32Array(A.normal.array), dim: 3 }, subs: [Array.from(geo.index.array)] }, mats: [{ name: 'm', col: { _Color: col }, fl: {}, tex: {}, shader: '', keywords: '' }], kids: [] }], anim: null, info: { name, type: '', system: '' } };
     await UGCS.tx('readwrite', st => st.put({ parsed }, 'emuvr:' + id)); prefs.emuvr = (prefs.emuvr || []).filter(b => b.id !== id).concat([{ id, name, sys: '' }]); savePrefs();
