@@ -162,7 +162,7 @@ function renderInfo(force) {
   tab.hidden = true;
   if (active.g.music) { const g = active.g, mk = ['m', g.id, g.fmt, BAG.length, BAG.map(t => t.id).join(',').length].join('|'); el.hidden = false; if (!force && mk === lastInfoKey) return; lastInfoKey = mk; el.classList.add('open'); renderMusicInfo(el, g); return; }
   if (active.g.video) { const g = active.g, s = seasonOf(g), vk = ['v', g.id, g.fmt, g.seasonIdx, g.seasons ? g.seasons.length : 0, s && s.eps ? s.eps.length : -1, g.pos, g.played].join('|'); el.hidden = false; if (!force && vk === lastInfoKey) return; lastInfoKey = vk; el.classList.add('open'); renderVideoInfo(el, g); return; }
-  const g = active.g, key = [g.id, g.fmt, g.installed, g.scanKey, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
+  const g = active.g, key = [g.id, g.fmt, g.installed, g.scanKey, g.manualVer, g.manualOwn, g.platFull, PLATFORMS.length, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
   const idle = g.last === null || g.last === undefined ? g.added : g.last;
   const dustTxt = T(g.wrapped ? 'Ninguno, está precintado' : g.dust > .6 ? 'Mucho' : g.dust > .25 ? 'Algo' : g.dust > .04 ? 'Poco' : 'Limpio');
@@ -173,6 +173,7 @@ function renderInfo(force) {
     <dl><dt>${T('Jugado')}</dt><dd>${fmtH(g.hours)}${g.sessions ? ' · ' + T(g.sessions === 1 ? '{0} vez' : '{0} veces', g.sessions) : ''}</dd><dt>${T('Última vez')}</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>${T('Logros')}</dt><dd>${T('{0} de {1}', g.ach[0], g.ach[1])}</dd>` : ''}<dt>${T('Polvo')}</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : ''}</dd></dl>
     <div class="frow"><label for="stSel">${T('Estado')}</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : `<option value="" selected>${T('Sin estado')}</option>`}${statuses.map(s => `<option value="${esc(s)}"${s === g.status ? ' selected' : ''}>${esc(TD(s))}</option>`).join('')}<option value="__new">+ ${T('Nuevo estado…')}</option></select></div>
     <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="fmt-ico" aria-hidden="true">${FMT_ICON[g.fmt] || ''}</span><select id="fmtSel"${fmtLocked(g) ? ' disabled' : ''}>${GAME_FMTS.map(f => `<option value="${f}"${f === g.fmt ? ' selected' : ''}>${esc(T(DIMS[f].name))}</option>`).join('')}</select></div>
+    ${platRow(g)}
     ${gameActs(g)}
     ${fmtLocked(g) ? `<p class="fmt-lock">${T('El original de {0}. Se puede cambiar en Ajustes → Formato en consolas.', esc(g.platFull || g.plat))}</p>` : ''}
     ${newStatus ? `<form class="cat-new st-new"><input id="stNew" type="text" placeholder="${T('Nombre del estado nuevo')}" maxlength="40" autocomplete="off"><button type="submit">${T('Crear')}</button></form>` : ''}
@@ -181,13 +182,26 @@ function renderInfo(force) {
       <form class="cat-new"><input id="catNew" type="text" placeholder="${T('Nueva categoría')}" maxlength="40" autocomplete="off"><button type="submit">${T('Añadir')}</button></form></div>` : ''}
     <p class="note">${note}</p>`;
 }
+/* the platform Playnite has the game on, when it has it wrong: the game moves to that system's room */
+function platRow(g) {
+  if (!PLAYNITE || !g.real || !PLATFORMS.length) return '';
+  const cur = PLATFORMS.find(p => p.name === g.platFull);
+  return `<div class="frow"><label for="platSel">${T('Plataforma')}</label><span aria-hidden="true"></span><select id="platSel">${cur ? '' : `<option value="" selected>${esc(g.platName || T('Sin plataforma'))}</option>`}${PLATFORMS.map(p => `<option value="${esc(p.id)}"${cur && p.id === cur.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>`;
+}
+/* the game's real manual: a PDF of your own, or the one Playnite has in its Manual field */
+function manualActs(g) {
+  if (!(DIMS[g.fmt].man && DIMS[g.fmt].man[0])) return '';
+  const what = g.manualVer ? (g.manualOwn ? T('Tu PDF') : T('El PDF de Playnite')) : T('El de MyVLibrary');
+  return `<div class="acts"><span class="lbl">${T('Manual del juego')}</span><div class="act-row"><span class="inst${g.manualVer ? ' on' : ''}">${what}</span><button type="button" class="gact" data-manual="pick">${g.manualOwn ? T('Cambiar el PDF') : T('Elegir un PDF')}</button>${g.manualOwn ? `<button type="button" class="gact x" data-manual="remove" aria-label="${esc(T('Quitar el PDF'))}" title="${esc(T('Quitar el PDF'))}">×</button>` : ''}</div>`
+    + `<p class="art-note">${T('El manual de verdad, escaneado en PDF: se lee al abrir la caja (M) y su primera página es la portada del manual. Si el juego ya tiene un manual en PDF en Playnite, se usa ese.')}</p></div>`;
+}
 /* installing, uninstalling and the rest, done by Playnite (only inside it) */
 function gameActs(g) {
   if (!PLAYNITE || !g.real) return '';
   const b = (act, label, tip) => `<button type="button" class="gact" data-gact="${act}"${tip ? ` title="${esc(tip)}"` : ''}>${label}</button>`, mark = T('Solo cambia lo que Playnite tiene apuntado: no instala ni borra nada.');
   return `<div class="acts"><span class="lbl">${T('Instalación')}</span><div class="act-row"><span class="inst ${g.installed ? 'on' : ''}">${T(g.installed ? 'Instalado' : 'Sin instalar')}</span>`
     + (g.installed ? b('uninstall', T('Desinstalar')) + b('folder', T('Abrir carpeta')) + b('markOff', T('Marcar como no instalado'), mark) : b('install', T('Instalar')) + b('markOn', T('Marcar como instalado'), mark))
-    + b('reveal', T('Ver en Playnite')) + `</div></div>` + artActs(g);
+    + b('reveal', T('Ver en Playnite')) + `</div></div>` + artActs(g) + manualActs(g);
 }
 /* real pictures for the case: a full scan, or the back, the spine and the disc one by one */
 function artActs(g) {
@@ -199,6 +213,8 @@ function artActs(g) {
 /* the picture chosen for a part: made no bigger than it needs to be, then handed to the extension to keep */
 let artKind = null;
 function pickArt(kind) { artKind = kind; const f = $('#artFile'); f.value = ''; f.click(); }
+/* the pretend Playnite has no file dialog of its own: the browser's stands in for it */
+$('#manualFile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f && active && MOCK) MOCKHOST.pickManual(active.g.id, f); });
 $('#artFile').addEventListener('change', e => {
   const file = e.target.files && e.target.files[0], g = active && active.g, kind = artKind; if (!file || !g || !kind) return;
   const url = URL.createObjectURL(file), img = new Image();
@@ -227,6 +243,7 @@ function gameChanged(c, fields, regroup) {
 $('#info').addEventListener('change', e => {
   if (!active) return; const c = active, g = c.g;
   if (e.target.id === 'fmtSel') { setFormat(e.target.value); return; }
+  if (e.target.id === 'platSel') { const p = PLATFORMS.find(x => x.id === e.target.value); if (!p) return; g.platId = p.id; LIB.update(g, ['platform']); toast(T('Ahora es de {0}: al devolverlo irá a su sala.', p.name), 2800); return; }
   if (e.target.id === 'stSel' && e.target.value === '__new') { newStatus = true; renderInfo(true); const i = $('#stNew'); if (i) i.focus(); return; }
   if (e.target.id === 'stSel') { const old = g.status; g.status = e.target.value; gameChanged(c, ['status'], prefs.group === 'status'); if (prefs.group === 'status' && old !== g.status && groups[curGroup].key !== '__all') toast(T('Al devolverlo irá al estante «{0}»', STATUS_SHELF[g.status] || g.status)); }
   const box = e.target.closest('[data-catbox]');
@@ -239,6 +256,7 @@ $('#info').addEventListener('click', e => {
   const ga = e.target.closest('[data-gact]'); if (ga) { gameAct(active.g, ga.dataset.gact); return; }
   const ar = e.target.closest('[data-art]'); if (ar && PLAYNITE) { pickArt(ar.dataset.art); return; }
   if (e.target.closest('[data-fit]') && PLAYNITE) { openFit(active.g); return; }
+  const mb = e.target.closest('[data-manual]'); if (mb && PLAYNITE) { if (MOCK && mb.dataset.manual === 'pick') { const f = $('#manualFile'); f.value = ''; f.click(); } else LIB.send('manual', { id: active.g.id, act: mb.dataset.manual }); return; }
   const ax = e.target.closest('[data-artx]'); if (ax && PLAYNITE) { LIB.send('setArt', { id: active.g.id, kind: ax.dataset.artx, data: '' }); return; }
   if (e.target.closest('[data-edit]')) { infoEdit = !infoEdit; renderInfo(true); if (infoEdit) { const i = $('#catNew'); if (i && !coarse) i.focus(); } }
 });

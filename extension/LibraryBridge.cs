@@ -30,11 +30,13 @@ namespace MyVLibrary
         /* the video room */
         public string season { get; set; }
         public long? start { get; set; }
-        /* what to do with a game from its card: install, uninstall, markOn, markOff, folder, reveal */
+        /* what to do with a game from its card: install, uninstall, markOn, markOff, folder, reveal; for manual: pick, remove */
         public string act { get; set; }
         /* a picture for the case: full, back, spine or disc, and the picture itself as a data address;
            for setFit, the face (front too) and how it is framed, as JSON */
         public string kind { get; set; }
+        /* update: the platform's id, to change a game's platform */
+        public string platform { get; set; }
         public string data { get; set; }
     }
 
@@ -122,6 +124,7 @@ namespace MyVLibrary
             Db.Games.ItemCollectionChanged += OnGamesChanged;
             Db.CompletionStatuses.ItemCollectionChanged += OnListsChanged;
             Db.Categories.ItemCollectionChanged += OnListsChanged;
+            Db.Platforms.ItemCollectionChanged += OnListsChanged;
             WatchPresets(true);
             subscribed = true;
         }
@@ -133,6 +136,7 @@ namespace MyVLibrary
             Db.Games.ItemCollectionChanged -= OnGamesChanged;
             Db.CompletionStatuses.ItemCollectionChanged -= OnListsChanged;
             Db.Categories.ItemCollectionChanged -= OnListsChanged;
+            Db.Platforms.ItemCollectionChanged -= OnListsChanged;
             WatchPresets(false);
             subscribed = false;
         }
@@ -477,6 +481,7 @@ namespace MyVLibrary
                 ["scans"] = ArtOf(g.Id),
                 ["scanFit"] = FitOf(g.Id),
                 ["coverVer"] = Hash(g.CoverImage ?? ""),
+                ["manual"] = ManualOf(g),
                 ["ver"] = Version(g),
                 ["sum"] = Summary(g.Description)
             };
@@ -489,6 +494,7 @@ namespace MyVLibrary
                 ["type"] = type,
                 ["statuses"] = Db.CompletionStatuses.Select(s => new Dictionary<string, object> { ["id"] = s.Id.ToString(), ["name"] = s.Name }).ToList(),
                 ["categories"] = Db.Categories.Select(c => new Dictionary<string, object> { ["id"] = c.Id.ToString(), ["name"] = c.Name }).ToList(),
+                ["platforms"] = Db.Platforms.Select(p => new Dictionary<string, object> { ["id"] = p.Id.ToString(), ["name"] = p.Name }).ToList(),
                 ["presets"] = PresetList()
             };
         }
@@ -584,6 +590,9 @@ namespace MyVLibrary
                         break;
                     case "setFit":
                         SetFit(host, m);
+                        break;
+                    case "manual":
+                        ManualAction(host, m);
                         break;
                     case "jfSeasons":
                         VideoSeasons(host, m.id);
@@ -757,6 +766,12 @@ namespace MyVLibrary
                 g.Notes = m.notes;
             }
 
+            /* a game Playnite has on the wrong platform: the one chosen in the card replaces what it had */
+            if (m.fields.Contains("platform") && Guid.TryParse(m.platform, out var pid) && Db.Platforms.Get(pid) != null)
+            {
+                g.PlatformIds = new List<Guid> { pid };
+            }
+
             Db.Games.Update(g);
         }
 
@@ -899,6 +914,8 @@ namespace MyVLibrary
                 }
                 if (parts.Length != 2 || !Guid.TryParse(parts[1], out var id)) return null;
                 var kind = parts[0];
+                /* the game's real manual, a PDF */
+                if (kind == "manual") return LoadManual(id);
 
                 var g = Db.Games.Get(id);
                 if (g == null) return null;

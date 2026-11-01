@@ -43,6 +43,10 @@ if (target === 'demo') {
   }
   writeFileSync(join(out, 'fonts', 'fonts.css'), css);
   copyFileSync(join(here, 'node_modules', 'three', 'build', 'three.min.js'), join(out, 'vendor', 'three.min.js'));
+  /* pdf.js, loaded only when a game's real manual is opened (as .js, so the page's server gives it a script's type) */
+  copyFileSync(join(here, 'node_modules', 'pdfjs-dist', 'build', 'pdf.min.mjs'), join(out, 'vendor', 'pdf.min.js'));
+  copyFileSync(join(here, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs'), join(out, 'vendor', 'pdf.worker.min.js'));
+  copyFileSync(join(here, 'node_modules', 'pdfjs-dist', 'LICENSE'), join(out, 'vendor', 'pdf.js-LICENSE.txt'));
   writeFileSync(join(out, 'app.js'), app);
   const html = '<!doctype html>\n<html lang="es">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n' +
     head.replace('<!--FONTS-->', '<link rel="stylesheet" href="fonts/fonts.css">').replace(/<style>/, '<style>').replace('<canvas id="gl"', '</head>\n<body>\n<canvas id="gl"') +

@@ -1,7 +1,80 @@
 /* =====================================================================
    MANUAL (paper booklet)
    ===================================================================== */
-const book = { el: $('#book'), L: $('#slotL'), R: $('#slotR'), g: null, pages: [], i: 0, single: false, anim: false };
+const book = { el: $('#book'), L: $('#slotL'), R: $('#slotR'), g: null, pages: [], i: 0, single: false, anim: false, ratio: 0, pdf: null };
+
+/* ---------- the game's real manual: a PDF, read with pdf.js (loaded only when one is opened) ---------- */
+const PDFJS = { lib: null, loading: null };
+function pdfLib() {
+  if (PDFJS.lib) return Promise.resolve(PDFJS.lib);
+  return PDFJS.loading || (PDFJS.loading = import(new URL('vendor/pdf.min.js', location.href).href)
+    .then(m => { m.GlobalWorkerOptions.workerSrc = new URL('vendor/pdf.worker.min.js', location.href).href; return (PDFJS.lib = m); })
+    .catch(e => { PDFJS.loading = null; throw e; }));
+}
+function pdfDoc(g) {
+  if (!g.manualVer) return Promise.reject(new Error('no manual'));
+  if (g.pdfDoc && g.pdfFor === g.manualVer) return g.pdfDoc;
+  g.pdfFor = g.manualVer;
+  return (g.pdfDoc = pdfLib().then(lib => lib.getDocument({ url: LIB.manualUrl(g), disableRange: true, disableStream: true, isEvalSupported: false }).promise).catch(e => { g.pdfDoc = null; throw e; }));
+}
+async function pdfCanvas(doc, n, width) {
+  const page = await doc.getPage(n + 1), v0 = page.getViewport({ scale: 1 }), v = page.getViewport({ scale: width / v0.width });
+  const c = mkCanvas(Math.max(1, Math.round(v.width)), Math.max(1, Math.round(v.height))), x = c.getContext('2d');
+  x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height);
+  await page.render({ canvasContext: x, viewport: v }).promise; page.cleanup();
+  return c;
+}
+/* its first page is the manual's cover inside the case */
+function manualCoverFor(g) {
+  if (!g || !g.real || !g.manualVer || g.manualCover || g.manualBad === g.manualVer) return Promise.resolve(false);
+  const ver = g.manualVer;
+  return g.manualCoverP || (g.manualCoverP = pdfDoc(g).then(doc => pdfCanvas(doc, 0, 600))
+    .then(c => { if (g.manualVer !== ver) return false; g.manualCover = c; return true; })
+    .catch(e => { console.warn('MyVLibrary: manual', e); g.manualBad = ver; return false; })
+    .finally(() => { g.manualCoverP = null; }));
+}
+/* pages are drawn as they are needed (the ones in view first, then the next and the previous), and only the nearest are kept */
+function pdfShown() { return book.single ? [book.i] : [2 * book.i - 1, 2 * book.i]; }
+function pdfPageHtml(k) {
+  const P = book.pdf, u = P && P.urls.get(k); if (P && !u) pdfWant(k);
+  return `<div class="mp pdfp">${u ? `<img src="${u}" alt="${esc(T('Página {0}', k + 1))}" draggable="false">` : `<span class="pdf-wait">${T('Cargando la página…')}</span>`}</div>`;
+}
+function pdfWant(k) { const P = book.pdf; if (!P || k < 0 || k >= P.n || P.urls.has(k)) return; P.want.add(k); pdfPump(); }
+function pdfWarm() { const s = pdfShown(), a = Math.min(...s), b = Math.max(...s); [...s, b + 1, b + 2, a - 1, a - 2].forEach(pdfWant); }
+function pdfFill() { const P = book.pdf; if (!P || book.anim) return; pdfShown().forEach((k, j) => { if (k >= 0 && k < P.n && P.urls.has(k)) { const slot = book.single || j === 1 ? book.R : book.L; if (!slot.querySelector('img')) fillSlot(slot, k); } }); }
+async function pdfPump() {
+  const P = book.pdf; if (!P || P.busy || !P.want.size) return;
+  const s = pdfShown(), dist = k => Math.min(...s.map(x => Math.abs(x - k))), k = [...P.want].sort((a, b) => dist(a) - dist(b))[0];
+  P.want.delete(k); P.busy = true;
+  try {
+    const w = Math.min(1600, Math.round((book.el.clientWidth || 600) / (book.single ? 1 : 2) * Math.min(2, devicePixelRatio || 1)));
+    const c = await pdfCanvas(P.doc, k, w), blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+    if (book.pdf !== P || !blob) return;
+    P.urls.set(k, URL.createObjectURL(blob));
+    if (P.urls.size > 24) { const far = [...P.urls.keys()].sort((a, b) => dist(b) - dist(a))[0]; URL.revokeObjectURL(P.urls.get(far)); P.urls.delete(far); }
+    pdfFill();
+  } catch (e) { console.warn('MyVLibrary: manual page', k + 1, e); }
+  finally { P.busy = false; if (book.pdf === P) pdfPump(); }
+}
+function pdfDrop() { const P = book.pdf; if (!P) return; P.urls.forEach(u => URL.revokeObjectURL(u)); book.pdf = null; }
+async function openPdfManual(c) {
+  const g = c.g; book.opening = true;
+  try {
+    const doc = await pdfDoc(g); if (mode !== 'open' || active !== c) return;
+    const v = (await doc.getPage(1)).getViewport({ scale: 1 }); if (mode !== 'open' || active !== c) return;
+    pdfDrop();
+    /* your notes and the registration card stay at the back of the real manual */
+    const extras = realManualPages(c).slice(-3, -1);
+    book.g = g; book.ratio = v.width / v.height; book.pdf = { doc, n: doc.numPages, urls: new Map(), want: new Set(), busy: false };
+    book.pages = Array.from({ length: doc.numPages }, (_, k) => () => pdfPageHtml(k)).concat(extras);
+    book.i = 0; sizeBook(); renderSpread(); $('#manual').hidden = false; setMode('manual'); sfx.page(); $('#mNext').focus(); pdfWarm();
+    if (!g.manualCover) manualCoverFor(g).then(ok => { if (ok) LIB.refresh(g, true); });
+  } catch (e) {
+    console.warn('MyVLibrary: manual', e); g.manualBad = g.manualVer;
+    toast(T('No se ha podido abrir el PDF del manual: te enseño el de MyVLibrary'), 3500);
+    if (mode === 'open' && active === c) openManual();
+  } finally { book.opening = false; }
+}
 function realManualPages(c) {
   const g = c.g, cov = c.coverCanvas.toDataURL('image/jpeg', .88);
   const shotUrl = (g.bg || g.cover) ? shot(g, 1, 640, 400).toDataURL('image/jpeg', .85) : '';
@@ -82,7 +155,7 @@ function updateCount() {
 }
 function sizeBook() {
   if (!book.g) return;
-  const [mw, mh] = DIMS[book.g.fmt].man, r = mw / mh;
+  const [mw, mh] = DIMS[book.g.fmt].man, r = book.ratio || mw / mh;
   book.single = innerWidth < 760;
   const availH = innerHeight - 140, availW = innerWidth - 32;
   const pw = book.single ? Math.min(availW, availH * r, 520) : Math.min(availW / 2, availH * r, 470), ph = pw / r;
@@ -92,12 +165,15 @@ function sizeBook() {
   book.el.style.setProperty('--acc', inkAccent(book.g)); book.el.style.setProperty('--accbg', inkAccent(book.g));
 }
 function openManual() {
-  if (!active || busy || mode !== 'open') return;
+  if (!active || busy || mode !== 'open' || book.opening) return;
+  /* the game's own manual, when it has one that can be read */
+  if (active.g.real && active.g.manualVer && active.g.manualBad !== active.g.manualVer) { openPdfManual(active); return; }
   const wasSingle = book.single;
+  pdfDrop(); book.ratio = 0;
   book.g = active.g; book.pages = manualPages(active); book.i = 0; sizeBook(); if (wasSingle !== book.single) book.i = 0;
   renderSpread(); $('#manual').hidden = false; setMode('manual'); sfx.page(); $('#mNext').focus();
 }
-function closeManual() { if (mode !== 'manual') return; $('#manual').hidden = true; setMode('open'); canvasEl.focus(); }
+function closeManual() { if (mode !== 'manual') return; $('#manual').hidden = true; pdfDrop(); setMode('open'); canvasEl.focus(); }
 async function turn(dir) {
   if (book.anim) return; const ni = book.i + dir; if (ni < 0 || ni > maxSpread()) return;
   book.anim = true; sfx.page();
@@ -119,6 +195,7 @@ async function turn(dir) {
     leaf.remove(); book.i = ni; updateCount();
   }
   book.anim = false;
+  if (book.pdf) { pdfFill(); pdfWarm(); }
 }
 $('#mPrev').addEventListener('click', () => turn(-1));
 $('#mNext').addEventListener('click', () => turn(1));

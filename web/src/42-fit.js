@@ -32,7 +32,7 @@ function fitDefault(g, kind, raw, r) {
   const im = turned(raw, r), b = FIT.st[kind] ? FIT.st[kind].b : 1;
   if (kind === 'full') { const c = [0, 0, 1, 1]; return { r, c, k: wrapCuts(g, c), lock: false, explicit: false }; }
   /* the manual shows the whole picture */
-  if (kind === 'manual' && !artPic(g, 'manual')) return { r, c: containRect(imgW(im), imgH(im), faceA(g, kind)), k: null, lock: true, explicit: false, b };
+  if (kind === 'manual' && !manualScan(g)) return { r, c: containRect(imgW(im), imgH(im), faceA(g, kind)), k: null, lock: true, explicit: false, b };
   /* a part of the full scan already cut where it was framed fills its face as it is */
   if (raw.wrapCut && raw.exact && !r) return { r, c: [0, 0, 1, 1], k: null, lock: false, explicit: false };
   return { r, c: coverRect(imgW(im), imgH(im), faceA(g, kind)), k: null, lock: true, explicit: false };
@@ -122,11 +122,11 @@ function fitTab(kind) {
     : b('fill', T('Rellenar')) + b('whole', T('Entera')) + b('all', T('Toda la imagen')) + b('trim', T('Detectar bordes')))
     + b('rot', T('Girar 90°')) + b('reset', T('Restablecer'))
     + (full ? '' : `<label class="fit-lock"><input type="checkbox" id="fitLock"> ${T('Mantener la proporción')}</label>`)
-    + (kind === 'manual' && !artPic(FIT.g, 'manual') ? `<label class="fit-lock"><input type="checkbox" id="fitBand"> ${T('Con la franja «Manual de instrucciones»')}</label>` : '');
+    + (kind === 'manual' && !manualScan(FIT.g) ? `<label class="fit-lock"><input type="checkbox" id="fitBand"> ${T('Con la franja «Manual de instrucciones»')}</label>` : '');
   const cut = kind !== 'full' && fitImg(FIT.g, kind) && fitImg(FIT.g, kind).wrapCut;
   $('#fitHelp').textContent = full
     ? T('Arrastra los bordes de fuera hasta lo impreso y las dos líneas hasta los cantos del lomo. Cada parte se estira a su cara: contraportada, lomo y portada.')
-    : (cut ? T('Esta cara sale del escaneo completo: aquí se encuadra dentro de su parte.') + ' ' : kind === 'manual' && !artPic(FIT.g, 'manual') ? T('Sin un escaneo del manual, su portada se hace con la imagen de la portada de la caja.') + ' ' : '')
+    : (cut ? T('Esta cara sale del escaneo completo: aquí se encuadra dentro de su parte.') + ' ' : kind === 'manual' && !manualScan(FIT.g) ? T('Sin un escaneo del manual, su portada se hace con la imagen de la portada de la caja.') + ' ' : '')
       + T('Arrastra el recuadro o sus bordes, o acerca y aleja con la rueda. Lo que queda dentro va a la cara de la caja; sin mantener la proporción, se estira hasta llenarla.');
   $('#fitPrev').dataset.k = '';
   fitSync(); fitRedraw();
