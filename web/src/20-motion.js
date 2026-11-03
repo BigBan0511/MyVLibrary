@@ -47,7 +47,13 @@ function bez(a, b, c, t, out) { const u = 1 - t; return out.set(u * u * a.x + 2 
 
 /* ---------- camera: the whole wall, a closer look along the shelf, or the console ---------- */
 const cam = { pos: new V3(), look: new V3(), tPos: new V3(), tLook: new V3(), view: 'shelf', par: { x: 0, y: 0 }, browseX: 0 };
+/* while you walk, the shelf is wherever you stand (20-walk.js); every other view is framed with the usual lens */
 function viewPose(name, outPos, outLook) {
+  if (WALK.on && !WALK.raw && (name === 'shelf' || name === 'browse')) { walkPose(outPos, outLook); return; }
+  const fov = camera.fov; camera.fov = BASE_FOV;
+  try { framePose(name, outPos, outLook); } finally { camera.fov = fov; }
+}
+function framePose(name, outPos, outLook) {
   const narrow = camera.aspect < .95; let box, dir;
   if (name === 'roulette') {
     /* the casino corner: the wheel from above, the way you lean over a table */
@@ -77,7 +83,7 @@ function viewPose(name, outPos, outLook) {
 function setView(n) { cam.view = n; viewPose(n, cam.tPos, cam.tLook); renderInfo(); }
 function updateCamera(dt) {
   const a = 1 - Math.exp(-3.2 * dt / SPEED); cam.pos.lerp(cam.tPos, a); cam.look.lerp(cam.tLook, a);
-  const wantPar = mode === 'shelf' && !RM && pointer.type === 'mouse' && cam.view === 'shelf';
+  const wantPar = mode === 'shelf' && !RM && pointer.type === 'mouse' && cam.view === 'shelf' && !WALK.on;
   cam.par.x += ((wantPar ? pointer.x * 5 : 0) - cam.par.x) * (1 - Math.exp(-3 * dt));
   cam.par.y += ((wantPar ? pointer.y * 3 : 0) - cam.par.y) * (1 - Math.exp(-3 * dt));
   camera.position.copy(cam.pos); camera.position.x += cam.par.x; camera.position.y += cam.par.y; camera.lookAt(cam.look);
@@ -85,11 +91,13 @@ function updateCamera(dt) {
   const k = cam.snap ? 1 : 1 - Math.exp(-2.5 * dt / SPEED); cam.snap = false;
   /* the cinema light follows you into every room that is not the desk, always from the upper left */
   const roam = cam.view === 'roulette' || isCases() || STAGE.name === 'tv' || (LP.keyOff && (STAGE.name === 'video' || STAGE.name === 'music'));
-  if (roam) { _kl.set(cam.look.x, Math.min(cam.look.y, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(LP.keyOff ? _KOFF2.fromArray(LP.keyOff) : _KOFF); key.position.lerp(_kp, k); }
+  /* (walking, it follows you along the room, not where you look) */
+  const walking = WALK.on && (cam.view === 'shelf' || cam.view === 'browse'), lx = walking ? WALK.pos.x : cam.look.x, ly = walking ? 60 : cam.look.y;
+  if (roam) { _kl.set(lx, Math.min(ly, 70), -4); key.target.position.lerp(_kl, k); _kp.copy(key.target.position).add(LP.keyOff ? _KOFF2.fromArray(LP.keyOff) : _KOFF); key.position.lerp(_kp, k); }
   else { key.target.position.lerp(KEY_AIM, k); key.position.lerp(KEY_POS, k); }
   key.target.updateMatrixWorld();
   const follow = roam;
-  if (typeof shelfFill !== 'undefined') shelfFill.forEach((l, i) => { _kl.set(follow ? cam.look.x + (i ? 22 : -22) : SHELF.cx + (i ? 55 : -60), follow ? cam.look.y + 6 : SHELF.board + 26, follow ? 70 : SHELF.front + 75); l.position.lerp(_kl, k); });
+  if (typeof shelfFill !== 'undefined') shelfFill.forEach((l, i) => { _kl.set(follow ? lx + (i ? 22 : -22) : SHELF.cx + (i ? 55 : -60), follow ? ly + 6 : SHELF.board + 26, follow ? 70 : SHELF.front + 75); l.position.lerp(_kl, k); });
 }
 const _kl = new V3(), _kp = new V3(), _KOFF = new V3(66, 222, 236), _KOFF2 = new V3();
 
@@ -99,7 +107,7 @@ const _kl = new V3(), _kp = new V3(), _KOFF = new V3(66, 222, 236), _KOFF2 = new
 const lens = { k: 0, want: 0, since: 0, lost: 0, px: .5, py: .5, sx: .5, sy: .5, hitT: 0, manual: 1, base: 1 };
 const LENS_Z = { soft: 1.3, on: 1.6, big: 2.4 }, _lv = new V3();
 /* the zoom kept on the shelf whatever you point at: the closer view, times what the wheel has added */
-function lensBaseWant() { return mode === 'shelf' ? (prefs.near === 'on' ? 1.7 : 1) * lens.manual : 1; }
+function lensBaseWant() { return mode === 'shelf' && !WALK.on ? (prefs.near === 'on' ? 1.7 : 1) * lens.manual : 1; }
 /* how much is magnified right now: the hover zoom or the kept one, whichever is more */
 function lensZoomNow() { return Math.min(4.5, Math.max(1 + ((LENS_Z[prefs.zoom] || LENS_Z.on) - 1) * lens.k, lens.base)); }
 /* the wheel (or + and -): a zoom that stays until you take it back */
@@ -125,7 +133,7 @@ function lensAim(dt) {
   lens.px += (tx - lens.px) * a; lens.py += (ty - lens.py) * a; lens.sx += (sx - lens.sx) * a; lens.sy += (sy - lens.sy) * a;
 }
 function updateLens(dt, now) {
-  const can = prefs.zoom !== 'off' && mode === 'shelf' && !busy;
+  const can = prefs.zoom !== 'off' && mode === 'shelf' && !busy && !WALK.on;
   /* the pad already walks the camera up to the desk shelf and the TV cabinet: no lens on top of that */
   const over = can && hovered && !hovered.disposed && (kbNav ? !(cam.view === 'browse' && !isCases()) : pointer.type === 'mouse');
   /* a short wait before closing in, so crossing the shelf on the way elsewhere does not zoom,

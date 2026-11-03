@@ -74,6 +74,10 @@ button,select,input,textarea{font:inherit;color:inherit}
 .rl-btn svg{width:14px;height:14px;flex:none}
 .rl-btn[aria-pressed="true"]{background:#f4f2ee;color:#111}
 .rl-btn:disabled{opacity:.45;cursor:default}
+/* walking: the dot in the middle of the view, a ring when it is on a game */
+#walkDot{position:fixed;z-index:5;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 1.5px rgba(0,0,0,.55);pointer-events:none;transition:width .15s,height .15s,margin .15s,background .15s}
+#walkDot.on{width:16px;height:16px;margin:-8px 0 0 -8px;background:transparent;box-shadow:0 0 0 2px #ffb547,0 0 0 3.5px rgba(0,0,0,.45)}
+.decorating #walkDot{display:none!important}
 .rl-on .pills,.rl-on #filterBtn,.rl-on .tools .field{display:none}
 .rl-panel,.rl-result{position:fixed;z-index:6;top:calc(var(--hud-h,72px) + 10px);width:min(300px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--panel-line);border-radius:12px;padding:16px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 16px 40px rgba(0,0,0,.45);max-height:calc(100vh - var(--hud-h,72px) - 90px);overflow:auto}
 .rl-panel{left:max(16px,env(safe-area-inset-left,0px));display:grid;gap:12px}
@@ -561,6 +565,7 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="sysbar" id="sysbar" hidden><button type="button" class="sys-nav" data-sys="-1" aria-label="Sistema anterior">‹</button><div class="sysname"><b></b><span></span></div><button type="button" class="sys-nav" data-sys="1" aria-label="Sistema siguiente">›</button></div>
   <div class="tools">
     <nav class="pills" id="pills" aria-label="Estantes"></nav>
+    <button class="icon-btn rl-btn walk-btn" id="walkBtn" type="button" aria-pressed="false" title="Pasear por la habitación (V)"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="9.2" cy="2.4" r="1.6" fill="currentColor"/><path d="M8.6 5.2 7.2 9.4l2.6 2.2.6 3.4M7.2 9.4l-1.6 5.4M8.4 5.6 5.4 7.3l-.7 2.2M8.7 5.8l2 2.4 2.1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Pasear</span></button>
     <button class="icon-btn rl-btn" id="rlBtn" type="button" aria-pressed="false" title="Ruleta (R)"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.8v3.9M8 10.3v3.9M1.8 8h3.9M10.3 8h3.9" stroke="currentColor" stroke-width="1.3"/><circle cx="12.2" cy="4" r="1.1" fill="currentColor"/></svg><span>Ruleta</span></button>
     <button class="icon-btn filter-btn" id="filterBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="filterPop" title="Filtro (F)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 3h11.6L9.3 8.4V13l-2.6-1.3V8.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span>Filtro</span></button>
     <div class="field">
@@ -624,6 +629,7 @@ button,select,input,textarea{font:inherit;color:inherit}
   <p id="playNote"></p>
 </section>
 <div id="tip" hidden></div>
+<div id="walkDot" hidden aria-hidden="true"></div>
 <div class="toast" id="toast" role="status"></div>
 <nav class="prompts" id="prompts" aria-label="Acciones"></nav>
 <div class="mini" id="mini" hidden aria-label="Música"><div class="mini-txt"><b id="miniT"></b><span id="miniA"></span></div><time id="miniTime"></time><div class="mini-btns"><button type="button" data-m="mPrev" aria-label="Canción anterior">⏮</button><button type="button" data-m="mToggle" id="miniPlay">▶</button><button type="button" data-m="mNext" aria-label="Canción siguiente">⏭</button><button type="button" data-m="mDown" aria-label="Bajar el volumen">−</button><span id="miniVol"></span><button type="button" data-m="mUp" aria-label="Subir el volumen">+</button><button type="button" data-m="mEject" aria-label="Sacar el disco">⏏</button><button type="button" data-m="mGo" id="miniGo">Cadena</button></div></div>

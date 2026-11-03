@@ -2,7 +2,11 @@
 /* =====================================================================
    INPUT: pointer (pick, tear the seal, rub off dust), keyboard, gamepad
    ===================================================================== */
-function setPointer(e) { pointer.cx = e.clientX; pointer.cy = e.clientY; pointer.x = e.clientX / innerWidth * 2 - 1; pointer.y = -(e.clientY / innerHeight) * 2 + 1; }
+function setPointer(e) {
+  pointer.cx = e.clientX; pointer.cy = e.clientY; pointer.x = e.clientX / innerWidth * 2 - 1; pointer.y = -(e.clientY / innerHeight) * 2 + 1;
+  /* walking with the mouse held by the view, everything points at the middle */
+  if (WALK.locked) { pointer.cx = innerWidth / 2; pointer.cy = innerHeight / 2; pointer.x = pointer.y = 0; }
+}
 let drag = null;
 const _plane = new THREE.Plane(), _hp = new V3(), _hit = new V3(), _nrm = new V3();
 function onDrag(px, py) {
@@ -43,6 +47,7 @@ function endDrag() {
 }
 canvasEl.addEventListener('pointermove', e => {
   pointer.type = e.pointerType || 'mouse'; pointer.out = false; pointer.live = true; const px = pointer.cx, py = pointer.cy; setPointer(e);
+  if (walkPointerMove(e, px, py)) return;
   if (drag) { onDrag(px, py); return; }
   if (pointer.type !== 'mouse' || busy) return;
   if (mode === 'shelf') {
@@ -76,7 +81,7 @@ canvasEl.addEventListener('pointerup', e => {
   if (!pointer.down) return; const moved = Math.hypot(e.clientX - pointer.down.x, e.clientY - pointer.down.y); pointer.down = null;
   if (moved > 10 || (was && was.kind === 'tear')) return;
   setPointer(e); kbNav = false; const h = hit();
-  if (mode === 'shelf') { if (h) { focus = h.case; pick(h.case); } }
+  if (mode === 'shelf') { if (h) { focus = h.case; pick(h.case); } else walkClickedNothing(); }
   else if (mode === 'inspect') { if (h && h.case === active && h.part !== 'tab') flipCase(); }
   else if (mode === 'hifi') { const b = hifiHit(); if (b) musicAct(b); }
   else if (mode === 'roulette') { if (!RL.spinning && hit(RL.hits)) rlSpin(); }
@@ -103,6 +108,9 @@ function handleKey(k) {
   }
   if ((k === 'p' || k === 'P') && MPLAY.state !== 'off' && mode === 'shelf') { musicAct('mToggle'); return true; }
   if (mode === 'shelf') {
+    /* walking (20-walk.js): V and Esc stop it, X crouches, Enter takes out what you look at, the arrows walk */
+    if (WALK.on) { const r = walkKey(k); if (r !== undefined) return r; }
+    else if ((k === 'v' || k === 'V') && !DECO.on) { walkToggle(true); return true; }
     if (k.startsWith('Arrow')) { moveFocus(k.slice(5).toLowerCase()); return true; }
     if (k === 'Enter' || k === ' ') { if (focus && hovered === focus && navOrder.includes(focus)) pick(focus); else moveFocus('right'); return true; }
     if (k === 'q' || k === 'Q') { if (isRooms()) setSystem(-1); else setGroup(curGroup - 1); return true; }
@@ -152,15 +160,20 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !setPop.hidden) { setPop.hidden = true; return; }
   if (e.key === 'Escape' && !$('#filterPop').hidden) { closeFilterPop(); return; }
   if (LIB.hostPad && /^(Arrow|Page)/.test(e.key) && LIB.dupe(e.key, 'key')) { e.preventDefault(); return; }
-  sfx.init(); if (handleKey(e.key)) e.preventDefault();
+  sfx.init(); if (walkKeyDown(e)) { e.preventDefault(); return; }
+  if (handleKey(e.key)) e.preventDefault();
 });
 const gp = { prev: {}, stickT: 0 };
 function pollGamepad(dt) {
   if (LIB.hostPad) return;
   let pads; try { pads = navigator.getGamepads ? navigator.getGamepads() : []; } catch (e) { return; }
   const p = pads && Array.from(pads).find(Boolean); if (!p) return;
-  const map = { 0: 'Enter', 1: 'Escape', 2: 'm', 3: 'f', 4: 'q', 5: 'e', 6: 'z', 7: 'c', 8: 'i', 9: 'Enter', 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight' };
-  for (const k in map) { const on = !!(p.buttons[k] && p.buttons[k].pressed); if (on && !gp.prev[k]) { sfx.init(); handleKey(map[k]); } gp.prev[k] = on; }
+  /* pressing the sticks in: L3 walks (or stops), R3 crouches */
+  const map = { 0: 'Enter', 1: 'Escape', 2: 'm', 3: 'f', 4: 'q', 5: 'e', 6: 'z', 7: 'c', 8: 'i', 9: 'Enter', 10: 'v', 11: 'x', 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight' };
+  /* walking, the sticks and the d-pad move you instead of going from spine to spine */
+  const walking = walkBrowserPad(p);
+  for (const k in map) { const on = !!(p.buttons[k] && p.buttons[k].pressed); if (on && !gp.prev[k] && !(walking && k >= 12)) { sfx.init(); handleKey(map[k]); } gp.prev[k] = on; }
+  if (walking) return;
   const ax = p.axes[0] || 0, ay = p.axes[1] || 0; gp.stickT -= dt;
   if (gp.stickT <= 0 && (Math.abs(ax) > .6 || Math.abs(ay) > .6)) { gp.stickT = .16; handleKey(Math.abs(ax) > Math.abs(ay) ? (ax > 0 ? 'ArrowRight' : 'ArrowLeft') : (ay > 0 ? 'ArrowDown' : 'ArrowUp')); }
 }
@@ -188,7 +201,7 @@ function frame(now) {
   /* the room waits behind the open manual (and leaves the page free to draw a real manual's pages) */
   if (LIB.paused || document.hidden || (mode === 'manual' && !book.anim && !$('#manual').hidden)) { lastT = now; return; }
   const dt = clamp((now - lastT) / 1000, 0, .05); lastT = now;
-  runTweens(now); updateCamera(dt); updateLens(dt, now); if (RL.group.visible) updateRoulette(dt, now);
+  runTweens(now); walkUpdate(dt, now); updateCamera(dt); updateLens(dt, now); if (RL.group.visible) updateRoulette(dt, now);
   /* while zoomed the view still drifts a little with the mouse parallax: keep the hover on what is under the mouse */
   if (lensZoomNow() > 1.001 && mode === 'shelf' && !busy && !DECO.on && !kbNav && !drag && !pointer.out && pointer.live && pointer.type === 'mouse' && now - lens.hitT > 120) { lens.hitT = now; const h = hit(); setHovered(h ? h.case : null); canvasEl.style.cursor = h ? 'pointer' : 'default'; } updateRoom(dt, now); pollGamepad(dt); updateStudio(dt, now);
   const inspecting = (mode === 'inspect' || mode === 'open') && !drag;
@@ -241,12 +254,12 @@ async function boot() {
   setView('shelf'); cam.pos.copy(cam.tPos).add(new V3(RM ? 0 : 6, RM ? 0 : 10, RM ? 0 : 60)); cam.look.copy(cam.tLook);
   setTray(0); tvSet('standby'); setLed(false); renderSettings(); renderPills(); renderBrand();
   if (sfx.on) setTimeout(() => sfx.init(), 400);
-  setMode('shelf');
+  setMode('shelf'); if (prefs.walk === 'on') walkToggle(true);
   requestAnimationFrame(t => { lastT = t; frame(t); const l = $('#load'); l.classList.add('gone'); setTimeout(() => { l.hidden = true; }, 600); });
   if (PLAYNITE && LIB.running && LIB.running.length) { const r = LIB.running[0]; setTimeout(() => restorePlaying(r.id, r.seconds), 600); }
   else if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
 }
-window.__mvl = { discAt: () => { if (!active || !active.disc) return null; const p = active.disc.getWorldPosition(new V3()).project(camera); return [(p.x + 1) / 2 * innerWidth, (1 - p.y) / 2 * innerHeight, active.g.fmt]; }, modelsRead, libOpen, uMeta: () => prefs.ugc, skinRoot: () => active && active.skin && active.skin.root, skinPlan: () => { const s = active && active.skin; if (!s) return null; const q = new EU().setFromQuaternion(s.view.q), g = v => +v.toFixed(2); return { time: g(skinTime(active)), pull: s.pull ? g(s.pull.len) : 0, way: s.pull ? s.pull.v.toArray().map(g) : null, man: !!s.manual, w: g(s.view.w), h: g(s.view.h), home: active.discHome.toArray().map(g), say: `yaw ${g(q.y)} pitch ${g(q.x)} pull ${s.pull ? g(s.pull.len) : 0} man ${!!s.manual}` }; }, skin: () => active && { dim: active.dim.skin, worn: !!active.skin, disc: !!(active.disc && active.disc.userData.skin), home: active.discHome.toArray() }, decoFake: async (id, name, w, h, d, col) => {
+window.__mvl = { walk: () => ({ on: WALK.on, pos: [WALK.pos.x, WALK.pos.z].map(v => +v.toFixed(1)), eye: +walkEye().toFixed(1), yaw: +WALK.yaw.toFixed(3), pitch: +WALK.pitch.toFixed(3), locked: WALK.locked, follow: WALK.follow, area: WALK.area, obs: WALK.obs.length, fov: +camera.fov.toFixed(1), hovered: hovered ? hovered.g.t : null, mode, view: cam.view, cam: cam.pos.toArray().map(v => +v.toFixed(1)) }), discAt: () => { if (!active || !active.disc) return null; const p = active.disc.getWorldPosition(new V3()).project(camera); return [(p.x + 1) / 2 * innerWidth, (1 - p.y) / 2 * innerHeight, active.g.fmt]; }, modelsRead, libOpen, uMeta: () => prefs.ugc, skinRoot: () => active && active.skin && active.skin.root, skinPlan: () => { const s = active && active.skin; if (!s) return null; const q = new EU().setFromQuaternion(s.view.q), g = v => +v.toFixed(2); return { time: g(skinTime(active)), pull: s.pull ? g(s.pull.len) : 0, way: s.pull ? s.pull.v.toArray().map(g) : null, man: !!s.manual, w: g(s.view.w), h: g(s.view.h), home: active.discHome.toArray().map(g), say: `yaw ${g(q.y)} pitch ${g(q.x)} pull ${s.pull ? g(s.pull.len) : 0} man ${!!s.manual}` }; }, skin: () => active && { dim: active.dim.skin, worn: !!active.skin, disc: !!(active.disc && active.disc.userData.skin), home: active.discHome.toArray() }, decoFake: async (id, name, w, h, d, col) => {
     const geo = new THREE.BoxGeometry(w, h, d), A = geo.attributes;
     const parsed = { roots: [{ name: id, go: 1, active: true, p: { x: 0, y: 0, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 }, s: { x: 1, y: 1, z: 1 }, mesh: { n: A.position.count, pos: { arr: new Float32Array(A.position.array), dim: 3 }, nrm: { arr: new Float32Array(A.normal.array), dim: 3 }, subs: [Array.from(geo.index.array)] }, mats: [{ name: 'm', col: { _Color: col }, fl: {}, tex: {}, shader: '', keywords: '' }], kids: [] }], anim: null, info: { name, type: '', system: '' } };
     await UGCS.tx('readwrite', st => st.put({ parsed }, 'emuvr:' + id)); prefs.emuvr = (prefs.emuvr || []).filter(b => b.id !== id).concat([{ id, name, sys: '' }]); savePrefs();

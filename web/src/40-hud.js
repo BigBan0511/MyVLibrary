@@ -49,7 +49,7 @@ function placeTip() {
 }
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), ms); }
 
-function setMode(m) { mode = m; renderMini(); renderBag(); renderFilter(); renderRlBtn(); if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
+function setMode(m) { mode = m; renderMini(); renderBag(); renderFilter(); renderRlBtn(); renderWalkBtn(); walkDot(); if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
 const btn = (k, label, a, primary) => `<button class="pbtn${primary ? ' primary' : ''}" type="button" data-act="${a}"><kbd>${k}</kbd>${label}</button>`;
 function tearHintText(c) { return c.tear > .05 ? T('Precinto {0} % · sigue tirando', Math.round(100 * c.tear / c.L)) : T('Arrastra la lengüeta roja para quitar el precinto'); }
 function renderPrompts() {
@@ -57,7 +57,7 @@ function renderPrompts() {
   if (mode === 'shelf') {
     const gr = groups[curGroup], np = gr ? gr.pages.length : 1;
     if (np > 1) h += `<div class="pager"><button class="pbtn icon" type="button" data-act="prevPage" aria-label="${T('Página anterior')}"${curPage === 0 ? ' disabled' : ''}>‹</button><span class="pg">${curPage + 1} / ${np}</span><button class="pbtn next" type="button" data-act="nextPage"${curPage >= np - 1 ? ' disabled' : ''}>${T('Siguiente')} <i aria-hidden="true">›</i></button></div>`;
-    h += coarse ? `<span class="hint">${T('Toca un lomo para sacar el juego')}</span>` : isRooms() ? `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('sistemas')} · <kbd>Z</kbd><kbd>C</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>` : `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>`;
+    h += coarse ? `<span class="hint">${T('Toca un lomo para sacar el juego')}</span>` : WALK.on ? walkHints() : isRooms() ? `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('sistemas')} · <kbd>Z</kbd><kbd>C</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>` : `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>`;
   }
   if (mode === 'inspect' && active) {
     if (active.wrap) {

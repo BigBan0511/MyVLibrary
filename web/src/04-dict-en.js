@@ -249,7 +249,13 @@ DICT.en = {
   'Asignando {0}…': 'Assigning {0}…',
   '{0} modelo asignado': '{0} model assigned',
   '{0} modelos asignados': '{0} models assigned',
-  'Lee tu carpeta de .ugc y elige la consola, la caja y el medio de cada sistema. Las cajas de EmuVR se abren con su animación y llevan la carátula del juego; los cartuchos y discos, su etiqueta.': 'Read your .ugc folder and choose each system’s console, box and medium. EmuVR’s boxes open with their own animation and wear the game’s cover; cartridges and discs wear its label.'
+  'Lee tu carpeta de .ugc y elige la consola, la caja y el medio de cada sistema. Las cajas de EmuVR se abren con su animación y llevan la carátula del juego; los cartuchos y discos, su etiqueta.': 'Read your .ugc folder and choose each system’s console, box and medium. EmuVR’s boxes open with their own animation and wear the game’s cover; cartridges and discs wear its label.',
+  /* walking (20-walk.js) */
+  'Pasear': 'Walk', 'Pasear por la habitación (V)': 'Walk around the room (V)', 'Dejar de pasear (V)': 'Stop walking (V)',
+  'Paseando: WASD para andar; haz clic para mirar con el ratón': 'Walking: WASD to move; click to look around with the mouse',
+  'Stick izquierdo: andar': 'Left stick: walk', 'stick derecho: mirar': 'right stick: look', 'agacharse': 'crouch', 'dejar de pasear': 'stop walking',
+  'andar': 'walk', 'Mayús': 'Shift', 'correr': 'run', 'clic o': 'click or', 'suelta el ratón': 'lets go of the mouse',
+  'clic en un lomo para sacarlo, en lo demás para mirar con el ratón': 'click a spine to take it out, anywhere else to look around with the mouse',
 };
 /* the page itself was translated before the dictionary existed */
 if (document.body) applyDomLang();

@@ -47,6 +47,7 @@ Each system has its own place. PC games sit on a shelf above a desk with a beige
 
 - **Cinema light and the studio.** The room is dark, with one warm spot from the upper left and a little film grain. When you take something out, the room fades behind a grey studio backdrop and softboxes light the case: it turns towards you as it opens and settles with a small bounce when it closes, you can drag it to turn it in your hands, and its corners catch little stars of light. To keep the room behind it: Settings → When you take something out → In the room.
 - **A closer look.** Point at a game with the mouse, or move to it with the controller, and the view zooms in on it so the spines are easy to read. Choose how much in Settings → Zoom on hover (Gentle, Normal, A lot or No). For more: Shelf view → Closer keeps the view zoomed in all the time, and Mouse wheel → Zooms in and out lets the wheel zoom where you point (the page then turns with the buttons and the arrows). On the keyboard, + and − zoom and 0 goes back.
+- **Walk around the room.** The Walk button at the top (V on the keyboard, the left stick pressed in on the controller) puts you in the room in first person, the way EmuVR has you stand in it, without a headset. WASD walks, the arrows walk and turn, Shift runs and X crouches (handy in front of the TV cabinet, where you start crouched). Click on anything that isn't a game and the mouse looks round (Esc lets it go), or drag to look while it stays free. On the controller the left stick walks, the right one looks and R3 crouches. What's in the middle of the view (or under the mouse) is what a click, Enter or A takes out, and from there everything works as usual: the case comes to your hands, the disc goes in, the game opens on your monitor and, when you close it, you are back where you were standing. Walls and a ceiling close the room round you, the furniture is in your way, and changing system takes you to its room. In the bookcases design (and in the video and record shops) you walk down the row, and the bookcase you're looking at is the one whose games you can take out. It stays on the next time you open the shelf; V or the button turns it off.
 - **The TV and the whiteboard.** Changing what's on the TV brings a burst of snow and the channel number on screen, and the whiteboard writes what you're holding stroke by stroke.
 - **Rooms and lights.** Living room, Nordic, Cosy, Cabin, Japanese, Library, Industrial loft, Video store, Gamer and Spaceship, with four lights: cinema, night, evening and day.
 - **Your language.** The shelf follows Playnite's language (Spanish and English for now).
@@ -106,6 +107,8 @@ In the sidebar the shelf covers Playnite's own window buttons, so it shows its o
 |---|---|---|---|
 | Move along the shelf | hover | ← → (↑ ↓ jump 8 at a time) | d-pad / stick |
 | Take a game out | click the spine | Enter | A |
+| Walk around the room (on / off) | Walk button at the top | V | L3 (left stick pressed in) |
+| Walking: move, look, run, crouch | click on nothing to look with the mouse (Esc lets it go), or drag | WASD (arrows walk and turn) · Shift · X | left stick · right stick · R3 |
 | Turn the case | click the case, or drag it | F | Y |
 | Peel off the shrink wrap | drag the tab | Enter | A |
 | Open the case / insert the disc | buttons at the bottom | Enter | A |

@@ -360,12 +360,15 @@ const LIB = {
   recent: { key: '', t: 0, from: '' },
   dupe(key, from) { const now = performance.now(), r = this.recent, d = r.key === key && r.from !== from && now - r.t < 160; this.recent = { key, t: now, from }; return d; },
   pad(button, state) {
-    this.hostPad = true; if (state !== 'Pressed') return;
-    const map = { A: 'Enter', B: 'Escape', X: 'm', Y: 'f', Start: 'Enter', Back: 'i', LeftShoulder: 'q', RightShoulder: 'e', TriggerLeft: 'z', TriggerRight: 'c', DPadUp: 'ArrowUp', DPadDown: 'ArrowDown', DPadLeft: 'ArrowLeft', DPadRight: 'ArrowRight', LeftStickUp: 'ArrowUp', LeftStickDown: 'ArrowDown', LeftStickLeft: 'ArrowLeft', LeftStickRight: 'ArrowRight' };
+    this.hostPad = true;
+    /* walking, the sticks and the d-pad are held, not pressed (20-walk.js) */
+    if (walkHostPad(button, state)) return;
+    if (state !== 'Pressed') return;
+    const map = { A: 'Enter', B: 'Escape', X: 'm', Y: 'f', Start: 'Enter', Back: 'i', LeftShoulder: 'q', RightShoulder: 'e', TriggerLeft: 'z', TriggerRight: 'c', LeftStick: 'v', RightStick: 'x', DPadUp: 'ArrowUp', DPadDown: 'ArrowDown', DPadLeft: 'ArrowLeft', DPadRight: 'ArrowRight', LeftStickUp: 'ArrowUp', LeftStickDown: 'ArrowDown', LeftStickLeft: 'ArrowLeft', LeftStickRight: 'ArrowRight' };
     const k = map[button]; if (!k) return;
     if (this.dupe(k, 'pad')) return;
     sfx.init();
-    if (k === 'Escape' && mode === 'shelf' && PN_STATE.mode === 'fullscreen') { this.send('close'); return; }
+    if (k === 'Escape' && mode === 'shelf' && PN_STATE.mode === 'fullscreen' && !WALK.on) { this.send('close'); return; }
     handleKey(k);
   },
   async focusGame(id) {
