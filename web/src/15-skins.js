@@ -24,14 +24,18 @@ function dimOf(g) {
   const { w, h, d } = m.dim, id = `skin:${skinSlot(g)}:${g.fmt}:${w}x${h}x${d}`;
   return DIMS[id] || (DIMS[id] = Object.assign({}, base, { w, h, d: Math.max(d, .3), split: 0, discX: 0, id, skin: 'box:' + skinSlot(g), wide: false, shell: base.shell === 'card' ? 'card' : base.shell }));
 }
-const _sa = new V3(), _sb = new V3(), _sc = new V3(), _se1 = new V3(), _se2 = new V3(), _sn = new V3(), _st = new V3(), _su = new V3(), _sbx = new THREE.Box3(), _spv = new V3();
+const _sa = new V3(), _sb = new V3(), _sc = new V3(), _se1 = new V3(), _se2 = new V3(), _sn = new V3(), _st = new V3(), _su = new V3(), _spv = new V3();
 /* where a mesh's vertex is now: a part that bends is where its bones hold it (its geometry keeps the pose it was
    modelled in, and a box is as often modelled open as shut) */
 function skinVertex(m, i, out) { return (m.isSkinnedMesh ? m.boneTransform(i, out) : out.fromBufferAttribute(m.geometry.attributes.position, i)).applyMatrix4(m.matrixWorld); }
-/* a mesh's own bounds as it stands now (only its own: its children are measured as themselves) */
+/* a mesh's own bounds as it stands now (only its own: its children are measured as themselves), vertex by vertex:
+   the box round its geometry, turned, is as big as it is turned (a lid modelled at an angle and set straight by
+   its object measures twice as thick) */
 function skinBoxOf(m, b) {
-  if (m.isSkinnedMesh) { const n = m.geometry.attributes.position.count, step = Math.max(1, Math.floor(n / 6000)); for (let i = 0; i < n; i += step) b.expandByPoint(skinVertex(m, i, _spv)); return b; }
-  const G = m.geometry; if (!G.boundingBox) G.computeBoundingBox(); return b.union(_sbx.copy(G.boundingBox).applyMatrix4(m.matrixWorld));
+  const P = m.geometry && m.geometry.attributes.position; if (!P) return b;
+  const n = P.count, step = m.isSkinnedMesh ? Math.max(1, Math.floor(n / 20000)) : 1;
+  for (let i = 0; i < n; i += step) b.expandByPoint(skinVertex(m, i, _spv));
+  return b;
 }
 /* whether a mesh's triangles come out inside out (Unity's mirror), bones included */
 function skinWinding(m) {

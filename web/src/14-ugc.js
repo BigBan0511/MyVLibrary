@@ -529,9 +529,9 @@ const UGC = (() => {
     root.updateMatrixWorld(true);
     /* its bounds are where the bones hold it, not where the mesh was modelled */
     bent.forEach(([m]) => { const P = m.geometry.attributes.position, v = new V3(), b = new THREE.Box3(), step = Math.max(1, P.count >> 12); for (let i = 0; i < P.count; i += step) b.expandByPoint(m.boneTransform(i, v.fromBufferAttribute(P, i))); m.geometry.boundingBox = b; });
-    const box = new THREE.Box3(); meshes.forEach(m => { if (m.visible) box.expandByObject(m); });
+    const box = new THREE.Box3(); meshes.forEach(m => { if (m.visible) skinBoxOf(m, box); });
     if (!box.isEmpty()) { model.position.y -= box.min.y; model.position.x -= (box.min.x + box.max.x) / 2; model.position.z -= (box.min.z + box.max.z) / 2; }
-    root.updateMatrixWorld(true); box.setFromObject(model);
+    root.updateMatrixWorld(true); box.makeEmpty(); meshes.forEach(m => skinBoxOf(m, box));
     const anim = parsed.anim ? makeAnim(parsed.anim, byGo.get(parsed.anim.root) || model.children[0], byGo) : null;
     root.userData = { anchors, lids, meshes, art, info: parsed.info || {}, size: box.getSize(new V3()), materials: [...made.values(), ...bentMats.values()], anim: anim && Object.keys(anim.clips).length ? anim : null };
     return root;
