@@ -458,8 +458,10 @@ class Case {
     this.interior.forEach(([p, m]) => p.remove(m));
     if (this.multi) dropMultiInterior(this);
     if (this.disc) { this.disc.parent && this.disc.parent.remove(this.disc); this.disc.children.forEach(m => { if (m.geometry && !m.geometry.userData.shared) m.geometry.dispose(); }); }
-    if (this.manual) this.pivot.remove(this.manual);
+    /* an EmuVR box gives the manual back to our own case's lid as it goes: only then can it leave, from wherever it is
+       (left in the lid, it would come back over the disc, grey side up, the next time the game is in your hands) */
     skinOff(this); skinMediumOff(this);
+    if (this.manual && this.manual.parent) this.manual.parent.remove(this.manual);
     if (this.extraLabelMats) { this.extraLabelMats.forEach(m => { if (m.map) m.map.dispose(); unM(m); }); this.extraLabelMats = null; }
     if (this.mediaMat) { unM(this.mediaMat); this.mediaMat = null; }
     this.disc = null; this.manual = null; this.interior = null; this.thick = null;
