@@ -11,9 +11,21 @@ const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 const coarse = matchMedia('(pointer: coarse)').matches;
 let shelfPicks = [];
 function buildShelfPicks() { shelfPicks = navOrder.flatMap(c => [c.shell, c.lid, c.spine, c.wrap].filter(Boolean)); }
+/* what a click on the case in your hands can land on: what shows of it. An EmuVR box or medium is a whole model,
+   so all of its pieces count, and its see-through plastic lets the click through to the disc behind it */
+const seeThrough = m => [].concat(m.material).every(t => t && t.transparent && (t.opacity < .6 || !t.depthWrite));
+function caseHits(c) {
+  const L = [], deep = (o, glass) => { if (o) o.traverse(m => { if (m.isMesh && !(glass && seeThrough(m))) L.push(m); }); };
+  if (c.skin) deep(c.skin.root, true); else L.push(c.shell, c.lid, c.spine);
+  L.push(c.wrap, c.tabHit); if (c.strip) c.path.forEach(p => L.push(p.mesh));
+  deep(c.disc); L.push(c.manual);
+  if (c.multi) c.multi.slots.filter(o => !o.userData.away).forEach(o => L.push(...o.children));
+  /* hidden pieces (our own case under an EmuVR box) would stop the ray without being seen */
+  return L.filter(o => { if (!o) return false; for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; });
+}
 function hit(list) {
   ndc.set(pointer.x, pointer.y); ray.setFromCamera(ndc, camera);
-  list = list || (mode === 'shelf' ? shelfPicks : active ? [active.shell, active.lid, active.spine, active.wrap, active.tabHit, ...(active.strip ? active.path.map(p => p.mesh) : []), ...(active.disc ? active.disc.children : []), active.manual, ...(active.multi ? active.multi.slots.filter(o => !o.userData.away).flatMap(o => o.children) : [])].filter(Boolean) : []);
+  list = list || (mode === 'shelf' ? shelfPicks : active ? caseHits(active) : []);
   const h = ray.intersectObjects(list, false)[0];
   return h ? { case: h.object.userData.case, part: h.object.userData.part || null, point: h.point, obj: h.object } : null;
 }

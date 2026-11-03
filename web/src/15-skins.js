@@ -24,7 +24,27 @@ function dimOf(g) {
   const { w, h, d } = m.dim, id = `skin:${skinSlot(g)}:${g.fmt}:${w}x${h}x${d}`;
   return DIMS[id] || (DIMS[id] = Object.assign({}, base, { w, h, d: Math.max(d, .3), split: 0, discX: 0, id, skin: 'box:' + skinSlot(g), wide: false, shell: base.shell === 'card' ? 'card' : base.shell }));
 }
-const _sa = new V3(), _sb = new V3(), _sc = new V3(), _se1 = new V3(), _se2 = new V3(), _sn = new V3(), _st = new V3(), _su = new V3();
+const _sa = new V3(), _sb = new V3(), _sc = new V3(), _se1 = new V3(), _se2 = new V3(), _sn = new V3(), _st = new V3(), _su = new V3(), _spv = new V3();
+/* where a mesh's vertex is now: a part that bends is where its bones hold it (its geometry keeps the pose it was
+   modelled in, and a box is as often modelled open as shut) */
+function skinVertex(m, i, out) { return (m.isSkinnedMesh ? m.boneTransform(i, out) : out.fromBufferAttribute(m.geometry.attributes.position, i)).applyMatrix4(m.matrixWorld); }
+/* a mesh's own bounds as it stands now (only its own: its children are measured as themselves), vertex by vertex:
+   the box round its geometry, turned, is as big as it is turned (a lid modelled at an angle and set straight by
+   its object measures twice as thick) */
+function skinBoxOf(m, b) {
+  const P = m.geometry && m.geometry.attributes.position; if (!P) return b;
+  const n = P.count, step = m.isSkinnedMesh ? Math.max(1, Math.floor(n / 20000)) : 1;
+  for (let i = 0; i < n; i += step) b.expandByPoint(skinVertex(m, i, _spv));
+  return b;
+}
+/* whether a mesh's triangles come out inside out (Unity's mirror), bones included */
+function skinWinding(m) {
+  if (!m.isSkinnedMesh) return m.matrixWorld.determinant() < 0 ? -1 : 1;
+  const A = m.geometry.attributes, sk = m.skeleton; let bi = 0, bw = -1;
+  for (let k = 0; k < 4; k++) { const w = A.skinWeight.array[k]; if (w > bw) { bw = w; bi = A.skinIndex.array[k]; } }
+  const bone = sk && sk.bones[bi]; if (!bone) return m.matrixWorld.determinant() < 0 ? -1 : 1;
+  return new THREE.Matrix4().multiplyMatrices(m.matrixWorld, m.bindMatrixInverse).multiply(bone.matrixWorld).multiply(sk.boneInverses[bi]).multiply(m.bindMatrix).determinant() < 0 ? -1 : 1;
+}
 function skinClosed(root) { const an = root.userData.anim; if (an) { if (an.clips.close) an.apply(an.clips.close, an.clips.close.dur); else if (an.clips.open) an.apply(an.clips.open, 0); } root.updateMatrixWorld(true); }
 /* the faces of a model, by the way they look: area, UV box and which way U and V run */
 function skinFaces(root, list) {
@@ -33,10 +53,10 @@ function skinFaces(root, list) {
     const G = m.geometry, P = G.attributes.position, UV = G.attributes.uv, I = G.index; if (!P || !UV || !I) continue;
     const g0 = G.groups && G.groups[0], from = g0 ? g0.start : 0, to = g0 ? g0.start + g0.count : I.count;
     /* Unity's models are mirrored on the way in, which turns their triangles inside out */
-    const mirror = m.matrixWorld.determinant() < 0 ? -1 : 1;
+    const mirror = skinWinding(m);
     for (let i = from; i + 2 < to; i += 3) {
       const a = I.getX(i), b = I.getX(i + 1), c = I.getX(i + 2);
-      _sa.fromBufferAttribute(P, a).applyMatrix4(m.matrixWorld); _sb.fromBufferAttribute(P, b).applyMatrix4(m.matrixWorld); _sc.fromBufferAttribute(P, c).applyMatrix4(m.matrixWorld);
+      skinVertex(m, a, _sa); skinVertex(m, b, _sb); skinVertex(m, c, _sc);
       _se1.subVectors(_sb, _sa); _se2.subVectors(_sc, _sa); _sn.crossVectors(_se1, _se2); const ar = _sn.length() / 2; if (ar < 1e-6) continue; _sn.normalize().multiplyScalar(mirror);
       const ax = Math.abs(_sn.x), ay = Math.abs(_sn.y), az = Math.abs(_sn.z), key = ax >= ay && ax >= az ? 'x' + Math.sign(_sn.x) : ay >= az ? 'y' + Math.sign(_sn.y) : 'z' + Math.sign(_sn.z);
       const f = B[key] || (B[key] = { key, area: 0, u0: 9, u1: -9, v0: 9, v1: -9, gu: new V3(), gv: new V3(), n: new V3() });
@@ -65,10 +85,19 @@ function skinFaces(root, list) {
   return Object.values(B).sort((a, b) => b.outer - a.outer);
 }
 /* a model turned so that X, Y and Z are the case's own axes, centred, and no bigger than a shelf takes */
-function skinPlace(root, right, up, n, maxW, maxH, keepAll) {
+function skinPlace(root, right, up, n, maxW, maxH, keepAll, art) {
   const q = new Q4().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, n)).invert();
   root.quaternion.copy(q); root.position.set(0, 0, 0); root.scale.setScalar(1); root.updateMatrixWorld(true);
-  const measure = () => { const b = new THREE.Box3(); root.updateMatrixWorld(true); root.userData.meshes.forEach(m => { let v = keepAll || m.visible; for (let o = m.parent; v && o && o !== root; o = o.parent) v = o.visible; if (v) b.expandByObject(m); }); return b; };
+  const shown = m => { let v = keepAll || m.visible; for (let o = m.parent; v && o && o !== root; o = o.parent) v = o.visible; return v; };
+  const bounds = list => { const b = new THREE.Box3(); list.forEach(m => { if (shown(m)) skinBoxOf(m, b); }); return b; };
+  /* a box is what its printed picture wraps, give or take its plastic: a piece reaching much further on a side
+     the picture covers (a part left open in the model, a hidden one) is not the box */
+  const measure = () => {
+    root.updateMatrixWorld(true); const all = bounds(root.userData.meshes); if (!art || !art.length || all.isEmpty()) return all;
+    const a = bounds(art); if (a.isEmpty()) return all;
+    ['x', 'y', 'z'].forEach(k => { if (a.max[k] - a.min[k] < .5) return; all.min[k] = Math.max(all.min[k], a.min[k] - .6); all.max[k] = Math.min(all.max[k], a.max[k] + .6); });
+    return all;
+  };
   let box = measure(), size = box.getSize(new V3());
   const s = Math.min(1, maxW / size.x, maxH / size.y); if (s < 1) { root.scale.setScalar(s); box = measure(); size = box.getSize(new V3()); }
   root.position.copy(box.getCenter(new V3())).negate(); root.updateMatrixWorld(true);
@@ -94,17 +123,17 @@ function skinFitBox(root, key) {
   const spine = F.filter(f => f !== front && f !== back && f.key[0] !== front.key[0]).sort((a, b) => b.area - a.area).find(f => !back || (uMid(f) > Math.min(uMid(front), uMid(back)) - .05 && uMid(f) < Math.max(uMid(front), uMid(back)) + .05));
   const flipOf = f => { const c = new V3().crossVectors(f.gu, f.gv); return c.dot(f.n) < 0; };
   root.userData.rects = { front: front && { u0: front.u0, u1: front.u1, v0: front.v0, v1: front.v1, flip: flipOf(front) }, back: back && { u0: back.u0, u1: back.u1, v0: back.v0, v1: back.v1, flip: flipOf(back) }, spine: spine && { u0: spine.u0, u1: spine.u1, v0: spine.v0, v1: spine.v1, flip: back ? flipOf(front) : flipOf(spine), turn: spine.v1 - spine.v0 < spine.u1 - spine.u0 } };
-  const max = skinMax(key), size = skinPlace(root, right, up, axis, max.w, max.h);
+  const max = skinMax(key), size = skinPlace(root, right, up, axis, max.w, max.h, false, (root.userData.art || []).length ? root.userData.art : null);
   return { w: +size.x.toFixed(2), h: +size.y.toFixed(2), d: +size.z.toFixed(2) };
 }
 /* a medium, measured: the label to the front, the end with the socket (the end that goes in) down */
 function skinFitMedium(root) {
   const A = root.userData.anchors; root.updateMatrixWorld(true);
-  const all = new THREE.Box3(); root.userData.meshes.forEach(m => { if (m.visible) all.expandByObject(m); });
+  const all = new THREE.Box3(); root.userData.meshes.forEach(m => { if (m.visible) skinBoxOf(m, all); });
   const size0 = all.getSize(new V3()), ctr = all.getCenter(new V3());
   const thin = size0.x <= size0.y && size0.x <= size0.z ? new V3(1, 0, 0) : size0.y <= size0.z ? new V3(0, 1, 0) : new V3(0, 0, 1);
   let n = thin.clone();
-  if (A.label) { const F = skinFaces(root, [A.label]); if (F[0]) { const f = F[0], k = f.key[0]; n = new V3(k === 'x' ? 1 : 0, k === 'y' ? 1 : 0, k === 'z' ? 1 : 0); const lc = new THREE.Box3().setFromObject(A.label).getCenter(new V3()).sub(ctr).dot(n); if (Math.abs(lc) > .02 ? lc < 0 : n.dot(f.n) < 0) n.negate(); } }
+  if (A.label) { const F = skinFaces(root, [A.label]); if (F[0]) { const f = F[0], k = f.key[0]; n = new V3(k === 'x' ? 1 : 0, k === 'y' ? 1 : 0, k === 'z' ? 1 : 0); const lc = skinBoxOf(A.label, new THREE.Box3()).getCenter(new V3()).sub(ctr).dot(n); if (Math.abs(lc) > .02 ? lc < 0 : n.dot(f.n) < 0) n.negate(); } }
   else if (n.dot(new V3(1, 1, 1)) < 0) n.negate();
   let down = A.male ? A.male.getWorldPosition(new V3()).sub(ctr).projectOnPlane(n) : new V3();
   /* a socket in the middle (a cassette) says nothing: the short side goes down, so it lies the long way */

@@ -330,7 +330,7 @@ function ugcDevice(root) {
   /* the socket in the model's space: where it is and its axes (the top of the model when it has none) */
   const sock = () => {
     root.updateMatrixWorld(true);
-    if (!A.socket) { const b = new THREE.Box3(); (root.userData.meshes || []).forEach(m => { if (m.visible) b.expandByObject(m); }); if (b.isEmpty()) b.setFromObject(root); return { p: new V3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2), x: new V3(1, 0, 0), y: new V3(0, 1, 0), z: new V3(0, 0, 1), guessed: true }; }
+    if (!A.socket) { const b = new THREE.Box3(); (root.userData.meshes || []).forEach(m => { if (m.visible) skinBoxOf(m, b); }); if (b.isEmpty()) b.setFromObject(root); return { p: new V3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2), x: new V3(1, 0, 0), y: new V3(0, 1, 0), z: new V3(0, 0, 1), guessed: true }; }
     const e = A.socket.matrixWorld.elements;
     return { p: new V3().setFromMatrixPosition(A.socket.matrixWorld), x: new V3(e[0], e[1], e[2]).normalize(), y: new V3(e[4], e[5], e[6]).normalize(), z: new V3(e[8], e[9], e[10]).normalize() };
   };
