@@ -38,7 +38,7 @@ function renderTip() {
   const g = c.g, idle = g.last === null || g.last === undefined ? g.added : g.last;
   if (g.music) { tipEl.innerHTML = `<b>${esc(g.t)}</b><span>${esc([musicSub(g), g.year, T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</span>`; tipEl.hidden = false; placeTip(); return; }
   const extra = g.wrapped ? ' · ' + T('precintado') : g.dust > .3 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : '';
-  tipEl.innerHTML = `<b>${esc(g.t)}</b><span>${fmtH(g.hours)} · ${esc(g.status ? TD(g.status) : T('Sin estado'))}${extra}</span>`; tipEl.hidden = false; placeTip();
+  tipEl.innerHTML = `<b>${g.favorite ? '<i class="tip-fav" aria-hidden="true">★</i> ' : ''}${esc(g.t)}</b><span>${fmtH(g.hours)} · ${esc(g.status ? TD(g.status) : T('Sin estado'))}${extra}</span>`; tipEl.hidden = false; placeTip();
 }
 const _tipV = new V3();
 function placeTip() {
@@ -49,7 +49,7 @@ function placeTip() {
 }
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), ms); }
 
-function setMode(m) { mode = m; renderMini(); renderBag(); renderFilter(); renderRlBtn(); if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
+function setMode(m) { mode = m; renderMini(); renderBag(); renderFilter(); renderRlBtn(); if (m === 'shelf' && STAGE.dirty) { STAGE.dirty = false; applyStage(curSysKey()); } $('#sysbar').classList.toggle('away', m !== 'shelf'); $('#pills').classList.toggle('away', m !== 'shelf' && m !== 'loading'); renderPrompts(); renderInfo(); renderTip(); $('#play').hidden = m !== 'playing'; if (m !== 'open') hoverPart = null; canvasEl.style.cursor = 'default'; }
 const btn = (k, label, a, primary) => `<button class="pbtn${primary ? ' primary' : ''}" type="button" data-act="${a}"><kbd>${k}</kbd>${label}</button>`;
 function tearHintText(c) { return c.tear > .05 ? T('Precinto {0} % · sigue tirando', Math.round(100 * c.tear / c.L)) : T('Arrastra la lengüeta roja para quitar el precinto'); }
 function renderPrompts() {

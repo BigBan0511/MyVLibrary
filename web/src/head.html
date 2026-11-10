@@ -231,6 +231,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 .fav-btn:hover{color:var(--amber);border-color:var(--amber)}
 .fav-btn[aria-pressed="true"]{color:#1b1509;background:var(--amber);border-color:var(--amber)}
 .fav-btn:active{transform:scale(.9)}
+.tip-fav{font-style:normal;color:var(--amber)}
 .info dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:14px}
 .info dt{color:var(--ink-dim)}
 .info dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
@@ -545,6 +546,9 @@ button,select,input,textarea{font:inherit;color:inherit}
   .tools{flex-wrap:wrap;row-gap:4px}
   .pills{order:9;flex:1 1 100%}
   .pills>:first-child{margin-left:auto}
+  /* on their own row they would lie across a game held in your hands: they step aside, as the system's name does */
+  .pills{transition:opacity .25s}
+  .pills.away{opacity:0;pointer-events:none}
   .field input{width:84px;transition:width .15s}
   .field input:focus,.field input:not(:placeholder-shown){width:130px}
 }

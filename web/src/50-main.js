@@ -149,9 +149,12 @@ window.addEventListener('keydown', e => {
   if (tag === 'INPUT' || tag === 'SELECT') { if (e.key === 'Escape') tg.blur(); return; }
   if (tag === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
   if (e.key === 'Escape' && !$('#lib').hidden) { libClose(); return; }
-  if (e.key === 'Escape' && !setPop.hidden) { setPop.hidden = true; return; }
+  /* (the button goes out with its panel: it used to stay lit after Esc) */
+  if (e.key === 'Escape' && !setPop.hidden) { setPop.hidden = true; setBtn.setAttribute('aria-expanded', 'false'); return; }
   if (e.key === 'Escape' && !$('#filterPop').hidden) { closeFilterPop(); return; }
   if (LIB.hostPad && /^(Arrow|Page)/.test(e.key) && LIB.dupe(e.key, 'key')) { e.preventDefault(); return; }
+  /* with Ctrl, Alt or the Windows key held, the key is for the system or the browser (Ctrl+R, Ctrl+Shift+I…), not a shortcut of the shelf */
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
   sfx.init(); if (handleKey(e.key)) e.preventDefault();
 });
 const gp = { prev: {}, stickT: 0 };

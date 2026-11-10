@@ -100,11 +100,11 @@ function showTick(now) {
   showStep(now);
 }
 /* what stops it: keys, clicks, the wheel and a touch (swallowed while it was on), and the mouse really moving */
-['keydown', 'pointerdown', 'wheel', 'touchstart'].forEach(ev => window.addEventListener(ev, e => {
+['keydown', 'pointerdown', 'wheel', 'touchstart'].forEach(ev => { const passive = ev === 'wheel' || ev === 'touchstart'; window.addEventListener(ev, e => {
   if (!showPoke()) return;
-  e.stopImmediatePropagation(); if (e.cancelable) e.preventDefault();
+  e.stopImmediatePropagation(); if (!passive && e.cancelable) e.preventDefault();
   if (ev === 'pointerdown') SHOW.eat = true;
-}, { capture: true, passive: false }));
+}, { capture: true, passive }); });
 ['pointerup', 'click'].forEach(ev => window.addEventListener(ev, e => { if (!SHOW.eat) return; e.stopImmediatePropagation(); if (e.cancelable) e.preventDefault(); if (ev === 'click') SHOW.eat = false; else setTimeout(() => { SHOW.eat = false; }, 60); }, { capture: true }));
 window.addEventListener('pointermove', e => {
   if (SHOW.mx < 0) { SHOW.mx = e.clientX; SHOW.my = e.clientY; return; }

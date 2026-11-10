@@ -22,15 +22,17 @@ function gfxBase() { return Math.min(window.devicePixelRatio || 1, 2); }
 function gfxScale() { const m = gfxMode(); return m === 'high' ? 1 : m === 'low' ? .72 : GFX.steps[GFX.i]; }
 /* the sharpness and the shadows that go with the choice (and with where Automatic stands) */
 function gfxApply() {
-  const s = gfxScale(), pr = Math.max(.5, gfxBase() * s);
+  const s = gfxScale(), pr = Math.max(.6, gfxBase() * s);
   if (Math.abs(renderer.getPixelRatio() - pr) > .001) { renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight, false); }
   const sh = gfxMode() === 'low' || s <= .6 ? 1024 : 2048;
   if (sh !== GFX.shadow) { GFX.shadow = sh; key.shadow.mapSize.set(sh, sh); if (key.shadow.map) { key.shadow.map.dispose(); key.shadow.map = null; } }
   document.documentElement.classList.toggle('gfx-low', gfxMode() === 'low');
   gfxNote();
 }
+/* the softest step allowed: never under six tenths of a picture's dot per dot of the screen, where it stops looking soft and starts looking broken */
+function gfxFloor() { let n = 0; GFX.steps.forEach((s, i) => { if (gfxBase() * s >= .6) n = i; }); return n; }
 function gfxSet(i) {
-  i = clamp(i, 0, GFX.steps.length - 1); if (i === GFX.i) return;
+  i = clamp(i, 0, gfxFloor()); if (i === GFX.i) return;
   GFX.i = i; GFX.skip = 2; GFX.bad = GFX.good = 0; gfxApply();
   /* where it settled is where it starts the next time */
   clearTimeout(GFX.saveT); GFX.saveT = setTimeout(() => { prefs.gfxAt = GFX.i; savePrefs(); }, 4000);
@@ -54,7 +56,7 @@ function gfxTick(now) {
   }
   if (fps < 48) {
     GFX.good = 0;
-    if (++GFX.bad >= 2 && GFX.i < GFX.steps.length - 1) {
+    if (++GFX.bad >= 2 && GFX.i < gfxFloor()) {
       /* stepping up just before did this: that step stays out of reach for a while */
       if (now - GFX.upT < 12000) { GFX.ceil = GFX.i + 1; GFX.ceilT = now; }
       GFX.before = fps; GFX.tried = 1; gfxSet(GFX.i + 1);
@@ -78,7 +80,7 @@ function gfxNote() {
   const pct = Math.round(gfxScale() * 100), fps = GFX.fps ? Math.round(GFX.fps) : 0;
   el.textContent = fps ? T('Ahora: {0} imágenes por segundo, nitidez al {1} %.', fps, pct) : T('Ahora: nitidez al {0} %.', pct);
 }
-if (gfxMode() === 'auto' && Number.isInteger(prefs.gfxAt)) GFX.i = clamp(prefs.gfxAt, 0, GFX.steps.length - 1);
+if (gfxMode() === 'auto' && Number.isInteger(prefs.gfxAt)) GFX.i = clamp(prefs.gfxAt, 0, gfxFloor());
 gfxApply();
 /* moved to a screen with another scale: the sharpness follows */
 window.addEventListener('resize', gfxApply);
