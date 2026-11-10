@@ -160,8 +160,10 @@ function pollGamepad(dt) {
   let pads; try { pads = navigator.getGamepads ? navigator.getGamepads() : []; } catch (e) { return; }
   const p = pads && Array.from(pads).find(Boolean); if (!p) return;
   const map = { 0: 'Enter', 1: 'Escape', 2: 'm', 3: 'f', 4: 'q', 5: 'e', 6: 'z', 7: 'c', 8: 'i', 9: 'Enter', 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight' };
-  for (const k in map) { const on = !!(p.buttons[k] && p.buttons[k].pressed); if (on && !gp.prev[k]) { sfx.init(); handleKey(map[k]); } gp.prev[k] = on; }
   const ax = p.axes[0] || 0, ay = p.axes[1] || 0; gp.stickT -= dt;
+  /* the pad counts as someone being there: it wakes the room behind a game and stops the showcase (that press does nothing else) */
+  if (p.buttons.some(b => b && b.pressed) || Math.abs(ax) > .5 || Math.abs(ay) > .5) { gfxWake(); if (showPoke()) { for (const k in map) gp.prev[k] = !!(p.buttons[k] && p.buttons[k].pressed); gp.stickT = .3; return; } }
+  for (const k in map) { const on = !!(p.buttons[k] && p.buttons[k].pressed); if (on && !gp.prev[k]) { sfx.init(); handleKey(map[k]); } gp.prev[k] = on; }
   if (gp.stickT <= 0 && (Math.abs(ax) > .6 || Math.abs(ay) > .6)) { gp.stickT = .16; handleKey(Math.abs(ax) > Math.abs(ay) ? (ax > 0 ? 'ArrowRight' : 'ArrowLeft') : (ay > 0 ? 'ArrowDown' : 'ArrowUp')); }
 }
 function onResize() {
@@ -187,6 +189,8 @@ function frame(now) {
   requestAnimationFrame(frame);
   /* the room waits behind the open manual (and leaves the page free to draw a real manual's pages) */
   if (LIB.paused || document.hidden || (mode === 'manual' && !book.anim && !$('#manual').hidden)) { lastT = now; return; }
+  /* a game is running in front of the shelf: the room leaves it the graphics card (43-gfx.js) */
+  if (gfxResting(now)) return;
   const dt = clamp((now - lastT) / 1000, 0, .05); lastT = now;
   runTweens(now); updateCamera(dt); updateLens(dt, now); if (RL.group.visible) updateRoulette(dt, now);
   /* while zoomed the view still drifts a little with the mouse parallax: keep the hover on what is under the mouse */
@@ -208,7 +212,7 @@ function frame(now) {
   updateParticles(dt); updateMotes(dt, now); updateContacts();
   drawTV(now); updateTvLight(now); drawBoard(); updateBackTrailer(now);
   if (mode === 'playing') { const m = Math.max(0, Math.floor((now - playStart) / 1000)); $('#playTime').textContent = PLAYNITE ? `${String(Math.floor(m / 3600)).padStart(2, '0')}:${String(Math.floor(m / 60) % 60).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
-  renderer.render(scene, camera);
+  renderer.render(scene, camera); gfxTick(now); showTick(now);
   if (!tipEl.hidden) placeTip();
 }
 
@@ -246,7 +250,7 @@ async function boot() {
   if (PLAYNITE && LIB.running && LIB.running.length) { const r = LIB.running[0]; setTimeout(() => restorePlaying(r.id, r.seconds), 600); }
   else if (LIB.focusId) { const id = LIB.focusId; LIB.focusId = null; setTimeout(() => LIB.focusGame(id), 900); }
 }
-window.__mvl = { discAt: () => { if (!active || !active.disc) return null; const p = active.disc.getWorldPosition(new V3()).project(camera); return [(p.x + 1) / 2 * innerWidth, (1 - p.y) / 2 * innerHeight, active.g.fmt]; }, modelsRead, libOpen, uMeta: () => prefs.ugc, skinRoot: () => active && active.skin && active.skin.root, skinPlan: () => { const s = active && active.skin; if (!s) return null; const q = new EU().setFromQuaternion(s.view.q), g = v => +v.toFixed(2); return { time: g(skinTime(active)), pull: s.pull ? g(s.pull.len) : 0, way: s.pull ? s.pull.v.toArray().map(g) : null, man: !!s.manual, w: g(s.view.w), h: g(s.view.h), home: active.discHome.toArray().map(g), say: `yaw ${g(q.y)} pitch ${g(q.x)} pull ${s.pull ? g(s.pull.len) : 0} man ${!!s.manual}` }; }, skin: () => active && { dim: active.dim.skin, worn: !!active.skin, disc: !!(active.disc && active.disc.userData.skin), home: active.discHome.toArray() }, decoFake: async (id, name, w, h, d, col) => {
+window.__mvl = { renderInfo: () => renderer.info.render.frame, gfx: () => ({ mode: gfxMode(), i: GFX.i, fps: +GFX.fps.toFixed(1), scale: gfxScale(), pr: +renderer.getPixelRatio().toFixed(3), shadow: GFX.shadow, gaveUp: GFX.gaveUp }), show: () => ({ on: SHOW.on, n: SHOW.n, own: SHOW.own ? SHOW.own.g.t : null, hovered: hovered ? hovered.g.t : null, hush: !!sfx.hush }), showNow: () => { SHOW.idle = -1e9; }, discAt: () => { if (!active || !active.disc) return null; const p = active.disc.getWorldPosition(new V3()).project(camera); return [(p.x + 1) / 2 * innerWidth, (1 - p.y) / 2 * innerHeight, active.g.fmt]; }, modelsRead, libOpen, uMeta: () => prefs.ugc, skinRoot: () => active && active.skin && active.skin.root, skinPlan: () => { const s = active && active.skin; if (!s) return null; const q = new EU().setFromQuaternion(s.view.q), g = v => +v.toFixed(2); return { time: g(skinTime(active)), pull: s.pull ? g(s.pull.len) : 0, way: s.pull ? s.pull.v.toArray().map(g) : null, man: !!s.manual, w: g(s.view.w), h: g(s.view.h), home: active.discHome.toArray().map(g), say: `yaw ${g(q.y)} pitch ${g(q.x)} pull ${s.pull ? g(s.pull.len) : 0} man ${!!s.manual}` }; }, skin: () => active && { dim: active.dim.skin, worn: !!active.skin, disc: !!(active.disc && active.disc.userData.skin), home: active.discHome.toArray() }, decoFake: async (id, name, w, h, d, col) => {
     const geo = new THREE.BoxGeometry(w, h, d), A = geo.attributes;
     const parsed = { roots: [{ name: id, go: 1, active: true, p: { x: 0, y: 0, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 }, s: { x: 1, y: 1, z: 1 }, mesh: { n: A.position.count, pos: { arr: new Float32Array(A.position.array), dim: 3 }, nrm: { arr: new Float32Array(A.normal.array), dim: 3 }, subs: [Array.from(geo.index.array)] }, mats: [{ name: 'm', col: { _Color: col }, fl: {}, tex: {}, shader: '', keywords: '' }], kids: [] }], anim: null, info: { name, type: '', system: '' } };
     await UGCS.tx('readwrite', st => st.put({ parsed }, 'emuvr:' + id)); prefs.emuvr = (prefs.emuvr || []).filter(b => b.id !== id).concat([{ id, name, sys: '' }]); savePrefs();

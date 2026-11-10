@@ -57,7 +57,7 @@ function renderPrompts() {
   if (mode === 'shelf') {
     const gr = groups[curGroup], np = gr ? gr.pages.length : 1;
     if (np > 1) h += `<div class="pager"><button class="pbtn icon" type="button" data-act="prevPage" aria-label="${T('Página anterior')}"${curPage === 0 ? ' disabled' : ''}>‹</button><span class="pg">${curPage + 1} / ${np}</span><button class="pbtn next" type="button" data-act="nextPage"${curPage >= np - 1 ? ' disabled' : ''}>${T('Siguiente')} <i aria-hidden="true">›</i></button></div>`;
-    h += coarse ? `<span class="hint">${T('Toca un lomo para sacar el juego')}</span>` : isRooms() ? `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('sistemas')} · <kbd>Z</kbd><kbd>C</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>` : `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>`;
+    h += SHOW.on ? `<span class="hint">${T('Escaparate · pulsa cualquier tecla para volver')}</span>` : coarse ? `<span class="hint">${T('Toca un lomo para sacar el juego')}</span>` : isRooms() ? `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('sistemas')} · <kbd>Z</kbd><kbd>C</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>` : `<span class="hint">${T('Clic en un lomo')} · <kbd>←</kbd><kbd>→</kbd> ${T('recorrer')} · <kbd>Q</kbd><kbd>E</kbd> ${T('estantes')} · <kbd>${T('Intro')}</kbd> ${T('sacar')}</span>`;
   }
   if (mode === 'inspect' && active) {
     if (active.wrap) {
@@ -71,6 +71,8 @@ function renderPrompts() {
   if (mode === 'playing') h = btn('Esc', active.g.video ? mediaT(active.g, 'Sacar el disco') : PLAYNITE ? mediaT(active.g, 'Sacar el disco') : T('Cerrar el juego'), 'quit', true);
   if (mode === 'hifi' || (active && active.g.music && (mode === 'inspect' || mode === 'open'))) h = musicPrompts();
   if (mode === 'roulette') h = rlPrompts();
+  /* the showcase has its own line, whatever it is holding */
+  if (SHOW.on && mode !== 'shelf') h = `<span class="hint">${T('Escaparate · pulsa cualquier tecla para volver')}</span>`;
   el.innerHTML = h;
   if (typeof renderEpBar === 'function') renderEpBar();
 }
@@ -174,14 +176,14 @@ function renderInfo(force) {
   tab.hidden = true;
   if (active.g.music) { const g = active.g, mk = ['m', g.id, g.fmt, BAG.length, BAG.map(t => t.id).join(',').length].join('|'); el.hidden = false; if (!force && mk === lastInfoKey) return; lastInfoKey = mk; el.classList.add('open'); renderMusicInfo(el, g); return; }
   if (active.g.video) { const g = active.g, s = seasonOf(g), vk = ['v', g.id, g.fmt, g.seasonIdx, g.seasons ? g.seasons.length : 0, s && s.eps ? s.eps.length : -1, g.pos, g.played].join('|'); el.hidden = false; if (!force && vk === lastInfoKey) return; lastInfoKey = vk; el.classList.add('open'); renderVideoInfo(el, g); return; }
-  const g = active.g, key = [g.id, g.fmt, g.installed, g.scanKey, g.manualVer, g.manualOwn, g.platFull, PLATFORMS.length, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
+  const g = active.g, key = [g.id, g.fmt, g.installed, !!g.favorite, g.scanKey, g.manualVer, g.manualOwn, g.platFull, PLATFORMS.length, g.hours, g.status, g.last, g.sessions, g.cats.join(','), infoEdit, infoOpen, newStatus, prefs.cats.length, STATUSES.length, Math.round(g.dust * 4)].join('|');
   el.hidden = false; if (!force && key === lastInfoKey) return; lastInfoKey = key;
   const idle = g.last === null || g.last === undefined ? g.added : g.last;
   const dustTxt = T(g.wrapped ? 'Ninguno, está precintado' : g.dust > .6 ? 'Mucho' : g.dust > .25 ? 'Algo' : g.dust > .04 ? 'Poco' : 'Limpio');
   const note = T(PLAYNITE ? 'Los cambios se guardan en Playnite al momento.' : 'Si cambias el estado, al devolverlo irá a ese estante.');
   const statuses = g.status && !STATUSES.includes(g.status) ? [g.status, ...STATUSES] : STATUSES;
   el.classList.toggle('open', infoOpen);
-  el.innerHTML = `<div class="info-bar"><button type="button" class="info-more" data-more="1" aria-expanded="${infoOpen}">${infoOpen ? T('Menos') : T('Estado y categorías')}</button><button type="button" class="info-hide" data-hide="1" aria-label="${T('Ocultar la ficha')}" title="${T('Ocultar la ficha')} (I) · ${T('Arrastra para moverla')}">${T('Ocultar')} <i aria-hidden="true">▴</i></button></div><div class="eyebrow">${esc([g.genre, g.year, g.real ? g.plat : T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</div><h2>${esc(g.t)}</h2>
+  el.innerHTML = `<div class="info-bar"><button type="button" class="info-more" data-more="1" aria-expanded="${infoOpen}">${infoOpen ? T('Menos') : T('Estado y categorías')}</button><button type="button" class="info-hide" data-hide="1" aria-label="${T('Ocultar la ficha')}" title="${T('Ocultar la ficha')} (I) · ${T('Arrastra para moverla')}">${T('Ocultar')} <i aria-hidden="true">▴</i></button></div><div class="eyebrow">${esc([g.genre, g.year, g.real ? g.plat : T(DIMS[g.fmt].name)].filter(Boolean).join(' · '))}</div><div class="info-title"><h2>${esc(g.t)}</h2><button type="button" class="fav-btn" data-fav="1" aria-pressed="${!!g.favorite}" aria-label="${T('Favorito')}" title="${T(g.favorite ? 'Quitar de favoritos' : 'Marcar como favorito')}">${g.favorite ? '★' : '☆'}</button></div>
     <dl><dt>${T('Jugado')}</dt><dd>${fmtH(g.hours)}${g.sessions ? ' · ' + T(g.sessions === 1 ? '{0} vez' : '{0} veces', g.sessions) : ''}</dd><dt>${T('Última vez')}</dt><dd>${lastText(g.last)}</dd>${g.ach[1] ? `<dt>${T('Logros')}</dt><dd>${T('{0} de {1}', g.ach[0], g.ach[1])}</dd>` : ''}<dt>${T('Polvo')}</dt><dd>${dustTxt}${g.dust > .04 && idle != null ? ' · ' + T('{0} sin tocar', spanText(idle)) : ''}</dd></dl>
     <div class="frow"><label for="stSel">${T('Estado')}</label><span class="pill ${STATUS_CLASS[g.status] || 'st-sin'}" aria-hidden="true"></span><select id="stSel">${g.status ? '' : `<option value="" selected>${T('Sin estado')}</option>`}${statuses.map(s => `<option value="${esc(s)}"${s === g.status ? ' selected' : ''}>${esc(TD(s))}</option>`).join('')}<option value="__new">+ ${T('Nuevo estado…')}</option></select></div>
     <div class="frow"><label for="fmtSel">${T('Formato')}</label><span class="fmt-ico" aria-hidden="true">${FMT_ICON[g.fmt] || ''}</span><select id="fmtSel"${fmtLocked(g) ? ' disabled' : ''}>${GAME_FMTS.map(f => `<option value="${f}"${f === g.fmt ? ' selected' : ''}>${esc(T(DIMS[f].name))}</option>`).join('')}</select></div>
@@ -265,6 +267,8 @@ $('#info').addEventListener('click', e => {
   if (!active) return;
   if (e.target.closest('[data-more]')) { infoOpen = !infoOpen; renderInfo(true); return; }
   if (e.target.closest('[data-hide]')) { setCard('hide'); return; }
+  /* the star: Playnite's own favourite mark; the game gains (or leaves) the Favourites shelf when it goes back */
+  if (e.target.closest('[data-fav]')) { const g = active.g; g.favorite = !g.favorite; gameChanged(active, ['favorite'], true); sfx.tick(); toast(T(g.favorite ? 'Favorito: tiene su estante, «★ Favoritos»' : 'Ya no es favorito'), 2200); const b = $('#info .fav-btn'); if (b) b.focus({ preventScroll: true }); return; }
   const ga = e.target.closest('[data-gact]'); if (ga) { gameAct(active.g, ga.dataset.gact); return; }
   const ar = e.target.closest('[data-art]'); if (ar && PLAYNITE) { pickArt(ar.dataset.art); return; }
   if (e.target.closest('[data-fit]') && PLAYNITE) { openFit(active.g); return; }
@@ -408,7 +412,7 @@ function renderSettings() {
   setPop.querySelectorAll('[data-tab-btn]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tabBtn === prefs.setTab)));
   setPop.querySelectorAll('[data-tab]').forEach(r => { r.hidden = r.dataset.tab !== prefs.setTab; });
   const mv = $('#mvolRange'); if (mv) { mv.value = prefs.mvol; $('#mvolVal').textContent = prefs.mvol + ' %'; }
-  renderUgcList(); renderDecoList(); const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); }
+  renderUgcList(); renderDecoList(); const vr = $('#volRange'); if (vr) { vr.value = prefs.vol; $('#volVal').textContent = prefs.vol + ' %'; } setPop.querySelectorAll('[data-pref]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(prefs[seg.dataset.pref] === b.dataset.v)))); renderRoomPick(); gfxNote(); }
 function renderRoomPick() {
   const el = $('#roomPick'); if (!el) return;
   el.innerHTML = ROOM_ORDER.map(k => { const R = ROOMS[k]; return `<button type="button" class="room" data-room="${k}" aria-pressed="${prefs.room === k}"><i style="background:linear-gradient(90deg,${R.sw[0]} 0 45%,${R.sw[1]} 45% 72%,${R.sw[2]} 72%)"></i><span>${T(R.name)}</span></button>`; }).join('');
@@ -434,6 +438,7 @@ setPop.addEventListener('click', e => {
   const all = e.target.closest('[data-all]'); if (all) { setMusicBulk(['album', 'playlist', 'song'], all.dataset.all); sfx.tick(); return; }
   const b = e.target.closest('button[data-v]'); if (!b) return; const k = b.closest('[data-pref]').dataset.pref; if (prefs[k] === b.dataset.v) return; prefs[k] = b.dataset.v; savePrefs(); renderSettings();
   if (k === 'light') applyLight(prefs.light);
+  if (k === 'gfx') { GFX.gaveUp = false; GFX.useless = 0; GFX.ceil = 0; if (prefs.gfx !== 'auto') { GFX.i = 0; delete prefs.gfxAt; savePrefs(); } gfxApply(); }
   if (k === 'sound') { sfx.on = prefs.sound !== 'off'; if (sfx.on) sfx.tick(); if (trailer.video) trailer.video.volume = trailerVolume(); }
   if (k === 'trailer') { if (active && (mode === 'inspect' || mode === 'open')) { stopTrailer(); startTrailer(active); } }
   if (k === 'layout') setLayout(prefs.layout);
@@ -452,7 +457,7 @@ document.addEventListener('pointerdown', e => {
 });
 
 /* ---------- the filter: every game, only the installed ones, or one of Playnite's saved filters ---------- */
-function filterChoices() { return [['all', T('Todos los juegos')], ['installed', T('Solo los instalados')], ...PRESETS.map(p => ['p:' + p.id, p.name])]; }
+function filterChoices() { return [['all', T('Todos los juegos')], ['installed', T('Solo los instalados')], ['fav', T('Solo los favoritos')], ...PRESETS.map(p => ['p:' + p.id, p.name])]; }
 function filterName(f) { const c = filterChoices().find(c => c[0] === f); return c ? c[1] : T('Todos los juegos'); }
 function renderFilter() {
   const b = $('#filterBtn'), pop = $('#filterPop'); if (!b) return;
@@ -468,7 +473,7 @@ function renderFilterPop() {
   const f = filterOf(), ch = filterChoices();
   /* each choice says how many games it leaves; one that leaves none cannot be picked */
   const item = ([v, name]) => { const n = filterCount(v); return `<button type="button" role="menuitemradio" aria-checked="${v === f}" data-filter="${esc(v)}"${n ? '' : ' disabled'}><b>${esc(name)}</b><span>${n}</span></button>`; };
-  $('#filterPop').innerHTML = ch.slice(0, 2).map(item).join('') + (PRESETS.length ? `<div class="pop-title">${T('Filtros de Playnite')}</div>` + ch.slice(2).map(item).join('') : PLAYNITE ? `<p class="filter-note">${T('Los filtros que guardes en Playnite aparecerán aquí.')}</p>` : '');
+  $('#filterPop').innerHTML = ch.slice(0, 3).map(item).join('') + (PRESETS.length ? `<div class="pop-title">${T('Filtros de Playnite')}</div>` + ch.slice(3).map(item).join('') : PLAYNITE ? `<p class="filter-note">${T('Los filtros que guardes en Playnite aparecerán aquí.')}</p>` : '');
 }
 function closeFilterPop() { $('#filterPop').hidden = true; $('#filterBtn').setAttribute('aria-expanded', 'false'); }
 $('#filterBtn').addEventListener('click', () => {
@@ -508,6 +513,8 @@ function checkFilter() {
   const name = filterName(f); prefs.filter = 'all'; savePrefs(); renderFilter(); toast(T('«{0}» se ha quedado sin juegos: se quita el filtro', name), 2600); return true;
 }
 function syncHudHeight() { document.documentElement.style.setProperty('--hud-h', $('.hud-top').offsetHeight + 'px'); }
+/* the bar grows a row when the shelves drop under the buttons: what hangs below it follows */
+if (window.ResizeObserver) new ResizeObserver(() => syncHudHeight()).observe($('.hud-top'));
 
 /* =====================================================================
    ACTIONS

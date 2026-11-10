@@ -366,7 +366,7 @@ const sfx = {
   },
   vol: 1,
   setVolume(v) { this.vol = clamp(v, 0, 1); if (this.out) this.out.gain.setTargetAtTime(this.vol * this.vol, this.ctx.currentTime, .03); },
-  ok() { if (!this.on) return false; this.init(); if (!this.ctx) return false; if (this.ctx.state === 'suspended') this.ctx.resume(); return true; },
+  ok() { if (!this.on || this.hush) return false; this.init(); if (!this.ctx) return false; if (this.ctx.state === 'suspended') this.ctx.resume(); return true; },
   buffer(name, arg) {
     const key = name + '|' + (arg || ''), list = this.cache.get(key) || [], want = SFX_VARIANTS[name] || 1;
     if (list.length < want) {
