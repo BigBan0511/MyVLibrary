@@ -43,6 +43,9 @@ if (target === 'demo') {
   }
   writeFileSync(join(out, 'fonts', 'fonts.css'), css);
   copyFileSync(join(here, 'node_modules', 'three', 'build', 'three.min.js'), join(out, 'vendor', 'three.min.js'));
+  /* three.js's own glTF loader, fetched only when a .glb model is used (14-glb.js) */
+  copyFileSync(join(here, 'node_modules', 'three', 'examples', 'js', 'loaders', 'GLTFLoader.js'), join(out, 'vendor', 'GLTFLoader.js'));
+  copyFileSync(join(here, 'node_modules', 'three', 'LICENSE'), join(out, 'vendor', 'three.js-LICENSE.txt'));
   /* pdf.js, loaded only when a game's real manual is opened (as .js, so the page's server gives it a script's type) */
   copyFileSync(join(here, 'node_modules', 'pdfjs-dist', 'build', 'pdf.min.mjs'), join(out, 'vendor', 'pdf.min.js'));
   copyFileSync(join(here, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs'), join(out, 'vendor', 'pdf.worker.min.js'));

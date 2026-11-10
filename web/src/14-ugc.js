@@ -539,7 +539,7 @@ const UGC = (() => {
   function dispose(root) {
     if (!root) return;
     root.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
-    (root.userData.materials || []).forEach(m => { ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap'].forEach(k => { if (m[k]) m[k].dispose(); }); unM(m); });
+    (root.userData.materials || []).forEach(m => { ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'alphaMap'].forEach(k => { if (m[k]) m[k].dispose(); }); unM(m); });
   }
   return { parse, peek, assemble, build, dispose, readBundle, readSerialized, readObject, pid };
 })();
