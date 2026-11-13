@@ -202,6 +202,7 @@ const LIB = {
     if (fields.includes('rating')) m.score = g.rating ? g.rating * 20 : null;
     if (fields.includes('notes')) m.notes = g.notes || '';
     if (fields.includes('platform')) m.platform = g.platId || '';
+    if (fields.includes('favorite')) m.favorite = !!g.favorite;
     this.send('update', m);
   },
 
@@ -361,6 +362,7 @@ const LIB = {
   dupe(key, from) { const now = performance.now(), r = this.recent, d = r.key === key && r.from !== from && now - r.t < 160; this.recent = { key, t: now, from }; return d; },
   pad(button, state) {
     this.hostPad = true; if (state !== 'Pressed') return;
+    gfxWake(); if (showPoke()) return;
     const map = { A: 'Enter', B: 'Escape', X: 'm', Y: 'f', Start: 'Enter', Back: 'i', LeftShoulder: 'q', RightShoulder: 'e', TriggerLeft: 'z', TriggerRight: 'c', DPadUp: 'ArrowUp', DPadDown: 'ArrowDown', DPadLeft: 'ArrowLeft', DPadRight: 'ArrowRight', LeftStickUp: 'ArrowUp', LeftStickDown: 'ArrowDown', LeftStickLeft: 'ArrowLeft', LeftStickRight: 'ArrowRight' };
     const k = map[button]; if (!k) return;
     if (this.dupe(k, 'pad')) return;
@@ -435,7 +437,7 @@ const MOCKHOST = {
       const left = /leftover/.test(location.search); if (left) setTimeout(() => this.post({ type: 'tracking', id: m.id }), 5000);
       this.stopT = setTimeout(() => { this.post({ type: 'stopped', id: m.id, seconds: 754, active: !document.hidden }); if (r) { r.playtime += 754; r.playCount++; r.lastActivity = new Date().toISOString(); this.post({ type: 'games', games: [r] }); } }, left ? 45000 : 14000); }
     if (m.type === 'manual') { const r = this.lib.find(q => q.id === m.id); if (r && m.act === 'remove') { r.manual = null; this.post({ type: 'games', games: [r] }); } return; }
-    if (m.type === 'update') { const r = this.lib.find(q => q.id === m.id); if (r) { if (m.platform !== undefined) { const p = this.plats[+String(m.platform).slice(1)]; if (p) r.plats = [p]; } if ('status' in m) r.status = m.status; if (m.cats) r.cats = m.cats; if ('score' in m) r.score = m.score; if ('notes' in m) r.notes = m.notes; this.post({ type: 'games', games: [r] }); } console.log('[mock] update', m); }
+    if (m.type === 'update') { const r = this.lib.find(q => q.id === m.id); if (r) { if (m.platform !== undefined) { const p = this.plats[+String(m.platform).slice(1)]; if (p) r.plats = [p]; } if ('status' in m) r.status = m.status; if (m.cats) r.cats = m.cats; if ('score' in m) r.score = m.score; if ('favorite' in m) r.favorite = m.favorite; if ('notes' in m) r.notes = m.notes; this.post({ type: 'games', games: [r] }); } console.log('[mock] update', m); }
     if (m.type === 'release') { clearTimeout(this.stopT); console.log('[mock] release', m.id); }
     if (m.type === 'openUrl' || m.type === 'close') console.log('[mock]', m.type, m.url || '');
   },

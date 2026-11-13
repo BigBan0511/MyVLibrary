@@ -296,7 +296,7 @@ function persist() { try { localStorage.setItem(STORE, JSON.stringify(saved)); }
 function saveGame(g) {
   /* fmt is only kept when you chose it; otherwise each game keeps the format its platform suggests */
   if (PLAYNITE) { saved[g.id] = { wrapped: g.wrapped, tear: g.tear, dust: +(g.dust || 0).toFixed(3), dustAt: Date.now(), fmt: g.fmtPick || undefined, seasons: g.seasonPicks || undefined }; persist(); return; }
-  saved[g.id] = { hours: g.hours, sessions: g.sessions, last: g.last, status: g.status, wrapped: g.wrapped, tear: g.tear, dust: g.dust, notes: g.notes, rating: g.rating, ach: g.ach, cats: g.cats, fmt: g.fmtPick || undefined, seasons: g.seasonPicks || undefined }; persist();
+  saved[g.id] = { hours: g.hours, sessions: g.sessions, last: g.last, status: g.status, wrapped: g.wrapped, tear: g.tear, dust: g.dust, notes: g.notes, rating: g.rating, favorite: g.favorite || undefined, ach: g.ach, cats: g.cats, fmt: g.fmtPick || undefined, seasons: g.seasonPicks || undefined }; persist();
 }
 /* a film or a season keeps the family you chose (VHS, DVD, Blu-ray); a game the case you chose */
 function restoreFmt(g, s) {
@@ -316,7 +316,7 @@ const CAT0 = { faro: ['Partidas cortas', 'Favoritos'], turbo: ['Con amigos', 'Fa
 
 /* viewer preferences */
 const PREF_KEY = 'myvlibrary:prefs';
-const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'cine', hold: 'studio', zoom: 'on', near: 'off', wheel: 'page', corners: 'real', filter: 'all', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'rooms', sys: 'PC', fmtCon: 'lock', room: 'salon', mfAlb: 'year', mfPl: 'cd', mfSong: 'year', mixFmt: 'cd', flip: 'off', mvol: 70, setTab: 'general', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
+const prefs = { group: 'status', shelf: '__all', sort: 'alpha', light: 'cine', hold: 'studio', zoom: 'on', near: 'off', wheel: 'page', corners: 'real', filter: 'all', seal: 'ask', sound: 'on', vol: 80, trailer: 'on', autoStatus: 'off', card: 'show', cardStart: 'hide', cardPos: null, layout: 'rooms', sys: 'PC', fmtCon: 'lock', room: 'salon', mfAlb: 'year', mfPl: 'cd', mfSong: 'year', mixFmt: 'cd', flip: 'off', mvol: 70, setTab: 'general', gfx: 'auto', attract: '3', cats: PLAYNITE ? [] : ['Favoritos', 'Con amigos', 'Partidas cortas', 'Retro', 'Pendientes'] };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}); } catch (e) { }
 /* rooms by system arrived in 0.4: everyone starts there once; the older designs stay in Settings */
 if (prefs.layoutV !== 2) { prefs.layout = 'rooms'; prefs.layoutV = 2; }
@@ -385,7 +385,7 @@ function initDemoGames() {
     g.dust = g.wrapped ? 0 : dustFor(idle);
     g.notes = ''; g.artOpt = g.artOpt || {};
     const s = saved[g.id];
-    if (s) { for (const k of ['hours', 'sessions', 'last', 'status', 'wrapped', 'tear', 'dust', 'notes', 'rating', 'ach', 'cats']) if (k in s) g[k] = s[k]; restoreFmt(g, s); }
+    if (s) { for (const k of ['hours', 'sessions', 'last', 'status', 'wrapped', 'tear', 'dust', 'notes', 'rating', 'favorite', 'ach', 'cats']) if (k in s) g[k] = s[k]; restoreFmt(g, s); }
     resolveFmt(g);
     if (g.wrapped) { g.dust = 0; g.tear = g.tear || 0; }
     g.dust0 = g.dust;

@@ -23,6 +23,8 @@ namespace MyVLibrary
         public string status { get; set; }
         public List<string> cats { get; set; }
         public int? score { get; set; }
+        /* update: Playnite's own favourite mark */
+        public bool? favorite { get; set; }
         public string notes { get; set; }
         public string url { get; set; }
         public string name { get; set; }
@@ -764,6 +766,11 @@ namespace MyVLibrary
             if (m.fields.Contains("notes"))
             {
                 g.Notes = m.notes;
+            }
+
+            if (m.fields.Contains("favorite"))
+            {
+                g.Favorite = m.favorite == true;
             }
 
             /* a game Playnite has on the wrong platform: the one chosen in the card replaces what it had */

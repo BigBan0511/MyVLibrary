@@ -132,7 +132,7 @@ function blinkFloppy(sec) {
 
 /* ---------- trailer: on the TV and on the back of the case while the game is in your hands ---------- */
 const trailer = { video: null, c: null, ready: false, lastBack: 0 };
-function trailerVolume() { return prefs.sound === 'off' || prefs.trailer !== 'on' ? 0 : clamp(prefs.vol / 100, 0, 1) * .7; }
+function trailerVolume() { return prefs.sound === 'off' || prefs.trailer !== 'on' || sfx.hush ? 0 : clamp(prefs.vol / 100, 0, 1) * .7; }
 function startTrailer(c) {
   if (!c || !c.g.trailerUrl || prefs.trailer === 'off') return;
   if (trailer.c === c && trailer.video) { trailer.video.play().catch(() => { }); if (trailer.ready && (tv.state === 'standby' || tv.state === 'channel')) tvSet('trailer', c); return; }

@@ -26,7 +26,7 @@ function decoObj(it) {
     let v = await UGCS.tx('readonly', st => st.get(it.src));
     if (v && v.ref) v = await UGCS.tx('readonly', st => st.get(v.ref));
     if (!v) throw new Error('missing ' + it.src);
-    return decoAdopt(it, UGC.build(v.parsed || UGC.parse(v, { maxTex: 1024 })));
+    return decoAdopt(it, GLB.is(v) ? await GLB.build(v, { name: it.name }) : UGC.build(v.parsed || UGC.parse(v, { maxTex: 1024 })));
   })().catch(e => { console.error(e); toast(T('No se ha podido leer {0}', it.name)); return null; }).finally(() => DECO.building.delete(it.id)));
   return DECO.building.get(it.id);
 }
@@ -101,18 +101,24 @@ function decoSpawn() {
   for (const [x, y] of [[.38 * side, -.8], [-.38 * side, -.8], [.2 * side, -.6], [0, -.35], [0, 0]]) { const p = decoAtScreen(x, y, null); if (p) return [p.x, p.y, p.z]; }
   return [cam.look.x, 0, cam.look.z];
 }
-async function decoAdd(src, name, parsed) {
+async function decoAdd(src, name, parsed, built) {
   const sys = decoRoom(); if (!sys) return;
   const it = { id: 'd' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), src, name, p: decoSpawn(), r: 0, x: 0, z: 0, s: 1 };
   decoList(sys).push(it); savePrefs();
-  const o = parsed ? decoAdopt(it, UGC.build(parsed)) : await decoObj(it);
+  const o = built ? decoAdopt(it, built) : parsed ? decoAdopt(it, UGC.build(parsed)) : await decoObj(it);
   if (!o) return;
   decoPlace(it, o); o.visible = true;
   decoStart(it.id);
 }
 async function decoAddFile(file) {
-  const buf = await file.arrayBuffer(), parsed = UGC.parse(buf, { maxTex: 1024 });   /* fails here if it cannot be read: nothing is kept */
-  const src = 'deco:' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+  const buf = await file.arrayBuffer(), src = 'deco:' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+  /* a .glb (binary glTF, from Blender or any model site) goes through three.js's own loader; anything else is EmuVR's .ugc */
+  if (GLB.is(buf)) {
+    const name = file.name.replace(/\.glb$/i, '').replace(/[_-]+/g, ' ').trim() || 'GLB', root = await GLB.build(buf, { name });   /* fails here if it cannot be read: nothing is kept */
+    await UGCS.tx('readwrite', st => st.put(buf, src));
+    await decoAdd(src, name, null, root); return;
+  }
+  const parsed = UGC.parse(buf, { maxTex: 1024 });   /* fails here if it cannot be read: nothing is kept */
   await UGCS.tx('readwrite', st => st.put(buf, src));
   await decoAdd(src, parsed.info.name || file.name.replace(/\.ugc$/i, '').replace(/_[0-9a-f]{8}$/i, '').replace(/_/g, ' '), parsed);
 }
@@ -226,7 +232,7 @@ function renderDecoList() {
   if (!sys) { el.innerHTML = `<p class="deco-none">${T(isRooms() ? 'Entra en la sala de un sistema para decorarla.' : 'La decoración va en el diseño Por sistema.')}</p>`; return; }
   const L = decoList(sys), room = (systemsList().find(s => s.key === sys) || {}).name || sys, bases = UGCS.bases();
   el.innerHTML = `<div class="ugc-item"><div class="ugc-what"><b>${T('Esta sala')}</b><span class="on">${esc(room)}${L.length ? ' · ' + T(L.length === 1 ? '{0} cosa' : '{0} cosas', L.length) : ''}</span></div><div class="ugc-btns">`
-    + `<button type="button" data-deco-lib>${T('Biblioteca')}</button><button type="button" data-deco-add>${T('Añadir .ugc')}</button>`
+    + `<button type="button" data-deco-lib>${T('Biblioteca')}</button><button type="button" data-deco-add>${T('Añadir .ugc o .glb')}</button>`
     + (bases.length ? `<select data-deco-base aria-label="${esc(T('Una consola de EmuVR'))}"><option value="">EmuVR…</option>${bases.map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('')}</select>` : '')
     + (L.length ? `<button type="button" data-deco-place>${T('Colocar')}</button>` : '') + `</div></div>`
     + L.map(it => `<div class="ugc-item"><div class="ugc-what"><b>${esc(it.name)}</b><span>×${(it.s || 1).toFixed(2)}</span></div><div class="ugc-btns"><button type="button" data-deco-pick="${it.id}">${T('Colocar')}</button><button type="button" data-deco-del="${it.id}" aria-label="${esc(T('Quitar') + ': ' + it.name)}" title="${esc(T('Quitar'))}">×</button></div></div>`).join('');
@@ -248,6 +254,6 @@ $('#decoFile').addEventListener('change', async e => {
   const file = e.target.files && e.target.files[0]; if (!file) return;
   toast(T('Leyendo {0}…', file.name), 8000); await new Promise(r => setTimeout(r, 60));
   try { await decoAddFile(file); toast(T('Colócalo donde quieras'), 2600); }
-  catch (err) { console.error(err); toast(T('No se ha podido leer el .ugc'), 5000); }
+  catch (err) { console.error(err); toast(T(/draco|meshopt/i.test(String(err && err.message)) ? 'Ese .glb está comprimido (Draco o Meshopt): expórtalo sin compresión.' : /\.glb$/i.test(file.name) ? 'No se ha podido leer el .glb' : 'No se ha podido leer el .ugc'), 6000); }
   renderDecoList();
 });

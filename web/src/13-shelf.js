@@ -20,11 +20,11 @@ function isVideoRoom() { return isRooms() && curSysKey() === 'VIDEO'; }
 /* ---------- systems (rooms by system): the ones in your library, PC first, then by generation ---------- */
 function sysLabel(g) { const s = sysOf(g); return s === 'PC' ? 'PC' : s === 'VIDEO' ? T('Vídeo') : s === 'MUSIC' ? T('Música') : (g.platFull || g.plat || s); }
 /* the filter in the top bar: every game, only the installed ones, or one of Playnite's saved filters (films and music always pass) */
-function filterOf() { const f = prefs.filter || 'all'; return f === 'installed' || (f.startsWith('p:') && PRESETS.some(p => 'p:' + p.id === f)) ? f : 'all'; }
+function filterOf() { const f = prefs.filter || 'all'; return f === 'installed' || f === 'fav' || (f.startsWith('p:') && PRESETS.some(p => 'p:' + p.id === f)) ? f : 'all'; }
 function passes(g, f) {
   if (g.video || g.music) return true;
   f = typeof f === 'string' ? f : filterOf();
-  return f === 'all' ? true : f === 'installed' ? !!g.installed : (g.presets || []).includes(f.slice(2));
+  return f === 'all' ? true : f === 'installed' ? !!g.installed : f === 'fav' ? !!g.favorite : (g.presets || []).includes(f.slice(2));
 }
 function systemsList() {
   const m = new Map();
@@ -56,7 +56,7 @@ function groupRank(k, n) {
   if (prefs.group === 'plat') return -n;
   return 0;
 }
-function belongs(g, key) { return key === '__all' || keysOf(g).includes(key); }
+function belongs(g, key) { return key === '__all' || (key === '__fav' ? !!g.favorite : keysOf(g).includes(key)); }
 function buildGroups() {
   const sys = curSysKey(), all = (isRooms() ? GAMES.filter(g => sysOf(g) === sys) : GAMES.filter(g => !g.video && !g.music)).filter(g => passes(g)), map = new Map();
   if (isRooms() && sys === 'VIDEO') {
@@ -75,7 +75,9 @@ function buildGroups() {
   }
   if (prefs.group !== 'all') all.forEach(g => keysOf(g).forEach(k => { if (!map.has(k)) map.set(k, []); map.get(k).push(g); }));
   const keys = [...map.keys()].sort((a, b) => groupRank(a, map.get(a).length) - groupRank(b, map.get(b).length) || String(a).localeCompare(String(b), LANG));
-  const G = [{ key: '__all', label: T('Todos'), games: all }, ...keys.map(k => ({ key: k, label: groupLabel(k), games: map.get(k) }))];
+  /* the games marked as favourites (Playnite's own mark, set from the card) have a shelf of their own, whatever the shelves go by */
+  const favs = all.filter(g => g.favorite);
+  const G = [{ key: '__all', label: T('Todos'), games: all }, ...(favs.length ? [{ key: '__fav', label: '★ ' + T('Favoritos'), games: favs }] : []), ...keys.map(k => ({ key: k, label: groupLabel(k), games: map.get(k) }))];
   groups = isCases() ? bookcasesFrom(G) : G;
   if (!isCases()) groups.forEach(gr => { gr.pages = stageFor(sys) === 'tv' ? paginateCabinet(gr) : paginate(gr); });
 }

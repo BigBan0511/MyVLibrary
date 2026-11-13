@@ -1,4 +1,5 @@
 <title>MyVLibrary</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171513'/%3E%3Crect x='7' y='7' width='4' height='15' rx='1' fill='%23ffb547'/%3E%3Crect x='12.5' y='9' width='4' height='13' rx='1' fill='%23e9e2d4'/%3E%3Crect x='18' y='6' width='4' height='16' rx='1' fill='%237aa2f7'/%3E%3Crect x='5' y='23' width='22' height='3' rx='1' fill='%238a5a3a'/%3E%3C/svg%3E">
 <meta name="claude:viewport-fit-sides" content="cover">
 <!--FONTS-->
 <style>
@@ -34,6 +35,13 @@ body{background:var(--night);color:var(--ink);font-family:var(--f-body);overflow
 #grade::after{content:"";position:absolute;inset:-60px;background-image:var(--grain);opacity:.075;mix-blend-mode:overlay;animation:grain .5s steps(5) infinite}
 @keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-23px,14px)}40%{transform:translate(17px,-29px)}60%{transform:translate(-31px,-9px)}80%{transform:translate(26px,21px)}}
 @media (prefers-reduced-motion:reduce){#grade::after{animation:none}}
+.gfx-low #grade::after{animation:none}
+/* the showcase: the room on its own, with the top bar and the card out of the way and no mouse pointer */
+.hud-top,.info,.info-tab{transition:opacity .6s ease}
+.showcase .hud-top,.showcase .info,.showcase .info-tab,.showcase #winctl{opacity:0;pointer-events:none}
+.showcase,.showcase #gl{cursor:none!important}
+.gfx-now{display:block;font-weight:600;color:var(--ink);margin-bottom:3px}
+.gfx-now:empty{display:none}
 .film{position:fixed;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse 75% 70% at 50% 48%,rgba(0,0,0,0) 55%,rgba(0,0,0,.42) 100%)}
 button,select,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
@@ -216,6 +224,14 @@ button,select,input,textarea{font:inherit;color:inherit}
   background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;padding:16px 18px 18px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .info .eyebrow{font:700 11px/1.4 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)}
 .info h2{margin:6px 0 12px;font:800 34px/0.95 var(--f-display);text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
+/* the title with its favourite star beside it */
+.info-title{display:flex;align-items:flex-start;gap:8px}
+.info-title h2{flex:1;min-width:0}
+.fav-btn{flex:none;width:34px;height:34px;margin-top:3px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:var(--ink-dim);font-size:19px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:transform .15s,color .15s,border-color .15s,background .15s}
+.fav-btn:hover{color:var(--amber);border-color:var(--amber)}
+.fav-btn[aria-pressed="true"]{color:#1b1509;background:var(--amber);border-color:var(--amber)}
+.fav-btn:active{transform:scale(.9)}
+.tip-fav{font-style:normal;color:var(--amber)}
 .info dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:14px}
 .info dt{color:var(--ink-dim)}
 .info dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
@@ -525,11 +541,24 @@ button,select,input,textarea{font:inherit;color:inherit}
 .stars button.on{color:var(--acc)}
 .cut{font:700 .62em var(--f-mono);letter-spacing:.12em;color:#9a917f;text-transform:uppercase}
 .barcode{height:3.2em;width:auto;max-width:60%;image-rendering:pixelated}
+/* narrower still, the shelves get a row of their own under the buttons (they used to be squeezed out of sight) */
+@media (max-width:1180px){
+  .tools{flex-wrap:wrap;row-gap:4px}
+  .pills{order:9;flex:1 1 100%}
+  .pills>:first-child{margin-left:auto}
+  /* on their own row they would lie across a game held in your hands: they step aside, as the system's name does */
+  .pills{transition:opacity .25s}
+  .pills.away{opacity:0;pointer-events:none}
+  .field input{width:84px;transition:width .15s}
+  .field input:focus,.field input:not(:placeholder-shown){width:130px}
+}
+@media (max-width:960px) and (min-width:761px){.filter-btn span{display:none}.field input{width:64px}.field input:focus,.field input:not(:placeholder-shown){width:110px}}
 @media (max-width:760px),(max-height:560px){
   .hud-top{flex-wrap:wrap}
   .brand b{font-size:22px}
   .tools{gap:6px;flex-basis:100%;order:3;justify-content:flex-start}
-  .pills{order:2;flex:1 1 100%;padding-left:0}
+  .pills{padding-left:0}
+  .pills>:first-child{margin-left:0}
   .field input{width:84px}
   .icon-btn{padding:0 10px}
   .info{padding:10px 14px;max-height:46vh}
@@ -587,7 +616,7 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="set-row" data-tab="look"><span>Ambiente</span><div class="rooms" id="roomPick"></div></div>
   <div class="set-row" data-tab="look"><span>Luz</span><div class="seg" data-pref="light"><button type="button" data-v="cine">Cine</button><button type="button" data-v="noche">Noche</button><button type="button" data-v="tarde">Tarde</button><button type="button" data-v="dia">Día</button></div></div>
   <div class="set-row" data-tab="general"><span>Formato en consolas</span><div class="seg" data-pref="fmtCon"><button type="button" data-v="lock">El original</button><button type="button" data-v="free">Libre</button></div><p class="set-note">Con «El original», cada juego de consola va en la caja y el medio de su sistema (PlayStation en caja de CD grande, PS2 en caja DVD, Super Nintendo en cartucho…). Los de PC se pueden cambiar siempre.</p></div>
-  <div class="set-row" data-tab="general"><span>Precinto</span><div class="seg" data-pref="seal"><button type="button" data-v="ask">Preguntar</button><button type="button" data-v="manual">A mano</button><button type="button" data-v="auto">Quitar solo</button></div></div>
+  <div class="set-row" data-tab="general"><span>Precinto</span><div class="seg" data-pref="seal"><button type="button" data-v="ask">Preguntar</button><button type="button" data-v="manual">A mano</button><button type="button" data-v="auto">Quitar solo</button></div><p class="set-note">Los juegos que nunca has abierto llegan precintados: con «A mano» el precinto solo se quita tirando de la lengüeta.</p></div>
   <div class="set-row demo-only" data-tab="general"><span>Al terminar una partida</span><div class="seg" data-pref="autoStatus"><button type="button" data-v="off">No cambiar nada</button><button type="button" data-v="on">Marcar «Jugando»</button></div></div>
   <div class="set-row" data-tab="look"><span>Sonido</span><div class="seg" data-pref="sound"><button type="button" data-v="on">Sí</button><button type="button" data-v="off">No</button></div></div>
   <div class="set-row" data-tab="look"><span>Volumen de los efectos <b id="volVal" class="vol-val"></b></span><input id="volRange" class="vol" type="range" min="0" max="100" step="5"></div>
@@ -598,6 +627,8 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="set-row" data-tab="look"><span>Esquinas de las cajas</span><div class="seg" data-pref="corners"><button type="button" data-v="real">Como las reales</button><button type="button" data-v="round">Redondeadas</button></div></div>
   <div class="set-row" data-tab="look"><span>Al sacar algo de la estantería</span><div class="seg" data-pref="hold"><button type="button" data-v="studio">Fondo de estudio</button><button type="button" data-v="room">En la habitación</button></div></div>
   <div class="set-row" data-tab="general"><span>Ficha al sacar un juego</span><div class="seg" data-pref="cardStart"><button type="button" data-v="hide">Plegada</button><button type="button" data-v="show">Abierta</button></div></div>
+  <div class="set-row" data-tab="general"><span>Escaparate</span><div class="seg" data-pref="attract"><button type="button" data-v="0">No</button><button type="button" data-v="1">1 min</button><button type="button" data-v="3">3 min</button><button type="button" data-v="10">10 min</button></div><p class="set-note">Si no tocas nada durante ese tiempo, la estantería se enseña sola: se acerca a un juego y a otro, saca alguno para darle la vuelta y pasa de sala en sala, en silencio. Se para con cualquier tecla o al mover el ratón.</p></div>
+  <div class="set-row" data-tab="general"><span>Gráficos</span><div class="seg" data-pref="gfx"><button type="button" data-v="auto">Automático</button><button type="button" data-v="high">Nítido</button><button type="button" data-v="low">Rápido</button></div><p class="set-note"><b id="gfxNow" class="gfx-now"></b>Automático baja la nitidez solo cuando la tarjeta gráfica no llega y la vuelve a subir cuando va sobrada. Mientras un juego está en marcha, la habitación casi deja de dibujarse para no quitarle rendimiento.</p></div>
   <div class="set-row" data-tab="music"><span>Álbumes</span><div class="seg" data-pref="mfAlb"><button type="button" data-v="year">Por año</button><button type="button" data-v="lp">Vinilo</button><button type="button" data-v="cass">Casete</button><button type="button" data-v="cd">CD</button></div></div>
   <div class="set-row" data-tab="music"><span>Listas</span><div class="seg" data-pref="mfPl"><button type="button" data-v="lp">Vinilo</button><button type="button" data-v="cass">Casete</button><button type="button" data-v="cd">CD</button></div></div>
   <div class="set-row" data-tab="music"><span>Canciones sueltas</span><div class="seg" data-pref="mfSong"><button type="button" data-v="year">Por año</button><button type="button" data-v="lp">Vinilo</button><button type="button" data-v="cass">Casete</button><button type="button" data-v="cd">CD</button></div></div>
@@ -606,13 +637,13 @@ button,select,input,textarea{font:inherit;color:inherit}
   <div class="set-row" data-tab="music"><span>Vinilos y casetes</span><div class="seg" data-pref="flip"><button type="button" data-v="off">Todo seguido</button><button type="button" data-v="on">Dar la vuelta a mitad</button></div></div>
   <div class="set-row" data-tab="music"><span>Volumen de la música <b id="mvolVal" class="vol-val"></b></span><input id="mvolRange" class="vol" type="range" min="0" max="100" step="5"></div>
   <div class="set-row" data-tab="emuvr"><span>Modelos de cada sistema</span><div class="ugc-list" id="libList"></div><p class="set-note">Lee tu carpeta de .ugc y elige la consola, la caja y el medio de cada sistema. Las cajas de EmuVR se abren con su animación y llevan la carátula del juego; los cartuchos y discos, su etiqueta.</p></div>
-  <div class="set-row" data-tab="emuvr"><span>Decoración de la sala (.ugc)</span><div class="ugc-list" id="decoList"></div><p class="set-note">Figuras, la caja de una consola o cualquier .ugc de EmuVR, en la sala del sistema en el que estás; cada sala tiene la suya. Colocar: arrástralas a cualquier superficie; la rueda las gira y, con Mayús, cambia su tamaño.</p></div>
+  <div class="set-row" data-tab="emuvr"><span>Decoración de la sala (.ugc o .glb)</span><div class="ugc-list" id="decoList"></div><p class="set-note">Figuras, la caja de una consola o cualquier .ugc de EmuVR, y también cualquier modelo .glb (el formato 3D más común: lo exporta Blender y lo ofrecen casi todas las webs de modelos), en la sala del sistema en el que estás; cada sala tiene la suya. Colocar: arrástralas a cualquier superficie; la rueda las gira y, con Mayús, cambia su tamaño.</p></div>
   <div class="set-row" data-tab="emuvr"><span>Consolas y pantallas de EmuVR (.ugc)</span><div class="ugc-list" id="ugcList"></div><p class="set-note">En las salas por sistema, un .ugc de EmuVR sustituye a la consola genérica de ese sistema, a una tele o al monitor. Las consolas que trae EmuVR se leen de su carpeta. Todo se guarda solo en este equipo.</p></div>
   <input type="file" id="ugcFile" accept=".ugc" hidden>
-  <input type="file" id="decoFile" accept=".ugc" hidden>
+  <input type="file" id="decoFile" accept=".ugc,.glb" hidden>
   <input type="file" id="libDir" webkitdirectory multiple hidden>
   <input type="file" id="emuvrDir" webkitdirectory multiple hidden>
-  <p class="set-note set-row" data-tab="general">Los juegos que nunca has abierto llegan precintados: con «A mano» el precinto solo se quita tirando de la lengüeta. Los estados y categorías solo cambian cuando tú los cambias.</p>
+  <p class="set-note set-row" data-tab="general">Los estados y categorías solo cambian cuando tú los cambias.</p>
   <p class="set-ver">MyVLibrary <!--VERSION--></p>
 </div>
 <aside class="info" id="info" hidden aria-label="Ficha del juego"></aside>
